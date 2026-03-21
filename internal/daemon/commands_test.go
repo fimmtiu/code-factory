@@ -1015,3 +1015,103 @@ func TestDone_InProgress(t *testing.T) {
 		t.Errorf("done in-progress: expected done, got %q", wu.Status)
 	}
 }
+
+// TestDone_InvalidStatus verifies that done rejects tickets not in in-review
+// or in-progress state.
+func TestDone_InvalidStatus(t *testing.T) {
+	ticketsDir := makeTempTicketsDir(t)
+
+	ticket := models.NewTicket("fresh-ticket", "not started")
+	// StatusOpen is not acceptable for done.
+	ticket.Status = models.StatusOpen
+	writeTicket(t, ticketsDir, ticket)
+
+	d, _ := newTestDaemonWithMockGit(t, ticketsDir)
+	if err := d.State().Load(); err != nil {
+		t.Fatalf("State.Load: %v", err)
+	}
+	cancel := startWorker(t, d)
+	defer cancel()
+
+	resp := sendCommand(t, d, protocol.Command{
+		Name:   "done",
+		Params: map[string]string{"identifier": "fresh-ticket"},
+	})
+	if resp.Success {
+		t.Fatal("done invalid-status: expected failure, got success")
+	}
+	if resp.Error == "" {
+		t.Error("done invalid-status: expected non-empty error message")
+	}
+}
+
+// TestDone_NestedProjectCascade verifies that done cascades through multiple
+// levels of project hierarchy when all siblings are complete.
+func TestDone_NestedProjectCascade(t *testing.T) {
+	ticketsDir := makeTempTicketsDir(t)
+
+	// Build: grand > child-proj > leaf-ticket (only ticket, in-review)
+	grandDir := ticketsDir + "/grand"
+	childDir := grandDir + "/child-proj"
+	if err := os.MkdirAll(childDir, 0755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+
+	grand := models.NewProject("grand", "grandparent project")
+	if err := writeProjectFile(t, grandDir, grand); err != nil {
+		t.Fatalf("writeProjectFile grand: %v", err)
+	}
+
+	child := models.NewProject("grand/child-proj", "child project")
+	if err := writeProjectFile(t, childDir, child); err != nil {
+		t.Fatalf("writeProjectFile child: %v", err)
+	}
+
+	leaf := models.NewTicket("grand/child-proj/leaf", "leaf ticket")
+	leaf.Status = models.StatusInReview
+	writeTicketToDir(t, childDir, "leaf", leaf)
+
+	d, mock := newTestDaemonWithMockGit(t, ticketsDir)
+	if err := d.State().Load(); err != nil {
+		t.Fatalf("State.Load: %v", err)
+	}
+	cancel := startWorker(t, d)
+	defer cancel()
+
+	resp := sendCommand(t, d, protocol.Command{
+		Name:   "done",
+		Params: map[string]string{"identifier": "grand/child-proj/leaf"},
+	})
+	if !resp.Success {
+		t.Fatalf("done nested cascade: expected success, got %q", resp.Error)
+	}
+
+	// Both projects should be done.
+	for _, id := range []string{"grand/child-proj", "grand"} {
+		wu, ok := d.State().Get(id)
+		if !ok {
+			t.Fatalf("done nested cascade: %q not found in state", id)
+		}
+		if wu.Status != models.ProjectDone {
+			t.Errorf("done nested cascade: expected %q done, got %q", id, wu.Status)
+		}
+	}
+
+	// grand/child-proj should have been merged into grand, and grand into main.
+	foundChildMerge := false
+	foundGrandMerge := false
+	for _, m := range mock.MergedBranches {
+		if m == "grand/child-proj->grand" {
+			foundChildMerge = true
+		}
+		if m == "grand->main" {
+			foundGrandMerge = true
+		}
+	}
+	if !foundChildMerge {
+		t.Errorf("done nested cascade: expected 'grand/child-proj->grand', got %v", mock.MergedBranches)
+	}
+	if !foundGrandMerge {
+		t.Errorf("done nested cascade: expected 'grand->main', got %v", mock.MergedBranches)
+	}
+}
