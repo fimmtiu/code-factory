@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/fimmtiu/tickets/internal/gitutil"
 	"github.com/fimmtiu/tickets/internal/protocol"
 )
 
@@ -30,6 +31,7 @@ type Daemon struct {
 	socketPath string
 	ticketsDir string
 	state      *State
+	gitClient  gitutil.GitClient
 	listener   net.Listener
 	queue      chan *QueueItem
 	ctx        context.Context
@@ -45,6 +47,7 @@ func NewDaemon(socketPath, ticketsDir string) *Daemon {
 		socketPath: socketPath,
 		ticketsDir: ticketsDir,
 		state:      NewState(ticketsDir),
+		gitClient:  gitutil.NewRealGitClient(),
 		queue:      make(chan *QueueItem, 64),
 		ctx:        ctx,
 		cancel:     cancel,
@@ -59,6 +62,16 @@ func (d *Daemon) State() *State {
 // TicketsDir returns the path to the .tickets directory.
 func (d *Daemon) TicketsDir() string {
 	return d.ticketsDir
+}
+
+// GitClient returns the git client used by this daemon.
+func (d *Daemon) GitClient() gitutil.GitClient {
+	return d.gitClient
+}
+
+// SetGitClient replaces the git client. Intended for testing.
+func (d *Daemon) SetGitClient(gc gitutil.GitClient) {
+	d.gitClient = gc
 }
 
 // Queue returns the command queue. Callers (typically a Worker) consume
