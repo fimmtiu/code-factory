@@ -16,9 +16,9 @@ import (
 // MockGitClient is a test double for gitutil.GitClient that records calls
 // and can be configured to return errors.
 type MockGitClient struct {
-	CreatedWorktrees []string
-	MergedBranches   []string // "from->into"
-	RemovedWorktrees []string
+	CreatedWorktrees  []string
+	MergedBranches    []string // "from->into"
+	RemovedWorktrees  []string
 	CreateWorktreeErr error
 	MergeBranchErr    error
 	RemoveWorktreeErr error

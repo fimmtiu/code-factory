@@ -213,4 +213,3 @@ func (s *State) writeToDisk(wu *models.WorkUnit) error {
 
 	return storage.WriteWorkUnit(path, wu)
 }
-

@@ -76,9 +76,9 @@ func TestDetailPaneScrollUpAtTop(t *testing.T) {
 func TestDetailPaneViewShowsStatus(t *testing.T) {
 	dp := DetailPane{}
 	unit := &models.WorkUnit{
-		Identifier:  "proj/ticket-1",
-		Description: "A test ticket description",
-		Status:      models.StatusInProgress,
+		Identifier:   "proj/ticket-1",
+		Description:  "A test ticket description",
+		Status:       models.StatusInProgress,
 		Dependencies: []string{},
 	}
 	dp.SetUnit(unit)
