@@ -9,7 +9,9 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"os/signal"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/fimmtiu/tickets/internal/gitutil"
@@ -114,7 +116,33 @@ func (d *Daemon) Start() error {
 	d.wg.Add(1)
 	go d.acceptLoop()
 
+	d.watchSignals()
+
 	return nil
+}
+
+// watchSignals registers for SIGINT and SIGHUP. When either signal is received
+// the daemon is stopped gracefully. The goroutine also exits if the daemon
+// context is cancelled first (e.g. Stop was called directly).
+func (d *Daemon) watchSignals() {
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGHUP)
+	go func() {
+		select {
+		case <-sigCh:
+			d.Stop()
+		case <-d.ctx.Done():
+			signal.Stop(sigCh)
+		}
+	}()
+}
+
+// Wait blocks until the daemon's context is done (i.e. Stop has been called)
+// and all internal goroutines have exited. It is safe to call from main after
+// Start returns.
+func (d *Daemon) Wait() {
+	<-d.ctx.Done()
+	d.wg.Wait()
 }
 
 // Stop shuts down the daemon: cancels the context, closes the listener so

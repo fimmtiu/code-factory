@@ -4,6 +4,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"syscall"
 	"testing"
 	"time"
 
@@ -176,6 +177,47 @@ func TestDaemonAlreadyRunning(t *testing.T) {
 	if err == nil {
 		d2.Stop()
 		t.Fatal("expected error starting second daemon, got nil")
+	}
+}
+
+// TestDaemonStopsOnSIGHUP verifies that sending SIGHUP to the process causes
+// a running daemon to stop. We use SIGHUP rather than SIGINT because SIGINT
+// would also trigger the default Go test runner signal handler and abort the
+// test binary; SIGHUP is forwarded to the daemon's watchSignals goroutine
+// without interfering with the test runner.
+func TestDaemonStopsOnSIGHUP(t *testing.T) {
+	sockPath := tempSocketPath(t)
+	d := daemon.NewDaemon(sockPath, "")
+
+	if err := d.Start(); err != nil {
+		t.Fatalf("Start failed: %v", err)
+	}
+
+	// Send SIGHUP to ourselves — watchSignals will receive it and call Stop.
+	if err := syscall.Kill(os.Getpid(), syscall.SIGHUP); err != nil {
+		d.Stop()
+		t.Fatalf("Kill(SIGHUP) failed: %v", err)
+	}
+
+	// Wait blocks until the daemon has fully stopped (context cancelled and
+	// all goroutines exited). Use a timeout via a separate goroutine so the
+	// test doesn't hang indefinitely.
+	done := make(chan struct{})
+	go func() {
+		d.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// Daemon stopped as expected.
+	case <-time.After(5 * time.Second):
+		t.Fatal("daemon did not stop within 5 seconds after SIGHUP")
+	}
+
+	// Socket should have been cleaned up.
+	if _, err := net.Dial("unix", sockPath); err == nil {
+		t.Error("expected socket to be removed after daemon stopped")
 	}
 }
 
