@@ -251,3 +251,267 @@ func writeWorkUnitToPath(t *testing.T, path string, wu *models.WorkUnit) error {
 	}
 	return os.WriteFile(path, data, 0644)
 }
+
+// sendCommand is a helper that sends a command to the worker via the daemon
+// queue and waits for a response with a timeout.
+func sendCommand(t *testing.T, d *daemon.Daemon, cmd protocol.Command) protocol.Response {
+	t.Helper()
+	respCh := make(chan protocol.Response, 1)
+	d.Queue() <- &daemon.QueueItem{
+		Cmd:      cmd,
+		Response: respCh,
+	}
+	select {
+	case resp := <-respCh:
+		return resp
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for response")
+		return protocol.Response{}
+	}
+}
+
+// startWorker creates a worker, registers commands, and starts it. Returns
+// a cancel function to stop the worker.
+func startWorker(t *testing.T, d *daemon.Daemon) context.CancelFunc {
+	t.Helper()
+	w := daemon.NewWorker(d, func() {})
+	daemon.RegisterCommands(w, d)
+	ctx, cancel := context.WithCancel(context.Background())
+	go w.Run(ctx)
+	return cancel
+}
+
+// TestCreateProject_Success verifies that a top-level project can be created
+// and is present in state afterwards.
+func TestCreateProject_Success(t *testing.T) {
+	ticketsDir := makeTempTicketsDir(t)
+	d := newTestDaemonWithDir(t, ticketsDir)
+	cancel := startWorker(t, d)
+	defer cancel()
+
+	resp := sendCommand(t, d, protocol.Command{
+		Name: "create-project",
+		Params: map[string]string{
+			"identifier":  "my-project",
+			"description": "a test project",
+		},
+	})
+	if !resp.Success {
+		t.Fatalf("create-project: expected success, got error: %q", resp.Error)
+	}
+
+	wu, ok := d.State().Get("my-project")
+	if !ok {
+		t.Fatal("create-project: expected project in state after create")
+	}
+	if wu.Description != "a test project" {
+		t.Errorf("create-project: expected description 'a test project', got %q", wu.Description)
+	}
+	if !wu.IsProject {
+		t.Error("create-project: expected IsProject=true")
+	}
+}
+
+// TestCreateProject_Subproject verifies that a subproject can be created under
+// an existing parent project.
+func TestCreateProject_Subproject(t *testing.T) {
+	ticketsDir := makeTempTicketsDir(t)
+	d := newTestDaemonWithDir(t, ticketsDir)
+	cancel := startWorker(t, d)
+	defer cancel()
+
+	// Create parent first.
+	resp := sendCommand(t, d, protocol.Command{
+		Name: "create-project",
+		Params: map[string]string{
+			"identifier":  "parent-proj",
+			"description": "parent project",
+		},
+	})
+	if !resp.Success {
+		t.Fatalf("create-project parent: expected success, got %q", resp.Error)
+	}
+
+	// Create subproject under it.
+	resp = sendCommand(t, d, protocol.Command{
+		Name: "create-project",
+		Params: map[string]string{
+			"identifier":  "parent-proj/child-proj",
+			"description": "child project",
+		},
+	})
+	if !resp.Success {
+		t.Fatalf("create-project subproject: expected success, got %q", resp.Error)
+	}
+
+	wu, ok := d.State().Get("parent-proj/child-proj")
+	if !ok {
+		t.Fatal("create-project subproject: expected subproject in state")
+	}
+	if wu.Description != "child project" {
+		t.Errorf("create-project subproject: expected description 'child project', got %q", wu.Description)
+	}
+}
+
+// TestCreateProject_MissingParent verifies that creating a subproject when the
+// parent does not exist returns an error response.
+func TestCreateProject_MissingParent(t *testing.T) {
+	ticketsDir := makeTempTicketsDir(t)
+	d := newTestDaemonWithDir(t, ticketsDir)
+	cancel := startWorker(t, d)
+	defer cancel()
+
+	resp := sendCommand(t, d, protocol.Command{
+		Name: "create-project",
+		Params: map[string]string{
+			"identifier":  "nonexistent-parent/child-proj",
+			"description": "orphan child",
+		},
+	})
+	if resp.Success {
+		t.Fatal("create-project missing parent: expected failure, got success")
+	}
+	if resp.Error == "" {
+		t.Error("create-project missing parent: expected non-empty error message")
+	}
+}
+
+// TestCreateTicket_Success verifies that a ticket can be created under an
+// existing project and appears in state with open status.
+func TestCreateTicket_Success(t *testing.T) {
+	ticketsDir := makeTempTicketsDir(t)
+	d := newTestDaemonWithDir(t, ticketsDir)
+	cancel := startWorker(t, d)
+	defer cancel()
+
+	// Create project first.
+	resp := sendCommand(t, d, protocol.Command{
+		Name: "create-project",
+		Params: map[string]string{
+			"identifier":  "my-proj",
+			"description": "a project",
+		},
+	})
+	if !resp.Success {
+		t.Fatalf("create-project: expected success, got %q", resp.Error)
+	}
+
+	// Create ticket under it.
+	resp = sendCommand(t, d, protocol.Command{
+		Name: "create-ticket",
+		Params: map[string]string{
+			"identifier":  "my-proj/my-ticket",
+			"description": "a ticket",
+		},
+	})
+	if !resp.Success {
+		t.Fatalf("create-ticket: expected success, got %q", resp.Error)
+	}
+
+	wu, ok := d.State().Get("my-proj/my-ticket")
+	if !ok {
+		t.Fatal("create-ticket: expected ticket in state after create")
+	}
+	if wu.Status != models.StatusOpen {
+		t.Errorf("create-ticket: expected status open, got %q", wu.Status)
+	}
+	if wu.Description != "a ticket" {
+		t.Errorf("create-ticket: expected description 'a ticket', got %q", wu.Description)
+	}
+}
+
+// TestCreateTicket_BlockedByDeps verifies that a ticket created with
+// dependencies gets the "blocked" status.
+func TestCreateTicket_BlockedByDeps(t *testing.T) {
+	ticketsDir := makeTempTicketsDir(t)
+	d := newTestDaemonWithDir(t, ticketsDir)
+	cancel := startWorker(t, d)
+	defer cancel()
+
+	// Create a top-level dep ticket first.
+	resp := sendCommand(t, d, protocol.Command{
+		Name: "create-ticket",
+		Params: map[string]string{
+			"identifier":  "dep-ticket",
+			"description": "a dependency",
+		},
+	})
+	if !resp.Success {
+		t.Fatalf("create dep ticket: expected success, got %q", resp.Error)
+	}
+
+	// Create ticket that depends on dep-ticket.
+	resp = sendCommand(t, d, protocol.Command{
+		Name: "create-ticket",
+		Params: map[string]string{
+			"identifier":   "blocked-ticket",
+			"description":  "blocked by dep",
+			"dependencies": "dep-ticket",
+		},
+	})
+	if !resp.Success {
+		t.Fatalf("create-ticket blocked: expected success, got %q", resp.Error)
+	}
+
+	wu, ok := d.State().Get("blocked-ticket")
+	if !ok {
+		t.Fatal("create-ticket blocked: expected ticket in state")
+	}
+	if wu.Status != models.StatusBlocked {
+		t.Errorf("create-ticket blocked: expected status blocked, got %q", wu.Status)
+	}
+	if len(wu.Dependencies) != 1 || wu.Dependencies[0] != "dep-ticket" {
+		t.Errorf("create-ticket blocked: expected dependencies=[dep-ticket], got %v", wu.Dependencies)
+	}
+}
+
+// TestCreateTicket_TopLevel verifies that a top-level ticket (no parent
+// project) can be created successfully.
+func TestCreateTicket_TopLevel(t *testing.T) {
+	ticketsDir := makeTempTicketsDir(t)
+	d := newTestDaemonWithDir(t, ticketsDir)
+	cancel := startWorker(t, d)
+	defer cancel()
+
+	resp := sendCommand(t, d, protocol.Command{
+		Name: "create-ticket",
+		Params: map[string]string{
+			"identifier":  "top-level-ticket",
+			"description": "no parent needed",
+		},
+	})
+	if !resp.Success {
+		t.Fatalf("create-ticket top-level: expected success, got %q", resp.Error)
+	}
+
+	wu, ok := d.State().Get("top-level-ticket")
+	if !ok {
+		t.Fatal("create-ticket top-level: expected ticket in state")
+	}
+	if wu.Status != models.StatusOpen {
+		t.Errorf("create-ticket top-level: expected status open, got %q", wu.Status)
+	}
+}
+
+// TestCreateTicket_MissingParent verifies that creating a ticket under a
+// nonexistent project returns an error response.
+func TestCreateTicket_MissingParent(t *testing.T) {
+	ticketsDir := makeTempTicketsDir(t)
+	d := newTestDaemonWithDir(t, ticketsDir)
+	cancel := startWorker(t, d)
+	defer cancel()
+
+	resp := sendCommand(t, d, protocol.Command{
+		Name: "create-ticket",
+		Params: map[string]string{
+			"identifier":  "ghost-proj/my-ticket",
+			"description": "orphan ticket",
+		},
+	})
+	if resp.Success {
+		t.Fatal("create-ticket missing parent: expected failure, got success")
+	}
+	if resp.Error == "" {
+		t.Error("create-ticket missing parent: expected non-empty error message")
+	}
+}
