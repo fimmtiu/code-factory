@@ -25,16 +25,19 @@ var housekeepingCommands = map[string]bool{
 // the QueueItem's response channel.
 type Worker struct {
 	daemon   *Daemon
+	stopFn   func()
 	mu       sync.RWMutex
 	lastCmd  time.Time
 	handlers map[string]HandlerFunc
 }
 
-// NewWorker creates a Worker attached to the given Daemon and registers the
-// built-in command handlers.
-func NewWorker(d *Daemon) *Worker {
+// NewWorker creates a Worker attached to the given Daemon. stopFn is called
+// (in a goroutine) when the exit command or housekeeping idle check triggers
+// a shutdown. The built-in handlers are registered automatically.
+func NewWorker(d *Daemon, stopFn func()) *Worker {
 	w := &Worker{
 		daemon:   d,
+		stopFn:   stopFn,
 		handlers: make(map[string]HandlerFunc),
 	}
 	w.registerBuiltins()

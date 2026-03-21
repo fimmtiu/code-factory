@@ -14,14 +14,14 @@ import (
 // for worker tests that drive the queue directly.
 func newTestDaemon(t *testing.T) *daemon.Daemon {
 	t.Helper()
-	return daemon.NewDaemon(tempSocketPath(t))
+	return daemon.NewDaemon(tempSocketPath(t), "")
 }
 
 // TestWorkerPingHandler verifies that the built-in ping handler returns a
 // successful response containing the daemon's PID.
 func TestWorkerPingHandler(t *testing.T) {
 	d := newTestDaemon(t)
-	w := daemon.NewWorker(d)
+	w := daemon.NewWorker(d, func() {})
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -61,7 +61,7 @@ func TestWorkerPingHandler(t *testing.T) {
 // failure response.
 func TestWorkerUnknownCommand(t *testing.T) {
 	d := newTestDaemon(t)
-	w := daemon.NewWorker(d)
+	w := daemon.NewWorker(d, func() {})
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -91,7 +91,7 @@ func TestWorkerUnknownCommand(t *testing.T) {
 // in order (one at a time).
 func TestWorkerSequentialExecution(t *testing.T) {
 	d := newTestDaemon(t)
-	w := daemon.NewWorker(d)
+	w := daemon.NewWorker(d, func() {})
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -129,7 +129,7 @@ func TestWorkerSequentialExecution(t *testing.T) {
 // command handlers at runtime.
 func TestWorkerCustomHandler(t *testing.T) {
 	d := newTestDaemon(t)
-	w := daemon.NewWorker(d)
+	w := daemon.NewWorker(d, func() {})
 	w.RegisterHandler("echo", func(cmd protocol.Command) protocol.Response {
 		msg := cmd.Params["message"]
 		data, _ := json.Marshal(map[string]string{"echo": msg})
@@ -168,7 +168,7 @@ func TestWorkerCustomHandler(t *testing.T) {
 // context is cancelled.
 func TestWorkerContextCancellation(t *testing.T) {
 	d := newTestDaemon(t)
-	w := daemon.NewWorker(d)
+	w := daemon.NewWorker(d, func() {})
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
@@ -194,7 +194,7 @@ func TestWorkerContextCancellation(t *testing.T) {
 // updated for non-ping commands but not for ping.
 func TestWorkerLastNonHousekeepingCmd(t *testing.T) {
 	d := newTestDaemon(t)
-	w := daemon.NewWorker(d)
+	w := daemon.NewWorker(d, func() {})
 
 	// Register a non-housekeeping command.
 	w.RegisterHandler("work", func(cmd protocol.Command) protocol.Response {

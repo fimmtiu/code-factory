@@ -28,7 +28,7 @@ func tempSocketPath(t *testing.T) string {
 // and that the socket file is removed after Stop.
 func TestDaemonStartStop(t *testing.T) {
 	sockPath := tempSocketPath(t)
-	d := daemon.NewDaemon(sockPath)
+	d := daemon.NewDaemon(sockPath, "")
 
 	if err := d.Start(); err != nil {
 		t.Fatalf("Start failed: %v", err)
@@ -51,7 +51,7 @@ func TestDaemonStartStop(t *testing.T) {
 // command, and receive a response when the queue is consumed externally.
 func TestDaemonAcceptsConnection(t *testing.T) {
 	sockPath := tempSocketPath(t)
-	d := daemon.NewDaemon(sockPath)
+	d := daemon.NewDaemon(sockPath, "")
 
 	if err := d.Start(); err != nil {
 		t.Fatalf("Start failed: %v", err)
@@ -93,7 +93,7 @@ func TestDaemonAcceptsConnection(t *testing.T) {
 // the daemon's queue.
 func TestDaemonQueueReceivesCommand(t *testing.T) {
 	sockPath := tempSocketPath(t)
-	d := daemon.NewDaemon(sockPath)
+	d := daemon.NewDaemon(sockPath, "")
 
 	if err := d.Start(); err != nil {
 		t.Fatalf("Start failed: %v", err)
@@ -138,7 +138,7 @@ func TestDaemonStaleSocket(t *testing.T) {
 	// Close the listener immediately so it won't respond to pings.
 	staleListener.Close()
 
-	d := daemon.NewDaemon(sockPath)
+	d := daemon.NewDaemon(sockPath, "")
 	if err := d.Start(); err != nil {
 		t.Fatalf("Start failed on stale socket: %v", err)
 	}
@@ -157,7 +157,7 @@ func TestDaemonStaleSocket(t *testing.T) {
 func TestDaemonAlreadyRunning(t *testing.T) {
 	sockPath := tempSocketPath(t)
 
-	d1 := daemon.NewDaemon(sockPath)
+	d1 := daemon.NewDaemon(sockPath, "")
 	if err := d1.Start(); err != nil {
 		t.Fatalf("first Start failed: %v", err)
 	}
@@ -171,7 +171,7 @@ func TestDaemonAlreadyRunning(t *testing.T) {
 		}
 	}()
 
-	d2 := daemon.NewDaemon(sockPath)
+	d2 := daemon.NewDaemon(sockPath, "")
 	err := d2.Start()
 	if err == nil {
 		d2.Stop()
@@ -193,7 +193,7 @@ func TestIsRunning(t *testing.T) {
 	}
 
 	// Start a daemon with a ping responder.
-	d := daemon.NewDaemon(sockPath)
+	d := daemon.NewDaemon(sockPath, "")
 	if err := d.Start(); err != nil {
 		t.Fatalf("Start failed: %v", err)
 	}

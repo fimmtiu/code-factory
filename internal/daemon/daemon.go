@@ -28,6 +28,8 @@ type QueueItem struct {
 // worker goroutine.
 type Daemon struct {
 	socketPath string
+	ticketsDir string
+	state      *State
 	listener   net.Listener
 	queue      chan *QueueItem
 	ctx        context.Context
@@ -35,16 +37,28 @@ type Daemon struct {
 	wg         sync.WaitGroup
 }
 
-// NewDaemon creates a Daemon that will listen on socketPath. Call Start to
-// begin accepting connections.
-func NewDaemon(socketPath string) *Daemon {
+// NewDaemon creates a Daemon that will listen on socketPath and manage state
+// stored in ticketsDir. Call Start to begin accepting connections.
+func NewDaemon(socketPath, ticketsDir string) *Daemon {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Daemon{
 		socketPath: socketPath,
+		ticketsDir: ticketsDir,
+		state:      NewState(ticketsDir),
 		queue:      make(chan *QueueItem, 64),
 		ctx:        ctx,
 		cancel:     cancel,
 	}
+}
+
+// State returns the daemon's in-memory state.
+func (d *Daemon) State() *State {
+	return d.state
+}
+
+// TicketsDir returns the path to the .tickets directory.
+func (d *Daemon) TicketsDir() string {
+	return d.ticketsDir
 }
 
 // Queue returns the command queue. Callers (typically a Worker) consume
@@ -71,6 +85,11 @@ func (d *Daemon) Start() error {
 		if err := os.Remove(d.socketPath); err != nil && !os.IsNotExist(err) {
 			return fmt.Errorf("removing stale socket: %w", err)
 		}
+	}
+
+	// Load state from disk before accepting any connections.
+	if err := d.state.Load(); err != nil {
+		return fmt.Errorf("loading state: %w", err)
 	}
 
 	ln, err := net.Listen("unix", d.socketPath)
