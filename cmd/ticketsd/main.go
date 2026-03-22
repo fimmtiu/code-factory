@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/fimmtiu/tickets/internal/daemon"
 	"github.com/fimmtiu/tickets/internal/storage"
@@ -38,6 +39,12 @@ func main() {
 		fmt.Fprintln(os.Stderr, "error starting daemon:", err)
 		os.Exit(1)
 	}
+
+	w := daemon.NewWorker(d, d.Stop)
+	daemon.RegisterCommands(w, d)
+	daemon.RegisterHousekeeping(w, d)
+	daemon.StartHousekeepingTimer(d, 60*time.Second)
+	go w.Run(d.Context())
 
 	// Block until the daemon stops (via signal or explicit Stop call).
 	d.Wait()

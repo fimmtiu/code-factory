@@ -76,6 +76,11 @@ func (d *Daemon) SetGitClient(gc gitutil.GitClient) {
 	d.gitClient = gc
 }
 
+// Context returns the daemon's context. It is cancelled when Stop is called.
+func (d *Daemon) Context() context.Context {
+	return d.ctx
+}
+
 // Queue returns the command queue. Callers (typically a Worker) consume
 // *QueueItem values from this channel.
 func (d *Daemon) Queue() chan *QueueItem {
