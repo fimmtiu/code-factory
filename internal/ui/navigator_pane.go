@@ -26,42 +26,37 @@ type NavigatorPane struct {
 
 // SetUnits rebuilds the tree from the given flat list of work units, using
 // each unit's Parent field to establish the hierarchy.
-func (np *NavigatorPane) SetUnits(units []*models.WorkUnit) {
-	// Build a map for quick lookup
+// buildTree constructs a forest of TreeNodes from units, linking children to
+// parents and collecting roots. Orphaned nodes (parent not in the list) are
+// treated as roots.
+func buildTree(units []*models.WorkUnit) []*TreeNode {
 	byID := make(map[string]*TreeNode, len(units))
 	for _, u := range units {
-		node := &TreeNode{
-			unit:     u,
-			expanded: true, // start expanded
-		}
-		byID[u.Identifier] = node
+		byID[u.Identifier] = &TreeNode{unit: u, expanded: true}
 	}
 
-	// Attach children to parents; collect roots
-	np.tree = nil
+	var roots []*TreeNode
 	for _, u := range units {
 		node := byID[u.Identifier]
 		if u.Parent == "" {
-			node.depth = 0
-			np.tree = append(np.tree, node)
+			roots = append(roots, node)
 		} else if parent, ok := byID[u.Parent]; ok {
-			node.depth = parent.depth + 1
 			parent.children = append(parent.children, node)
 		} else {
-			// Orphan: parent not in list, treat as root
-			node.depth = 0
-			np.tree = append(np.tree, node)
+			roots = append(roots, node) // orphan: treat as root
 		}
 	}
 
-	// Recompute depths after building tree (since map iteration order varies)
-	for _, root := range np.tree {
+	// Correct depths now that the full tree structure is known.
+	for _, root := range roots {
 		setDepths(root, 0)
 	}
+	return roots
+}
 
+func (np *NavigatorPane) SetUnits(units []*models.WorkUnit) {
+	np.tree = buildTree(units)
 	np.rebuildVisible()
-
-	// Clamp cursor
 	if np.cursor >= len(np.nodes) {
 		np.cursor = max(0, len(np.nodes)-1)
 	}
@@ -134,13 +129,47 @@ func (np NavigatorPane) Selected() *models.WorkUnit {
 }
 
 // View renders the navigator pane as a string with the given dimensions.
-func (np NavigatorPane) View(width, height int) string {
+// nodePrefix returns the tree-decoration prefix for a node (expand/collapse
+// arrow for projects, bullet for tickets).
+func nodePrefix(node *TreeNode) string {
+	if !node.unit.IsProject {
+		return "• "
+	}
+	if len(node.children) == 0 {
+		return "  "
+	}
+	if node.expanded {
+		return "▼ "
+	}
+	return "▶ "
+}
+
+// renderNodeLine builds and styles a single tree row. selected determines
+// whether the cursor is on this node.
+func renderNodeLine(node *TreeNode, selected bool, width int) string {
 	selectedStyle := lipgloss.NewStyle().
 		Background(lipgloss.Color("4")).
 		Foreground(lipgloss.Color("15"))
 	projectStyle := lipgloss.NewStyle().Bold(true)
 	ticketStyle := lipgloss.NewStyle()
 
+	indent := strings.Repeat("  ", node.depth)
+	label := indent + nodePrefix(node) + node.unit.Identifier + " [" + node.unit.Status + "]"
+	if width > 2 && len(label) > width-2 {
+		label = label[:width-2]
+	}
+
+	switch {
+	case selected:
+		return selectedStyle.Render(label)
+	case node.unit.IsProject:
+		return projectStyle.Render(label)
+	default:
+		return ticketStyle.Render(label)
+	}
+}
+
+func (np NavigatorPane) View(width, height int) string {
 	var sb strings.Builder
 	visibleLines := 0
 
@@ -148,44 +177,10 @@ func (np NavigatorPane) View(width, height int) string {
 		if visibleLines >= height {
 			break
 		}
-
-		indent := strings.Repeat("  ", node.depth)
-
-		var prefix string
-		if node.unit.IsProject {
-			if len(node.children) > 0 {
-				if node.expanded {
-					prefix = "▼ "
-				} else {
-					prefix = "▶ "
-				}
-			} else {
-				prefix = "  "
-			}
-		} else {
-			prefix = "• "
-		}
-
-		label := indent + prefix + node.unit.Identifier + " [" + node.unit.Status + "]"
-
-		// Trim to width
-		if width > 2 && len(label) > width-2 {
-			label = label[:width-2]
-		}
-
-		var line string
-		if i == np.cursor {
-			line = selectedStyle.Render(label)
-		} else if node.unit.IsProject {
-			line = projectStyle.Render(label)
-		} else {
-			line = ticketStyle.Render(label)
-		}
-
 		if visibleLines > 0 {
 			sb.WriteByte('\n')
 		}
-		sb.WriteString(line)
+		sb.WriteString(renderNodeLine(node, i == np.cursor, width))
 		visibleLines++
 	}
 

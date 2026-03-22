@@ -13,8 +13,8 @@ import (
 	"github.com/fimmtiu/tickets/internal/storage"
 )
 
-// socketPath returns the path to the daemon socket for the current repository.
-// It finds the repo root from the current directory.
+// socketPathForRepo locates the daemon socket path and repo root from the
+// current working directory.
 func socketPathForRepo() (string, string, error) {
 	repoRoot, err := storage.FindRepoRoot(".")
 	if err != nil {
@@ -25,15 +25,29 @@ func socketPathForRepo() (string, string, error) {
 	return sockPath, repoRoot, nil
 }
 
+// ensureDaemon finds the daemon socket for the current repo and auto-starts
+// the daemon if it is not already running. It returns the socket path on
+// success.
+func ensureDaemon() (string, error) {
+	sockPath, repoRoot, err := socketPathForRepo()
+	if err != nil {
+		return "", err
+	}
+	if err := client.EnsureRunning(sockPath, repoRoot); err != nil {
+		return "", err
+	}
+	return sockPath, nil
+}
+
 // runCommand dispatches to the appropriate subcommand handler.
 func runCommand(subcommand string, args []string) error {
 	switch subcommand {
 	case "init":
-		return runInit(args)
+		return runInit()
 	case "running":
 		sockPath, _, err := socketPathForRepo()
 		if err != nil {
-			// If we can't find the repo, there is definitely no daemon running
+			// If we can't find the repo, there is definitely no daemon running.
 			fmt.Println("No daemon running")
 			return nil
 		}
@@ -46,65 +60,44 @@ func runCommand(subcommand string, args []string) error {
 		}
 		return runExit(sockPath)
 	case "status":
-		sockPath, repoRoot, err := socketPathForRepo()
+		sockPath, err := ensureDaemon()
 		if err != nil {
-			return err
-		}
-		if err := client.EnsureRunning(sockPath, repoRoot); err != nil {
 			return err
 		}
 		return runStatus(sockPath)
 	case "create-project":
-		sockPath, repoRoot, err := socketPathForRepo()
+		sockPath, err := ensureDaemon()
 		if err != nil {
-			return err
-		}
-		if err := client.EnsureRunning(sockPath, repoRoot); err != nil {
 			return err
 		}
 		return runCreateProject(sockPath, args, os.Stdin)
 	case "create-ticket":
-		sockPath, repoRoot, err := socketPathForRepo()
+		sockPath, err := ensureDaemon()
 		if err != nil {
-			return err
-		}
-		if err := client.EnsureRunning(sockPath, repoRoot); err != nil {
 			return err
 		}
 		return runCreateTicket(sockPath, args, os.Stdin)
 	case "get-work":
-		sockPath, repoRoot, err := socketPathForRepo()
+		sockPath, err := ensureDaemon()
 		if err != nil {
-			return err
-		}
-		if err := client.EnsureRunning(sockPath, repoRoot); err != nil {
 			return err
 		}
 		return runGetWork(sockPath)
 	case "review-ready":
-		sockPath, repoRoot, err := socketPathForRepo()
+		sockPath, err := ensureDaemon()
 		if err != nil {
-			return err
-		}
-		if err := client.EnsureRunning(sockPath, repoRoot); err != nil {
 			return err
 		}
 		return runReviewReady(sockPath, args)
 	case "get-review":
-		sockPath, repoRoot, err := socketPathForRepo()
+		sockPath, err := ensureDaemon()
 		if err != nil {
-			return err
-		}
-		if err := client.EnsureRunning(sockPath, repoRoot); err != nil {
 			return err
 		}
 		return runGetReview(sockPath)
 	case "done":
-		sockPath, repoRoot, err := socketPathForRepo()
+		sockPath, err := ensureDaemon()
 		if err != nil {
-			return err
-		}
-		if err := client.EnsureRunning(sockPath, repoRoot); err != nil {
 			return err
 		}
 		return runDone(sockPath, args)
@@ -114,7 +107,7 @@ func runCommand(subcommand string, args []string) error {
 }
 
 // runInit finds the repo root, initialises .tickets/, and prints a message.
-func runInit(args []string) error {
+func runInit() error {
 	repoRoot, err := storage.FindRepoRoot(".")
 	if err != nil {
 		return err
@@ -198,6 +191,23 @@ type stdinInput struct {
 	Dependencies []string `json:"dependencies"`
 }
 
+// parseStdinInput reads and parses a stdinInput from r, returning an error if
+// the JSON is malformed or the description field is absent.
+func parseStdinInput(cmdName string, r io.Reader) (stdinInput, error) {
+	data, err := io.ReadAll(r)
+	if err != nil {
+		return stdinInput{}, fmt.Errorf("%s: read stdin: %w", cmdName, err)
+	}
+	var input stdinInput
+	if err := json.Unmarshal(data, &input); err != nil {
+		return stdinInput{}, fmt.Errorf("%s: parse stdin JSON: %w", cmdName, err)
+	}
+	if input.Description == "" {
+		return stdinInput{}, fmt.Errorf("%s: stdin JSON must contain a 'description' field", cmdName)
+	}
+	return input, nil
+}
+
 // runCreateProject sends "create-project" with identifier and description from stdin.
 func runCreateProject(socketPath string, args []string, stdin io.Reader) error {
 	if len(args) < 1 {
@@ -205,16 +215,9 @@ func runCreateProject(socketPath string, args []string, stdin io.Reader) error {
 	}
 	identifier := args[0]
 
-	data, err := io.ReadAll(stdin)
+	input, err := parseStdinInput("create-project", stdin)
 	if err != nil {
-		return fmt.Errorf("create-project: read stdin: %w", err)
-	}
-	var input stdinInput
-	if err := json.Unmarshal(data, &input); err != nil {
-		return fmt.Errorf("create-project: parse stdin JSON: %w", err)
-	}
-	if input.Description == "" {
-		return fmt.Errorf("create-project: stdin JSON must contain a 'description' field")
+		return err
 	}
 
 	c := client.NewClient(socketPath)
@@ -239,16 +242,9 @@ func runCreateTicket(socketPath string, args []string, stdin io.Reader) error {
 	}
 	identifier := args[0]
 
-	data, err := io.ReadAll(stdin)
+	input, err := parseStdinInput("create-ticket", stdin)
 	if err != nil {
-		return fmt.Errorf("create-ticket: read stdin: %w", err)
-	}
-	var input stdinInput
-	if err := json.Unmarshal(data, &input); err != nil {
-		return fmt.Errorf("create-ticket: parse stdin JSON: %w", err)
-	}
-	if input.Description == "" {
-		return fmt.Errorf("create-ticket: stdin JSON must contain a 'description' field")
+		return err
 	}
 
 	params := map[string]string{

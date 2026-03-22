@@ -120,7 +120,7 @@ func TestRunInit_CreatesTicketsDir(t *testing.T) {
 	defer os.Chdir(origDir)
 
 	out := captureOutput(func() {
-		if err := runInit([]string{}); err != nil {
+		if err := runInit(); err != nil {
 			t.Fatalf("runInit returned error: %v", err)
 		}
 	})
@@ -151,11 +151,11 @@ func TestRunInit_Idempotent(t *testing.T) {
 	defer os.Chdir(origDir)
 
 	// First call
-	if err := runInit([]string{}); err != nil {
+	if err := runInit(); err != nil {
 		t.Fatalf("first runInit error: %v", err)
 	}
 	// Second call should not fail
-	if err := runInit([]string{}); err != nil {
+	if err := runInit(); err != nil {
 		t.Fatalf("second runInit error: %v", err)
 	}
 }
@@ -166,7 +166,7 @@ func TestRunInit_NoGitRepo(t *testing.T) {
 	os.Chdir(tmp)
 	defer os.Chdir(origDir)
 
-	if err := runInit([]string{}); err == nil {
+	if err := runInit(); err == nil {
 		t.Error("expected error when no .git directory, got nil")
 	}
 }
