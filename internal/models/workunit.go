@@ -15,7 +15,7 @@ type WorkUnit struct {
 	Status       string    `json:"status"`
 	Dependencies []string  `json:"dependencies"`
 	LastUpdated  time.Time `json:"last_updated"`
-	IsProject    bool      `json:"-"`
+	IsProject    bool      `json:"is_project,omitempty"`
 	Parent       string    `json:"parent,omitempty"`
 }
 
