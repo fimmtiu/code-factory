@@ -83,7 +83,7 @@ func TestDetailPaneViewShowsStatus(t *testing.T) {
 	}
 	dp.SetUnit(unit)
 
-	view := dp.View(80, 20)
+	view := dp.View(80, 20, false)
 	if !strings.Contains(view, "in-progress") {
 		t.Errorf("expected view to contain status 'in-progress', got: %q", view)
 	}
@@ -99,7 +99,7 @@ func TestDetailPaneViewShowsDependencies(t *testing.T) {
 	}
 	dp.SetUnit(unit)
 
-	view := dp.View(80, 20)
+	view := dp.View(80, 20, false)
 	if !strings.Contains(view, "proj/ticket-0") {
 		t.Errorf("expected view to contain dependency 'proj/ticket-0', got: %q", view)
 	}
@@ -114,7 +114,7 @@ func TestDetailPaneViewShowsDescription(t *testing.T) {
 	}
 	dp.SetUnit(unit)
 
-	view := dp.View(80, 20)
+	view := dp.View(80, 20, false)
 	if !strings.Contains(view, "unique description text") {
 		t.Errorf("expected view to contain description, got: %q", view)
 	}
@@ -128,7 +128,7 @@ func TestDetailPaneViewNilUnit(t *testing.T) {
 			t.Errorf("View() panicked with nil unit: %v", r)
 		}
 	}()
-	view := dp.View(80, 20)
+	view := dp.View(80, 20, false)
 	_ = view
 }
 
@@ -145,7 +145,7 @@ func TestDetailPaneViewHeightMatchesRequested(t *testing.T) {
 		}
 		dp.SetUnit(unit)
 
-		view := dp.View(80, height)
+		view := dp.View(80, height, false)
 		lines := strings.Split(view, "\n")
 		if len(lines) != height {
 			t.Errorf("View(80, %d): got %d lines, want %d", height, len(lines), height)
@@ -156,7 +156,7 @@ func TestDetailPaneViewHeightMatchesRequested(t *testing.T) {
 func TestDetailPaneNilViewHeightMatchesRequested(t *testing.T) {
 	// Same contract for the "no item selected" state.
 	dp := DetailPane{}
-	view := dp.View(80, 12)
+	view := dp.View(80, 12, false)
 	lines := strings.Split(view, "\n")
 	if len(lines) != 12 {
 		t.Errorf("nil View(80, 12): got %d lines, want 12", len(lines))

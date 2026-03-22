@@ -131,7 +131,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // handleNavigatorKey handles key presses when the navigator pane is focused.
 func (m Model) handleNavigatorKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	navHeight := m.height / 2
+	navContentHeight := m.height/2 - 2 // pane height minus top+bottom borders
 	switch msg.Type {
 	case tea.KeyUp:
 		m.navigator.MoveUp()
@@ -144,12 +144,12 @@ func (m Model) handleNavigatorKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.detail.SetUnit(sel)
 		}
 	case tea.KeyPgUp:
-		m.navigator.PageUp(navHeight)
+		m.navigator.PageUp(navContentHeight)
 		if sel := m.navigator.Selected(); sel != nil {
 			m.detail.SetUnit(sel)
 		}
 	case tea.KeyPgDown:
-		m.navigator.PageDown(navHeight)
+		m.navigator.PageDown(navContentHeight)
 		if sel := m.navigator.Selected(); sel != nil {
 			m.detail.SetUnit(sel)
 		}
@@ -163,8 +163,8 @@ func (m Model) handleNavigatorKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // handleDetailKey handles key presses when the detail pane is focused.
 func (m Model) handleDetailKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	// Visible content rows in the detail pane (total height minus the top border).
-	detailContentHeight := (m.height - m.height/2) - 1
+	// Visible content rows in the detail pane (total height minus top+bottom borders).
+	detailContentHeight := (m.height - m.height/2) - 2
 	switch msg.Type {
 	case tea.KeyUp:
 		m.detail.ScrollUp()
@@ -197,10 +197,10 @@ func (m Model) View() string {
 	topSection := lipgloss.JoinHorizontal(
 		lipgloss.Top,
 		m.statusPane.View(m.units, topLeftWidth, topHeight),
-		m.navigator.View(topRightWidth, topHeight),
+		m.navigator.View(topRightWidth, topHeight, m.focused == NavigatorFocused),
 	)
 
-	bottom := m.detail.View(m.width, bottomHeight)
+	bottom := m.detail.View(m.width, bottomHeight, m.focused == DetailFocused)
 
 	if m.err != nil {
 		errStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("9"))

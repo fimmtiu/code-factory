@@ -10,7 +10,7 @@ import (
 func TestStatusPaneCountsProjects(t *testing.T) {
 	sp := StatusPane{}
 	units := sampleUnits()
-	view := sp.View(units, 40, 10)
+	view := sp.View(units, 40, 15) // 15 = 13 content lines + 2 border rows
 
 	// Should show project counts
 	if !strings.Contains(view, "Projects") && !strings.Contains(view, "project") {
@@ -21,7 +21,7 @@ func TestStatusPaneCountsProjects(t *testing.T) {
 func TestStatusPaneCountsTickets(t *testing.T) {
 	sp := StatusPane{}
 	units := sampleUnits()
-	view := sp.View(units, 40, 10)
+	view := sp.View(units, 40, 15) // 15 = 13 content lines + 2 border rows
 
 	// Should show ticket counts
 	if !strings.Contains(view, "Tickets") && !strings.Contains(view, "ticket") {

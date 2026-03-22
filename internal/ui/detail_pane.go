@@ -68,24 +68,29 @@ func (dp *DetailPane) PageDown(n int) {
 	}
 }
 
-// View renders the detail pane as a string with the given dimensions.
-func (dp DetailPane) View(width, height int) string {
-	// BorderTop adds 1 row; treat height as the total (outer) height so the
-	// rendered block is exactly height lines regardless of content.
-	contentHeight := height - 1
+// View renders the detail pane with the given outer dimensions.
+// focused controls the border highlight colour.
+func (dp DetailPane) View(width, height int, focused bool) string {
+	// Full border takes 1 row/col on each side; content area is 2 smaller.
+	contentHeight := height - 2
+
+	borderColor := lipgloss.Color("240")
+	if focused {
+		borderColor = lipgloss.Color("12")
+	}
+
+	paneStyle := lipgloss.NewStyle().
+		Width(width - 2).
+		Height(contentHeight).
+		Border(lipgloss.NormalBorder(), true).
+		BorderForeground(borderColor)
 
 	if dp.unit == nil {
-		paneStyle := lipgloss.NewStyle().
-			Width(width).
-			Height(contentHeight).
-			BorderTop(true).
-			BorderStyle(lipgloss.NormalBorder())
 		return paneStyle.Render("No item selected")
 	}
 
 	lines := dp.buildLines()
 
-	// Apply scroll offset
 	start := dp.scrollY
 	if start > len(lines) {
 		start = len(lines)
@@ -95,15 +100,7 @@ func (dp DetailPane) View(width, height int) string {
 		visible = visible[:contentHeight]
 	}
 
-	content := strings.Join(visible, "\n")
-
-	paneStyle := lipgloss.NewStyle().
-		Width(width).
-		Height(contentHeight).
-		BorderTop(true).
-		BorderStyle(lipgloss.NormalBorder())
-
-	return paneStyle.Render(content)
+	return paneStyle.Render(strings.Join(visible, "\n"))
 }
 
 // buildLines constructs the text lines for the current unit.

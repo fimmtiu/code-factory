@@ -21,6 +21,7 @@ type statusCounts struct {
 }
 
 // View renders the status pane with the given dimensions.
+// width and height are the outer (total) dimensions including the border.
 func (sp StatusPane) View(units []*models.WorkUnit, width, height int) string {
 	proj, ticket := computeCounts(units)
 
@@ -43,9 +44,10 @@ func (sp StatusPane) View(units []*models.WorkUnit, width, height int) string {
 		fmt.Sprintf("  Done:        %d", ticket.done),
 	}
 
+	contentHeight := height - 2 // top and bottom borders each consume 1 row
 	content := ""
 	for i, line := range lines {
-		if i >= height {
+		if i >= contentHeight {
 			break
 		}
 		if i > 0 {
@@ -55,9 +57,10 @@ func (sp StatusPane) View(units []*models.WorkUnit, width, height int) string {
 	}
 
 	paneStyle := lipgloss.NewStyle().
-		Width(width).
-		Height(height).
-		Padding(0, 1)
+		Width(width - 2).
+		Height(contentHeight).
+		Border(lipgloss.NormalBorder(), true).
+		BorderForeground(lipgloss.Color("240"))
 
 	return paneStyle.Render(content)
 }

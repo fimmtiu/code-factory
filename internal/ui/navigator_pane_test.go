@@ -133,7 +133,7 @@ func TestNavigatorView(t *testing.T) {
 	units := sampleUnits()
 	np.SetUnits(units)
 
-	view := np.View(60, 20)
+	view := np.View(60, 20, false)
 	if view == "" {
 		t.Error("expected non-empty view")
 	}
@@ -146,7 +146,7 @@ func TestNavigatorViewShowsIdentifiers(t *testing.T) {
 	}
 	np.SetUnits(units)
 
-	view := np.View(60, 20)
+	view := np.View(60, 20, false)
 	if !strings.Contains(view, "my-project") {
 		t.Errorf("expected view to contain 'my-project', got: %q", view)
 	}
@@ -164,7 +164,7 @@ func TestNavigatorViewCollapsedHidesChildren(t *testing.T) {
 	np.nodes[0].expanded = false
 	np.rebuildVisible()
 
-	view := np.View(60, 20)
+	view := np.View(60, 20, false)
 	if strings.Contains(view, "ticket-1") {
 		t.Error("expected collapsed project to hide child ticket-1")
 	}
@@ -233,7 +233,7 @@ func TestNavigatorViewScrollsCursorIntoView(t *testing.T) {
 	// Move cursor past the bottom of a height-5 window.
 	np.cursor = 10
 
-	view := np.View(60, 5)
+	view := np.View(60, 5, false)
 
 	// The cursor row must be visible.
 	if !strings.Contains(view, "ticket-10") {
@@ -250,7 +250,7 @@ func TestNavigatorViewTopNodeVisibleAtStart(t *testing.T) {
 	np.SetUnits(makeTickets(20))
 	// cursor at 0 — no scrolling should occur
 
-	view := np.View(60, 5)
+	view := np.View(60, 5, false)
 
 	if !strings.Contains(view, "ticket-0") {
 		t.Error("expected ticket-0 to be visible when cursor is at top")
@@ -268,7 +268,7 @@ func TestNavigatorViewScrollsBackUpWhenCursorRises(t *testing.T) {
 	np.cursor = 10
 	np.cursor = 0
 
-	view := np.View(60, 5)
+	view := np.View(60, 5, false)
 
 	if !strings.Contains(view, "ticket-0") {
 		t.Error("expected ticket-0 to be visible again after cursor returned to top")

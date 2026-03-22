@@ -188,18 +188,22 @@ func renderNodeLine(node *TreeNode, selected bool, width int) string {
 	}
 }
 
-func (np NavigatorPane) View(width, height int) string {
-	// Scroll the viewport so the cursor is always visible. When the cursor
-	// moves past the bottom edge, the viewport shifts to keep it in view.
+// View renders the navigator pane with the given outer dimensions.
+// focused controls the border highlight colour.
+func (np NavigatorPane) View(width, height int, focused bool) string {
+	// The border takes 1 row/col on each side; content area is 2 smaller.
+	contentHeight := height - 2
+
+	// Scroll the viewport so the cursor is always visible.
 	scrollOffset := 0
-	if np.cursor >= height {
-		scrollOffset = np.cursor - height + 1
+	if np.cursor >= contentHeight {
+		scrollOffset = np.cursor - contentHeight + 1
 	}
 
 	var sb strings.Builder
 	visibleLines := 0
 
-	for i := scrollOffset; i < len(np.nodes) && visibleLines < height; i++ {
+	for i := scrollOffset; i < len(np.nodes) && visibleLines < contentHeight; i++ {
 		if visibleLines > 0 {
 			sb.WriteByte('\n')
 		}
@@ -207,9 +211,16 @@ func (np NavigatorPane) View(width, height int) string {
 		visibleLines++
 	}
 
+	borderColor := lipgloss.Color("240")
+	if focused {
+		borderColor = lipgloss.Color("12")
+	}
+
 	paneStyle := lipgloss.NewStyle().
-		Width(width).
-		Height(height)
+		Width(width - 2).
+		Height(contentHeight).
+		Border(lipgloss.NormalBorder(), true).
+		BorderForeground(borderColor)
 
 	return paneStyle.Render(sb.String())
 }
