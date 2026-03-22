@@ -170,17 +170,21 @@ func renderNodeLine(node *TreeNode, selected bool, width int) string {
 }
 
 func (np NavigatorPane) View(width, height int) string {
+	// Scroll the viewport so the cursor is always visible. When the cursor
+	// moves past the bottom edge, the viewport shifts to keep it in view.
+	scrollOffset := 0
+	if np.cursor >= height {
+		scrollOffset = np.cursor - height + 1
+	}
+
 	var sb strings.Builder
 	visibleLines := 0
 
-	for i, node := range np.nodes {
-		if visibleLines >= height {
-			break
-		}
+	for i := scrollOffset; i < len(np.nodes) && visibleLines < height; i++ {
 		if visibleLines > 0 {
 			sb.WriteByte('\n')
 		}
-		sb.WriteString(renderNodeLine(node, i == np.cursor, width))
+		sb.WriteString(renderNodeLine(np.nodes[i], i == np.cursor, width))
 		visibleLines++
 	}
 

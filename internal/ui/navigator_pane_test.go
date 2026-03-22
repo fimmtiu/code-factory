@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -166,6 +167,69 @@ func TestNavigatorViewCollapsedHidesChildren(t *testing.T) {
 	view := np.View(60, 20)
 	if strings.Contains(view, "ticket-1") {
 		t.Error("expected collapsed project to hide child ticket-1")
+	}
+}
+
+// makeTickets builds n flat ticket WorkUnits with identifiers "ticket-0",
+// "ticket-1", ..., "ticket-N-1".
+func makeTickets(n int) []*models.WorkUnit {
+	units := make([]*models.WorkUnit, n)
+	for i := range units {
+		units[i] = &models.WorkUnit{
+			Identifier: fmt.Sprintf("ticket-%d", i),
+			IsProject:  false,
+			Status:     models.StatusOpen,
+		}
+	}
+	return units
+}
+
+func TestNavigatorViewScrollsCursorIntoView(t *testing.T) {
+	np := NavigatorPane{}
+	np.SetUnits(makeTickets(20))
+
+	// Move cursor past the bottom of a height-5 window.
+	np.cursor = 10
+
+	view := np.View(60, 5)
+
+	// The cursor row must be visible.
+	if !strings.Contains(view, "ticket-10") {
+		t.Error("expected ticket-10 (cursor) to be visible after scrolling")
+	}
+	// The first node must have scrolled off the top.
+	if strings.Contains(view, "ticket-0") {
+		t.Error("expected ticket-0 to be scrolled off the top")
+	}
+}
+
+func TestNavigatorViewTopNodeVisibleAtStart(t *testing.T) {
+	np := NavigatorPane{}
+	np.SetUnits(makeTickets(20))
+	// cursor at 0 — no scrolling should occur
+
+	view := np.View(60, 5)
+
+	if !strings.Contains(view, "ticket-0") {
+		t.Error("expected ticket-0 to be visible when cursor is at top")
+	}
+	if strings.Contains(view, "ticket-5") {
+		t.Error("expected ticket-5 to be off-screen when only 5 rows visible")
+	}
+}
+
+func TestNavigatorViewScrollsBackUpWhenCursorRises(t *testing.T) {
+	np := NavigatorPane{}
+	np.SetUnits(makeTickets(20))
+
+	// Scroll down so ticket-0 is off-screen, then back up.
+	np.cursor = 10
+	np.cursor = 0
+
+	view := np.View(60, 5)
+
+	if !strings.Contains(view, "ticket-0") {
+		t.Error("expected ticket-0 to be visible again after cursor returned to top")
 	}
 }
 
