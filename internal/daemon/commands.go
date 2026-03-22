@@ -3,21 +3,41 @@ package daemon
 import (
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 
-	"github.com/fimmtiu/tickets/internal/gitutil"
 	"github.com/fimmtiu/tickets/internal/models"
 	"github.com/fimmtiu/tickets/internal/protocol"
 	"github.com/fimmtiu/tickets/internal/storage"
 )
 
-// RegisterCommands registers the ping, exit, status, create-project,
+// parseDependencies splits a comma-separated dependency string into a slice,
+// discarding empty entries.
+func parseDependencies(raw string) []string {
+	var deps []string
+	for _, dep := range strings.Split(raw, ",") {
+		dep = strings.TrimSpace(dep)
+		if dep != "" {
+			deps = append(deps, dep)
+		}
+	}
+	return deps
+}
+
+// parentIdentifierOf returns the parent identifier portion of a slash-separated
+// identifier (e.g. "proj/sub/ticket" → "proj/sub"), and whether one exists.
+func parentIdentifierOf(identifier string) (string, bool) {
+	idx := strings.LastIndex(identifier, "/")
+	if idx < 0 {
+		return "", false
+	}
+	return identifier[:idx], true
+}
+
+// RegisterCommands registers the exit, status, create-project,
 // create-ticket, get-work, review-ready, get-review, and done command
-// handlers on the given worker.
+// handlers on the given worker. The ping handler is registered automatically
+// by NewWorker.
 func RegisterCommands(w *Worker, d *Daemon) {
-	w.RegisterHandler("ping", handlePingCommand)
 	w.RegisterHandler("exit", makeExitHandler(w))
 	w.RegisterHandler("status", makeStatusHandler(d))
 	w.RegisterHandler("create-project", makeCreateProjectHandler(d))
@@ -26,18 +46,6 @@ func RegisterCommands(w *Worker, d *Daemon) {
 	w.RegisterHandler("review-ready", makeReviewReadyHandler(d))
 	w.RegisterHandler("get-review", makeGetReviewHandler(d))
 	w.RegisterHandler("done", makeDoneHandler(d))
-}
-
-// handlePingCommand returns a success response containing the current process PID.
-func handlePingCommand(cmd protocol.Command) protocol.Response {
-	data, err := json.Marshal(map[string]int{"pid": os.Getpid()})
-	if err != nil {
-		return protocol.Response{Success: false, Error: "internal error marshaling ping response"}
-	}
-	return protocol.Response{
-		Success: true,
-		Data:    json.RawMessage(data),
-	}
 }
 
 // makeExitHandler returns a handler that calls the worker's stopFn
@@ -79,9 +87,7 @@ func makeCreateProjectHandler(d *Daemon) HandlerFunc {
 			return protocol.Response{Success: false, Error: err.Error()}
 		}
 
-		// For subprojects, check that the parent project exists.
-		if idx := strings.LastIndex(identifier, "/"); idx >= 0 {
-			parentID := identifier[:idx]
+		if parentID, ok := parentIdentifierOf(identifier); ok {
 			if _, ok := d.state.Get(parentID); !ok {
 				return protocol.Response{
 					Success: false,
@@ -95,8 +101,6 @@ func makeCreateProjectHandler(d *Daemon) HandlerFunc {
 		}
 
 		wu := models.NewProject(identifier, description)
-		wu.Status = models.ProjectOpen
-
 		if err := d.state.Add(wu); err != nil {
 			return protocol.Response{Success: false, Error: "failed to add project to state: " + err.Error()}
 		}
@@ -117,18 +121,9 @@ func makeCreateTicketHandler(d *Daemon) HandlerFunc {
 			return protocol.Response{Success: false, Error: err.Error()}
 		}
 
-		// Parse comma-separated dependencies, filtering empty strings.
-		var deps []string
-		for _, dep := range strings.Split(depsRaw, ",") {
-			dep = strings.TrimSpace(dep)
-			if dep != "" {
-				deps = append(deps, dep)
-			}
-		}
+		deps := parseDependencies(depsRaw)
 
-		// For tickets under a project, check that the parent project exists.
-		if idx := strings.LastIndex(identifier, "/"); idx >= 0 {
-			parentID := identifier[:idx]
+		if parentID, ok := parentIdentifierOf(identifier); ok {
 			if _, ok := d.state.Get(parentID); !ok {
 				return protocol.Response{
 					Success: false,
@@ -137,14 +132,8 @@ func makeCreateTicketHandler(d *Daemon) HandlerFunc {
 			}
 		}
 
-		initialStatus := models.StatusOpen
-		if len(deps) > 0 {
-			initialStatus = models.StatusBlocked
-		}
-
 		wu := models.NewTicket(identifier, description)
-		wu.Dependencies = deps
-		wu.Status = initialStatus
+		wu.SetDependencies(deps)
 
 		if err := d.state.Add(wu); err != nil {
 			return protocol.Response{Success: false, Error: "failed to add ticket to state: " + err.Error()}
@@ -165,7 +154,7 @@ func makeGetWorkHandler(d *Daemon) HandlerFunc {
 			return protocol.Response{Success: false, Error: "no work available"}
 		}
 
-		repoRoot := filepath.Dir(d.ticketsDir)
+		repoRoot := d.RepoRoot()
 		if err := d.gitClient.CreateWorktree(repoRoot, ticket.Identifier); err != nil {
 			return protocol.Response{Success: false, Error: "failed to create worktree: " + err.Error()}
 		}
@@ -175,26 +164,13 @@ func makeGetWorkHandler(d *Daemon) HandlerFunc {
 			return protocol.Response{Success: false, Error: "failed to update ticket: " + err.Error()}
 		}
 
-		markAncestorsInProgress(d.state, ticket)
+		d.state.MarkAncestorsInProgress(ticket)
 
 		data, err := json.Marshal(ticket)
 		if err != nil {
 			return protocol.Response{Success: false, Error: "failed to marshal ticket: " + err.Error()}
 		}
 		return protocol.Response{Success: true, Data: json.RawMessage(data)}
-	}
-}
-
-// markAncestorsInProgress walks up the parent chain from ticket and marks
-// every ancestor project as in-progress if not already.
-func markAncestorsInProgress(state *State, ticket *models.WorkUnit) {
-	parent, ok := state.Parent(ticket)
-	for ok {
-		if parent.Status != models.ProjectInProgress {
-			parent.Status = models.ProjectInProgress
-			state.Update(parent) //nolint:errcheck
-		}
-		parent, ok = state.Parent(parent)
 	}
 }
 
@@ -254,14 +230,14 @@ func makeDoneHandler(d *Daemon) HandlerFunc {
 		}
 
 		// Accept in-review or in-progress (lenient).
-		if wu.Status != models.StatusInReview && wu.Status != models.StatusInProgress {
+		if !wu.IsCompletable() {
 			return protocol.Response{
 				Success: false,
 				Error:   fmt.Sprintf("ticket %q is not in-review or in-progress (status: %s)", identifier, wu.Status),
 			}
 		}
 
-		repoRoot := filepath.Dir(d.ticketsDir)
+		repoRoot := d.RepoRoot()
 
 		// Determine the target branch for the merge.
 		parent, hasParent := d.state.Parent(wu)
@@ -283,7 +259,7 @@ func makeDoneHandler(d *Daemon) HandlerFunc {
 
 		// Cascade done up the project hierarchy.
 		if hasParent {
-			if err := cascadeDone(d.state, d.gitClient, repoRoot, wu); err != nil {
+			if err := d.cascadeDone(repoRoot, wu); err != nil {
 				return protocol.Response{Success: false, Error: "cascade done failed: " + err.Error()}
 			}
 		}
@@ -295,34 +271,34 @@ func makeDoneHandler(d *Daemon) HandlerFunc {
 // cascadeDone checks whether the parent of wu has all children done. If so,
 // marks the parent done, merges its branch into its own parent (or main),
 // removes its worktree, and recurses upward.
-func cascadeDone(state *State, git gitutil.GitClient, repoRoot string, wu *models.WorkUnit) error {
-	parent, hasParent := state.Parent(wu)
+func (d *Daemon) cascadeDone(repoRoot string, wu *models.WorkUnit) error {
+	parent, hasParent := d.state.Parent(wu)
 	if !hasParent {
 		return nil
 	}
-	if !state.AllDone(parent.Identifier) {
+	if !d.state.AllDone(parent.Identifier) {
 		return nil
 	}
 
 	parent.Status = models.ProjectDone
-	if err := state.Update(parent); err != nil {
+	if err := d.state.Update(parent); err != nil {
 		return err
 	}
 
-	grandparent, hasGrandparent := state.Parent(parent)
+	grandparent, hasGrandparent := d.state.Parent(parent)
 	intoBranch := "main"
 	if hasGrandparent {
 		intoBranch = grandparent.Identifier
 	}
 
-	if err := git.MergeBranch(repoRoot, parent.Identifier, intoBranch); err != nil {
+	if err := d.gitClient.MergeBranch(repoRoot, parent.Identifier, intoBranch); err != nil {
 		return err
 	}
 
-	git.RemoveWorktree(repoRoot, parent.Identifier) //nolint:errcheck
+	d.gitClient.RemoveWorktree(repoRoot, parent.Identifier) //nolint:errcheck
 
 	if hasGrandparent {
-		return cascadeDone(state, git, repoRoot, parent)
+		return d.cascadeDone(repoRoot, parent)
 	}
 	return nil
 }

@@ -41,6 +41,23 @@ func NewProject(identifier, description string) *WorkUnit {
 	}
 }
 
+// IsCompletable reports whether the ticket is in a state that allows it to be
+// marked done (i.e. in-progress or in-review).
+func (wu *WorkUnit) IsCompletable() bool {
+	return wu.Status == StatusInProgress || wu.Status == StatusInReview
+}
+
+// SetDependencies sets the dependencies of the ticket and adjusts the initial
+// status: blocked when there are unresolved deps, open otherwise.
+func (wu *WorkUnit) SetDependencies(deps []string) {
+	wu.Dependencies = deps
+	if len(deps) > 0 {
+		wu.Status = StatusBlocked
+	} else {
+		wu.Status = StatusOpen
+	}
+}
+
 func ValidateIdentifier(s string) error {
 	if s == "" {
 		return fmt.Errorf("identifier must not be empty")
