@@ -12,9 +12,9 @@ clean:
 	rm -f tickets ticketsd tickets-ui gen-testdata
 
 data:
-  ./gen-testdata
+	./gen-testdata
 
 clean-data:
 	rm -rf .tickets
 
-.PHONY: build test lint clean
+.PHONY: build test lint clean data clean-data
