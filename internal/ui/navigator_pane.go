@@ -173,7 +173,11 @@ func renderNodeLine(node *TreeNode, selected bool, width int) string {
 	ticketStyle := lipgloss.NewStyle()
 
 	indent := strings.Repeat("  ", node.depth)
-	label := indent + nodePrefix(node) + node.unit.Identifier + " [" + node.unit.Status + "]"
+	name := node.unit.Identifier
+	if idx := strings.LastIndex(name, "/"); idx >= 0 {
+		name = name[idx+1:]
+	}
+	label := indent + nodePrefix(node) + name + " [" + node.unit.Status + "]"
 	if width > 2 && len(label) > width-2 {
 		label = label[:width-2]
 	}

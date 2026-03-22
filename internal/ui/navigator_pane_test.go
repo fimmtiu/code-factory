@@ -152,6 +152,33 @@ func TestNavigatorViewShowsIdentifiers(t *testing.T) {
 	}
 }
 
+func TestNavigatorViewShowsShortName(t *testing.T) {
+	np := NavigatorPane{}
+	units := []*models.WorkUnit{
+		{Identifier: "proj-a", IsProject: true, Status: models.ProjectOpen},
+		{Identifier: "proj-a/sub", IsProject: true, Status: models.ProjectOpen, Parent: "proj-a"},
+		{Identifier: "proj-a/sub/fix-bug", IsProject: false, Status: models.StatusOpen, Parent: "proj-a/sub"},
+	}
+	np.SetUnits(units)
+
+	view := np.View(80, 20, false)
+
+	// Only the last path segment should appear for nested items.
+	if !strings.Contains(view, "sub [") {
+		t.Error("expected subproject to show as 'sub', not full path")
+	}
+	if strings.Contains(view, "proj-a/sub [") {
+		t.Error("expected subproject NOT to show full path 'proj-a/sub'")
+	}
+
+	if !strings.Contains(view, "fix-bug [") {
+		t.Error("expected ticket to show as 'fix-bug', not full path")
+	}
+	if strings.Contains(view, "proj-a/sub/fix-bug") {
+		t.Error("expected ticket NOT to show full path 'proj-a/sub/fix-bug'")
+	}
+}
+
 func TestNavigatorViewCollapsedHidesChildren(t *testing.T) {
 	np := NavigatorPane{}
 	units := []*models.WorkUnit{
