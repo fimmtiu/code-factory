@@ -15,8 +15,8 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"path"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/fimmtiu/tickets/internal/models"
@@ -123,6 +123,16 @@ type ticketSpec struct {
 	depIndex    int // index into sibling tickets, -1 = no dep
 }
 
+// depIdentifier returns the identifier of the ticket this spec depends on,
+// using the project's ticket list to resolve the index. Returns "" if there
+// is no dependency.
+func (p *projectNode) depIdentifier(spec ticketSpec) string {
+	if spec.depIndex < 0 {
+		return ""
+	}
+	return p.tickets[spec.depIndex].identifier
+}
+
 type generator struct {
 	rng        *rand.Rand
 	ticketsDir string
@@ -183,28 +193,35 @@ func (g *generator) projectDescription() string {
 // buildTree constructs a random project hierarchy with 5–7 total projects
 // and at least 24 tickets across them.
 func (g *generator) buildTree() []*projectNode {
-	// Decide how many top-level projects and subprojects to create.
 	// We target 5–7 total projects; subprojects live inside a top-level project.
 	totalProjects := 5 + g.rng.Intn(3) // 5, 6, or 7
 	numTopLevel := 3 + g.rng.Intn(2)   // 3 or 4
 	numSub := totalProjects - numTopLevel
 
-	roots := make([]*projectNode, numTopLevel)
+	roots := g.buildRoots(numTopLevel)
+	g.distributeSubprojects(roots, numSub)
+	g.fillTickets(roots)
+	return roots
+}
+
+func (g *generator) buildRoots(n int) []*projectNode {
+	roots := make([]*projectNode, n)
 	for i := range roots {
 		roots[i] = &projectNode{
 			identifier:  g.slug(),
 			description: g.projectDescription(),
 		}
 	}
+	return roots
+}
 
-	// Distribute subprojects among top-level projects (at most 2 per top-level).
-	subHosts := make([]int, 0, numSub)
+// distributeSubprojects spreads numSub subprojects across top-level roots,
+// capping at 2 subprojects per root to keep the tree balanced.
+func (g *generator) distributeSubprojects(roots []*projectNode, numSub int) {
 	for i := 0; i < numSub; i++ {
-		// Pick a top-level project that has fewer than 2 subprojects.
 		for {
-			idx := g.rng.Intn(numTopLevel)
+			idx := g.rng.Intn(len(roots))
 			if len(roots[idx].children) < 2 {
-				subHosts = append(subHosts, idx)
 				sub := &projectNode{
 					identifier:  roots[idx].identifier + "/" + g.slug(),
 					description: g.projectDescription(),
@@ -214,9 +231,10 @@ func (g *generator) buildTree() []*projectNode {
 			}
 		}
 	}
-	_ = subHosts
+}
 
-	// Assign tickets. We need at least 24 total; aim for 3–5 per container.
+// fillTickets assigns 2–5 tickets per project until the tree holds at least 24.
+func (g *generator) fillTickets(roots []*projectNode) {
 	allProjects := g.flattenProjects(roots)
 	totalTickets := 0
 	for totalTickets < 24 {
@@ -225,12 +243,10 @@ func (g *generator) buildTree() []*projectNode {
 			g.assignTickets(p, n)
 			totalTickets += n
 			if totalTickets >= 28 {
-				break
+				return
 			}
 		}
 	}
-
-	return roots
 }
 
 func (g *generator) flattenProjects(roots []*projectNode) []*projectNode {
@@ -267,52 +283,43 @@ func (g *generator) assignTickets(p *projectNode, n int) {
 
 // write persists the generated tree into the .tickets/ directory.
 func (g *generator) write(roots []*projectNode) error {
-	var writeProject func(*projectNode) error
-	writeProject = func(p *projectNode) error {
-		// Create the project directory and .project.json.
-		projDir := filepath.Join(g.ticketsDir, filepath.FromSlash(p.identifier))
-		if err := os.MkdirAll(projDir, 0755); err != nil {
-			return err
-		}
-		wu := models.NewProject(p.identifier, p.description)
-		if err := storage.WriteWorkUnit(filepath.Join(projDir, ".project.json"), wu); err != nil {
-			return err
-		}
-
-		// Write each ticket.
-		for i, spec := range p.tickets {
-			t := models.NewTicket(spec.identifier, spec.description)
-			if spec.depIndex >= 0 {
-				dep := p.tickets[spec.depIndex].identifier
-				t.SetDependencies([]string{dep})
-			}
-
-			// Ticket files live alongside the project directory (one level up)
-			// if the ticket belongs to a subproject, or directly under .tickets/
-			// for top-level project tickets.
-			//
-			// Actually ticket files always live inside the project dir:
-			// .tickets/<project>/<slug>.json
-			slug := ticketSlug(spec.identifier)
-			ticketPath := filepath.Join(projDir, slug+".json")
-			if err := storage.WriteWorkUnit(ticketPath, t); err != nil {
-				return fmt.Errorf("ticket %d (%s): %w", i, spec.identifier, err)
-			}
-		}
-
-		// Recurse into subprojects.
-		for _, child := range p.children {
-			if err := writeProject(child); err != nil {
-				return err
-			}
-		}
-
-		return nil
-	}
-
 	for _, root := range roots {
-		if err := writeProject(root); err != nil {
+		if err := g.writeProject(root); err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+func (g *generator) writeProject(p *projectNode) error {
+	projDir := filepath.Join(g.ticketsDir, filepath.FromSlash(p.identifier))
+	if err := os.MkdirAll(projDir, 0755); err != nil {
+		return err
+	}
+	wu := models.NewProject(p.identifier, p.description)
+	if err := storage.WriteWorkUnit(filepath.Join(projDir, ".project.json"), wu); err != nil {
+		return err
+	}
+	if err := g.writeTickets(p, projDir); err != nil {
+		return err
+	}
+	for _, child := range p.children {
+		if err := g.writeProject(child); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (g *generator) writeTickets(p *projectNode, projDir string) error {
+	for i, spec := range p.tickets {
+		t := models.NewTicket(spec.identifier, spec.description)
+		if dep := p.depIdentifier(spec); dep != "" {
+			t.SetDependencies([]string{dep})
+		}
+		ticketPath := filepath.Join(projDir, ticketSlug(spec.identifier)+".json")
+		if err := storage.WriteWorkUnit(ticketPath, t); err != nil {
+			return fmt.Errorf("ticket %d (%s): %w", i, spec.identifier, err)
 		}
 	}
 	return nil
@@ -320,8 +327,7 @@ func (g *generator) write(roots []*projectNode) error {
 
 // ticketSlug returns the final path component of a slash-separated identifier.
 func ticketSlug(identifier string) string {
-	parts := strings.Split(identifier, "/")
-	return parts[len(parts)-1]
+	return path.Base(identifier)
 }
 
 // ---------------------------------------------------------------------------
@@ -337,8 +343,8 @@ func printSummary(roots []*projectNode) {
 		for _, t := range p.tickets {
 			ticketCount++
 			dep := ""
-			if t.depIndex >= 0 {
-				dep = fmt.Sprintf("  (depends on %s)", p.tickets[t.depIndex].identifier)
+			if id := p.depIdentifier(t); id != "" {
+				dep = fmt.Sprintf("  (depends on %s)", id)
 			}
 			fmt.Printf("%s  [ticket]  %s%s\n", indent, t.identifier, dep)
 		}
@@ -364,37 +370,40 @@ func main() {
 	resetFlag := flag.Bool("reset", false, "remove existing .tickets/ content before generating")
 	flag.Parse()
 
-	repoRoot, err := storage.FindRepoRoot(*targetFlag)
-	if err != nil {
+	if err := run(*seedFlag, *targetFlag, *resetFlag); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
+	}
+}
+
+func run(seed int64, target string, reset bool) error {
+	repoRoot, err := storage.FindRepoRoot(target)
+	if err != nil {
+		return err
 	}
 
 	ticketsDir := storage.TicketsDirPath(repoRoot)
 
-	if *resetFlag {
+	if reset {
 		if err := os.RemoveAll(ticketsDir); err != nil {
-			fmt.Fprintln(os.Stderr, "error removing .tickets/:", err)
-			os.Exit(1)
+			return fmt.Errorf("removing .tickets/: %w", err)
 		}
 		fmt.Println("Removed existing .tickets/ directory.")
 	}
 
 	if err := storage.InitTicketsDir(repoRoot); err != nil {
-		fmt.Fprintln(os.Stderr, "error initialising .tickets/:", err)
-		os.Exit(1)
+		return fmt.Errorf("initialising .tickets/: %w", err)
 	}
 
-	rng := rand.New(rand.NewSource(*seedFlag))
-	gen := newGenerator(rng, ticketsDir)
+	gen := newGenerator(rand.New(rand.NewSource(seed)), ticketsDir)
 	roots := gen.buildTree()
 
 	if err := gen.write(roots); err != nil {
-		fmt.Fprintln(os.Stderr, "error writing test data:", err)
-		os.Exit(1)
+		return fmt.Errorf("writing test data: %w", err)
 	}
 
-	fmt.Printf("Generated test data (seed %d):\n\n", *seedFlag)
+	fmt.Printf("Generated test data (seed %d):\n\n", seed)
 	printSummary(roots)
 	fmt.Printf("\nData written to: %s\n", ticketsDir)
+	return nil
 }
