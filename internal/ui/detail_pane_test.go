@@ -132,6 +132,37 @@ func TestDetailPaneViewNilUnit(t *testing.T) {
 	_ = view
 }
 
+func TestDetailPaneViewHeightMatchesRequested(t *testing.T) {
+	// The detail pane has a BorderTop which costs 1 row. View must render to
+	// exactly height rows total (not height+1) so the overall frame fits the
+	// terminal without scrolling the first line off-screen.
+	for _, height := range []int{10, 12, 20, 24} {
+		dp := DetailPane{}
+		unit := &models.WorkUnit{
+			Identifier:  "proj/ticket-1",
+			Description: "some description",
+			Status:      models.StatusOpen,
+		}
+		dp.SetUnit(unit)
+
+		view := dp.View(80, height)
+		lines := strings.Split(view, "\n")
+		if len(lines) != height {
+			t.Errorf("View(80, %d): got %d lines, want %d", height, len(lines), height)
+		}
+	}
+}
+
+func TestDetailPaneNilViewHeightMatchesRequested(t *testing.T) {
+	// Same contract for the "no item selected" state.
+	dp := DetailPane{}
+	view := dp.View(80, 12)
+	lines := strings.Split(view, "\n")
+	if len(lines) != 12 {
+		t.Errorf("nil View(80, 12): got %d lines, want 12", len(lines))
+	}
+}
+
 func TestDetailPaneScrollDoesNotGoBeyondContent(t *testing.T) {
 	dp := DetailPane{}
 

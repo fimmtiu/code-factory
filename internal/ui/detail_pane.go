@@ -46,8 +46,16 @@ func (dp *DetailPane) ScrollDown() {
 
 // View renders the detail pane as a string with the given dimensions.
 func (dp DetailPane) View(width, height int) string {
+	// BorderTop adds 1 row; treat height as the total (outer) height so the
+	// rendered block is exactly height lines regardless of content.
+	contentHeight := height - 1
+
 	if dp.unit == nil {
-		paneStyle := lipgloss.NewStyle().Width(width).Height(height)
+		paneStyle := lipgloss.NewStyle().
+			Width(width).
+			Height(contentHeight).
+			BorderTop(true).
+			BorderStyle(lipgloss.NormalBorder())
 		return paneStyle.Render("No item selected")
 	}
 
@@ -59,15 +67,15 @@ func (dp DetailPane) View(width, height int) string {
 		start = len(lines)
 	}
 	visible := lines[start:]
-	if len(visible) > height {
-		visible = visible[:height]
+	if len(visible) > contentHeight {
+		visible = visible[:contentHeight]
 	}
 
 	content := strings.Join(visible, "\n")
 
 	paneStyle := lipgloss.NewStyle().
 		Width(width).
-		Height(height).
+		Height(contentHeight).
 		BorderTop(true).
 		BorderStyle(lipgloss.NormalBorder())
 
