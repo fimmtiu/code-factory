@@ -127,6 +127,46 @@ func TestWorkUnitJSONFieldNames(t *testing.T) {
 	}
 }
 
+func TestProjectJSONIncludesIsProject(t *testing.T) {
+	wu := NewProject("my-project", "desc")
+
+	data, err := json.Marshal(wu)
+	if err != nil {
+		t.Fatalf("json.Marshal failed: %v", err)
+	}
+
+	var raw map[string]interface{}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("json.Unmarshal failed: %v", err)
+	}
+
+	val, ok := raw["is_project"]
+	if !ok {
+		t.Fatal("expected \"is_project\" key in project JSON, but it was absent")
+	}
+	if val != true {
+		t.Errorf("is_project = %v, want true", val)
+	}
+}
+
+func TestTicketJSONOmitsIsProject(t *testing.T) {
+	wu := NewTicket("fix-bug", "desc")
+
+	data, err := json.Marshal(wu)
+	if err != nil {
+		t.Fatalf("json.Marshal failed: %v", err)
+	}
+
+	var raw map[string]interface{}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("json.Unmarshal failed: %v", err)
+	}
+
+	if _, ok := raw["is_project"]; ok {
+		t.Error("ticket JSON should not contain \"is_project\", but it does")
+	}
+}
+
 func TestValidateIdentifier(t *testing.T) {
 	tests := []struct {
 		input   string
