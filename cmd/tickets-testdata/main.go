@@ -1,10 +1,10 @@
-// gen-testdata generates a realistic set of fake projects and tickets in the
+// tickets-testdata generates a realistic set of fake projects and tickets in the
 // .tickets/ directory of a git repository. It is intended for manual testing
 // and local development of the tickets tools.
 //
 // Usage:
 //
-//	gen-testdata [flags]
+//	tickets-testdata [flags]
 //	  -seed int     random seed (default: current time)
 //	  -target dir   path inside the target git repository (default: ".")
 //	  -reset        remove all existing .tickets/ content before generating
