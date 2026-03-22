@@ -150,20 +150,6 @@ func (s *State) Parent(wu *models.WorkUnit) (*models.WorkUnit, bool) {
 	return parent, ok
 }
 
-// Children returns all direct children of the work unit with the given
-// parentID (i.e. all units whose Parent field equals parentID).
-func (s *State) Children(parentID string) []*models.WorkUnit {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	var out []*models.WorkUnit
-	for _, wu := range s.units {
-		if wu.Parent == parentID {
-			out = append(out, wu)
-		}
-	}
-	return out
-}
-
 // AllDone returns true if all direct children of parentID have status "done".
 // Returns true for a parent with no children.
 func (s *State) AllDone(parentID string) bool {
@@ -175,6 +161,19 @@ func (s *State) AllDone(parentID string) bool {
 		}
 	}
 	return true
+}
+
+// MarkAncestorsInProgress walks up the parent chain from wu and marks every
+// ancestor project as in-progress if it is not already.
+func (s *State) MarkAncestorsInProgress(wu *models.WorkUnit) {
+	parent, ok := s.Parent(wu)
+	for ok {
+		if parent.Status != models.ProjectInProgress {
+			parent.Status = models.ProjectInProgress
+			s.Update(parent) //nolint:errcheck
+		}
+		parent, ok = s.Parent(parent)
+	}
 }
 
 // unsatisfiedDepsLocked counts unsatisfied dependencies without acquiring the

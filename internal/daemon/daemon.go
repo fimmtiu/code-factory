@@ -10,6 +10,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"sync"
 	"syscall"
 	"time"
@@ -64,6 +65,11 @@ func (d *Daemon) State() *State {
 // TicketsDir returns the path to the .tickets directory.
 func (d *Daemon) TicketsDir() string {
 	return d.ticketsDir
+}
+
+// RepoRoot returns the root of the git repository (the parent of TicketsDir).
+func (d *Daemon) RepoRoot() string {
+	return filepath.Dir(d.ticketsDir)
 }
 
 // GitClient returns the git client used by this daemon.
