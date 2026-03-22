@@ -5,6 +5,7 @@ package ui
 import (
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -54,10 +55,14 @@ type Model struct {
 }
 
 // NewModel creates a new Model configured to connect to the daemon at socketPath.
+// socketPath is expected to be <repoRoot>/.tickets/.daemon.sock; the repo name
+// is derived from the directory two levels up.
 func NewModel(socketPath string) Model {
+	repoName := filepath.Base(filepath.Dir(filepath.Dir(socketPath)))
 	return Model{
-		client:  client.NewClient(socketPath),
-		focused: NavigatorFocused,
+		client:     client.NewClient(socketPath),
+		focused:    NavigatorFocused,
+		statusPane: StatusPane{repoName: repoName},
 	}
 }
 

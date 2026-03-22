@@ -7,6 +7,22 @@ import (
 	"github.com/fimmtiu/tickets/internal/models"
 )
 
+func TestStatusPaneShowsRepoName(t *testing.T) {
+	sp := StatusPane{repoName: "my-cool-project"}
+	view := sp.View(nil, 40, 15)
+	if !strings.Contains(view, "my-cool-project") {
+		t.Errorf("expected repo name in title, got: %q", view)
+	}
+}
+
+func TestStatusPaneFallsBackToStatusWhenNoRepoName(t *testing.T) {
+	sp := StatusPane{}
+	view := sp.View(nil, 40, 15)
+	if !strings.Contains(view, "Status") {
+		t.Errorf("expected fallback title 'Status', got: %q", view)
+	}
+}
+
 func TestStatusPaneCountsProjects(t *testing.T) {
 	sp := StatusPane{}
 	units := sampleUnits()

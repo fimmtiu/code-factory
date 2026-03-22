@@ -10,7 +10,9 @@ import (
 
 // StatusPane renders a compact summary of project and ticket statistics.
 // It is not interactive.
-type StatusPane struct{}
+type StatusPane struct {
+	repoName string
+}
 
 // statusCounts holds the computed counts for projects or tickets.
 type statusCounts struct {
@@ -28,8 +30,13 @@ func (sp StatusPane) View(units []*models.WorkUnit, width, height int) string {
 	titleStyle := lipgloss.NewStyle().Bold(true).Underline(true)
 	labelStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("12"))
 
+	title := sp.repoName
+	if title == "" {
+		title = "Status"
+	}
+
 	lines := []string{
-		titleStyle.Render("Status"),
+		titleStyle.Render(title),
 		"",
 		labelStyle.Render("Projects:"),
 		fmt.Sprintf("  Total:       %d", proj.total),
