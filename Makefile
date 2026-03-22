@@ -1,5 +1,5 @@
 build:
-	go build ./cmd/tickets ./cmd/ticketsd ./cmd/tickets-ui ./cmd/gen-testdata
+	go build ./cmd/tickets ./cmd/ticketsd ./cmd/tickets-ui ./cmd/tickets-testdata
 
 test:
 	go test ./...
@@ -9,12 +9,15 @@ lint:
 	gofmt -w .
 
 clean:
-	rm -f tickets ticketsd tickets-ui gen-testdata
+	rm -f tickets ticketsd tickets-ui tickets-testdata
 
 data:
-	./gen-testdata
+	./tickets-testdata
 
 clean-data:
 	rm -rf .tickets
 
-.PHONY: build test lint clean data clean-data
+install: build
+	GOBIN=$(HOME)/bin go install ./cmd/tickets ./cmd/ticketsd ./cmd/tickets-ui ./cmd/tickets-testdata
+
+.PHONY: build test lint clean data clean-data install
