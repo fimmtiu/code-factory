@@ -140,6 +140,75 @@ func TestAppDetailScrolling(t *testing.T) {
 	}
 }
 
+func TestAppNavigatorPageDown(t *testing.T) {
+	m := NewModel("/tmp/test.sock")
+	m.height = 24
+	m.focused = NavigatorFocused
+	m.units = sampleUnits()
+	m.navigator.SetUnits(m.units)
+
+	initial := m.navigator.cursor
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyPgDown})
+	um := updated.(Model)
+
+	if um.navigator.cursor <= initial {
+		t.Errorf("expected cursor to advance on PgDown, got cursor=%d (was %d)",
+			um.navigator.cursor, initial)
+	}
+}
+
+func TestAppNavigatorPageUp(t *testing.T) {
+	m := NewModel("/tmp/test.sock")
+	m.height = 24
+	m.focused = NavigatorFocused
+	m.units = sampleUnits()
+	m.navigator.SetUnits(m.units)
+	m.navigator.cursor = len(m.navigator.nodes) - 1 // start at end
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyPgUp})
+	um := updated.(Model)
+
+	if um.navigator.cursor >= m.navigator.cursor {
+		t.Errorf("expected cursor to decrease on PgUp, got cursor=%d (was %d)",
+			um.navigator.cursor, m.navigator.cursor)
+	}
+}
+
+func TestAppDetailPageDown(t *testing.T) {
+	m := NewModel("/tmp/test.sock")
+	m.height = 24
+	m.focused = DetailFocused
+	units := sampleUnits()
+	if len(units) > 0 {
+		m.detail.SetUnit(units[0])
+	}
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyPgDown})
+	um := updated.(Model)
+	// scrollY should not go negative; for a short description it may stay at 0
+	if um.detail.scrollY < 0 {
+		t.Errorf("expected scrollY >= 0 after PgDown, got %d", um.detail.scrollY)
+	}
+}
+
+func TestAppDetailPageUp(t *testing.T) {
+	m := NewModel("/tmp/test.sock")
+	m.height = 24
+	m.focused = DetailFocused
+	units := sampleUnits()
+	if len(units) > 0 {
+		m.detail.SetUnit(units[0])
+	}
+	m.detail.scrollY = 5
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyPgUp})
+	um := updated.(Model)
+
+	if um.detail.scrollY >= 5 {
+		t.Errorf("expected scrollY to decrease on PgUp, got %d (was 5)", um.detail.scrollY)
+	}
+}
+
 func TestAppCtrlRRefresh(t *testing.T) {
 	m := NewModel("/tmp/test.sock")
 	// Ctrl-R should trigger a refresh (non-nil command)

@@ -184,6 +184,48 @@ func makeTickets(n int) []*models.WorkUnit {
 	return units
 }
 
+func TestNavigatorPageDown(t *testing.T) {
+	np := NavigatorPane{}
+	np.SetUnits(makeTickets(20))
+
+	np.PageDown(5)
+	if np.cursor != 5 {
+		t.Errorf("expected cursor 5 after PageDown(5), got %d", np.cursor)
+	}
+}
+
+func TestNavigatorPageDownClampsAtEnd(t *testing.T) {
+	np := NavigatorPane{}
+	np.SetUnits(makeTickets(10))
+
+	np.PageDown(100)
+	if np.cursor != 9 {
+		t.Errorf("expected cursor clamped to 9 after PageDown(100), got %d", np.cursor)
+	}
+}
+
+func TestNavigatorPageUp(t *testing.T) {
+	np := NavigatorPane{}
+	np.SetUnits(makeTickets(20))
+	np.cursor = 15
+
+	np.PageUp(5)
+	if np.cursor != 10 {
+		t.Errorf("expected cursor 10 after PageUp(5) from 15, got %d", np.cursor)
+	}
+}
+
+func TestNavigatorPageUpClampsAtZero(t *testing.T) {
+	np := NavigatorPane{}
+	np.SetUnits(makeTickets(20))
+	np.cursor = 3
+
+	np.PageUp(100)
+	if np.cursor != 0 {
+		t.Errorf("expected cursor clamped to 0 after PageUp(100), got %d", np.cursor)
+	}
+}
+
 func TestNavigatorViewScrollsCursorIntoView(t *testing.T) {
 	np := NavigatorPane{}
 	np.SetUnits(makeTickets(20))

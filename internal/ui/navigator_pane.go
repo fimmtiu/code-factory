@@ -103,6 +103,25 @@ func (np *NavigatorPane) MoveDown() {
 	}
 }
 
+// PageUp moves the cursor up by height rows, clamped to 0.
+func (np *NavigatorPane) PageUp(height int) {
+	np.cursor -= height
+	if np.cursor < 0 {
+		np.cursor = 0
+	}
+}
+
+// PageDown moves the cursor down by height rows, clamped to len(nodes)-1.
+func (np *NavigatorPane) PageDown(height int) {
+	np.cursor += height
+	if np.cursor >= len(np.nodes) {
+		np.cursor = len(np.nodes) - 1
+	}
+	if np.cursor < 0 {
+		np.cursor = 0
+	}
+}
+
 // ToggleExpand collapses or expands the node at the current cursor position.
 func (np *NavigatorPane) ToggleExpand() {
 	if len(np.nodes) == 0 {

@@ -163,6 +163,66 @@ func TestDetailPaneNilViewHeightMatchesRequested(t *testing.T) {
 	}
 }
 
+func TestDetailPanePageDown(t *testing.T) {
+	dp := DetailPane{}
+	dp.SetUnit(&models.WorkUnit{
+		Identifier:  "proj/t",
+		Description: strings.Repeat("line\n", 30),
+		Status:      models.StatusOpen,
+	})
+
+	dp.PageDown(5)
+	if dp.scrollY != 5 {
+		t.Errorf("expected scrollY 5 after PageDown(5), got %d", dp.scrollY)
+	}
+}
+
+func TestDetailPanePageDownClampsAtEnd(t *testing.T) {
+	dp := DetailPane{}
+	dp.SetUnit(&models.WorkUnit{
+		Identifier:  "proj/t",
+		Description: "short",
+		Status:      models.StatusOpen,
+	})
+
+	dp.PageDown(1000)
+	lines := dp.buildLines()
+	maxScroll := len(lines) - 1
+	if dp.scrollY != maxScroll {
+		t.Errorf("expected scrollY clamped to %d, got %d", maxScroll, dp.scrollY)
+	}
+}
+
+func TestDetailPanePageUp(t *testing.T) {
+	dp := DetailPane{}
+	dp.SetUnit(&models.WorkUnit{
+		Identifier:  "proj/t",
+		Description: strings.Repeat("line\n", 30),
+		Status:      models.StatusOpen,
+	})
+	dp.scrollY = 20
+
+	dp.PageUp(8)
+	if dp.scrollY != 12 {
+		t.Errorf("expected scrollY 12 after PageUp(8) from 20, got %d", dp.scrollY)
+	}
+}
+
+func TestDetailPanePageUpClampsAtZero(t *testing.T) {
+	dp := DetailPane{}
+	dp.SetUnit(&models.WorkUnit{
+		Identifier:  "proj/t",
+		Description: strings.Repeat("line\n", 30),
+		Status:      models.StatusOpen,
+	})
+	dp.scrollY = 3
+
+	dp.PageUp(1000)
+	if dp.scrollY != 0 {
+		t.Errorf("expected scrollY clamped to 0, got %d", dp.scrollY)
+	}
+}
+
 func TestDetailPaneScrollDoesNotGoBeyondContent(t *testing.T) {
 	dp := DetailPane{}
 

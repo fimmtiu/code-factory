@@ -44,6 +44,30 @@ func (dp *DetailPane) ScrollDown() {
 	}
 }
 
+// PageUp scrolls the detail view up by n lines, clamped at 0.
+func (dp *DetailPane) PageUp(n int) {
+	dp.scrollY -= n
+	if dp.scrollY < 0 {
+		dp.scrollY = 0
+	}
+}
+
+// PageDown scrolls the detail view down by n lines, clamped to the last line.
+func (dp *DetailPane) PageDown(n int) {
+	if dp.unit == nil {
+		return
+	}
+	lines := dp.buildLines()
+	maxScroll := len(lines) - 1
+	if maxScroll < 0 {
+		maxScroll = 0
+	}
+	dp.scrollY += n
+	if dp.scrollY > maxScroll {
+		dp.scrollY = maxScroll
+	}
+}
+
 // View renders the detail pane as a string with the given dimensions.
 func (dp DetailPane) View(width, height int) string {
 	// BorderTop adds 1 row; treat height as the total (outer) height so the
