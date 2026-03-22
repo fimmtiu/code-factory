@@ -13,7 +13,6 @@ import (
 type DetailPane struct {
 	unit    *models.WorkUnit
 	scrollY int
-	height  int
 }
 
 // SetUnit sets the work unit to display and resets the scroll position.
@@ -47,8 +46,6 @@ func (dp *DetailPane) ScrollDown() {
 
 // View renders the detail pane as a string with the given dimensions.
 func (dp DetailPane) View(width, height int) string {
-	dp.height = height
-
 	if dp.unit == nil {
 		paneStyle := lipgloss.NewStyle().Width(width).Height(height)
 		return paneStyle.Render("No item selected")

@@ -47,7 +47,6 @@ type Model struct {
 	focused    FocusedPane
 	units      []*models.WorkUnit
 	client     *client.Client
-	socketPath string
 	navigator  NavigatorPane
 	detail     DetailPane
 	statusPane StatusPane
@@ -57,9 +56,8 @@ type Model struct {
 // NewModel creates a new Model configured to connect to the daemon at socketPath.
 func NewModel(socketPath string) Model {
 	return Model{
-		socketPath: socketPath,
-		client:     client.NewClient(socketPath),
-		focused:    NavigatorFocused,
+		client:  client.NewClient(socketPath),
+		focused: NavigatorFocused,
 	}
 }
 

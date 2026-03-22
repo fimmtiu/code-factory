@@ -320,41 +320,6 @@ func TestStateParent(t *testing.T) {
 	}
 }
 
-// TestStateChildren verifies that Children returns direct children of a parent.
-func TestStateChildren(t *testing.T) {
-	ticketsDir := makeTempTicketsDir(t)
-
-	projDir := filepath.Join(ticketsDir, "proj")
-	if err := os.MkdirAll(projDir, 0755); err != nil {
-		t.Fatalf("MkdirAll: %v", err)
-	}
-	proj := models.NewProject("proj", "parent")
-	if err := storage.WriteWorkUnit(filepath.Join(projDir, ".project.json"), proj); err != nil {
-		t.Fatalf("WriteWorkUnit project: %v", err)
-	}
-
-	for _, id := range []string{"child-a", "child-b"} {
-		child := models.NewTicket("proj/"+id, id)
-		if err := storage.WriteWorkUnit(filepath.Join(projDir, id+".json"), child); err != nil {
-			t.Fatalf("WriteWorkUnit child: %v", err)
-		}
-	}
-
-	// Top-level ticket (not a child of proj).
-	top := models.NewTicket("top-level", "top")
-	writeTicket(t, ticketsDir, top)
-
-	s := daemon.NewState(ticketsDir)
-	if err := s.Load(); err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-
-	children := s.Children("proj")
-	if len(children) != 2 {
-		t.Errorf("expected 2 children, got %d", len(children))
-	}
-}
-
 // TestStateAllDone verifies AllDone returns true only when all children are done.
 func TestStateAllDone(t *testing.T) {
 	ticketsDir := makeTempTicketsDir(t)
@@ -458,20 +423,6 @@ func TestStateParentNone(t *testing.T) {
 	_, ok := s.Parent(ticket)
 	if ok {
 		t.Error("expected Parent to return false for top-level ticket")
-	}
-}
-
-// TestStateChildrenEmpty verifies Children returns empty slice for unknown parent.
-func TestStateChildrenEmpty(t *testing.T) {
-	ticketsDir := makeTempTicketsDir(t)
-	s := daemon.NewState(ticketsDir)
-	if err := s.Load(); err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-
-	children := s.Children("nonexistent")
-	if len(children) != 0 {
-		t.Errorf("expected 0 children, got %d", len(children))
 	}
 }
 

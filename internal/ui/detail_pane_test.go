@@ -26,7 +26,7 @@ func TestDetailPaneSetUnit(t *testing.T) {
 
 func TestDetailPaneScrollDown(t *testing.T) {
 	dp := DetailPane{}
-	dp.height = 5
+
 	unit := &models.WorkUnit{
 		Identifier:  "proj/ticket-1",
 		Description: "Line1\nLine2\nLine3\nLine4\nLine5\nLine6\nLine7\nLine8\nLine9\nLine10",
@@ -42,7 +42,7 @@ func TestDetailPaneScrollDown(t *testing.T) {
 
 func TestDetailPaneScrollUp(t *testing.T) {
 	dp := DetailPane{}
-	dp.height = 5
+
 	unit := &models.WorkUnit{
 		Identifier:  "proj/ticket-1",
 		Description: "Line1\nLine2\nLine3\nLine4\nLine5\nLine6",
@@ -134,7 +134,7 @@ func TestDetailPaneViewNilUnit(t *testing.T) {
 
 func TestDetailPaneScrollDoesNotGoBeyondContent(t *testing.T) {
 	dp := DetailPane{}
-	dp.height = 20
+
 	unit := &models.WorkUnit{
 		Identifier:  "proj/ticket-1",
 		Description: "Short description",

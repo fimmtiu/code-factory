@@ -33,9 +33,9 @@ type Response struct {
 	Error string `json:"error,omitempty"`
 }
 
-// WriteCommand JSON-encodes cmd and writes it followed by a newline to w.
-func WriteCommand(w io.Writer, cmd Command) error {
-	data, err := json.Marshal(cmd)
+// writeJSON encodes v as JSON and writes it followed by a newline to w.
+func writeJSON(w io.Writer, v interface{}) error {
+	data, err := json.Marshal(v)
 	if err != nil {
 		return err
 	}
@@ -44,15 +44,26 @@ func WriteCommand(w io.Writer, cmd Command) error {
 	return err
 }
 
-// ReadCommand reads one newline-delimited JSON line from r and decodes it into
-// a Command. Use bufio.NewReader to wrap an underlying reader when calling this
-// repeatedly over the same connection.
-func ReadCommand(r io.Reader) (Command, error) {
+// readLine reads one newline-delimited line from r, wrapping in a bufio.Reader
+// if necessary.
+func readLine(r io.Reader) ([]byte, error) {
 	br, ok := r.(*bufio.Reader)
 	if !ok {
 		br = bufio.NewReader(r)
 	}
-	line, err := br.ReadBytes('\n')
+	return br.ReadBytes('\n')
+}
+
+// WriteCommand JSON-encodes cmd and writes it followed by a newline to w.
+func WriteCommand(w io.Writer, cmd Command) error {
+	return writeJSON(w, cmd)
+}
+
+// ReadCommand reads one newline-delimited JSON line from r and decodes it into
+// a Command. Use bufio.NewReader to wrap an underlying reader when calling this
+// repeatedly over the same connection.
+func ReadCommand(r io.Reader) (Command, error) {
+	line, err := readLine(r)
 	if err != nil {
 		return Command{}, err
 	}
@@ -65,23 +76,13 @@ func ReadCommand(r io.Reader) (Command, error) {
 
 // WriteResponse JSON-encodes resp and writes it followed by a newline to w.
 func WriteResponse(w io.Writer, resp Response) error {
-	data, err := json.Marshal(resp)
-	if err != nil {
-		return err
-	}
-	data = append(data, '\n')
-	_, err = w.Write(data)
-	return err
+	return writeJSON(w, resp)
 }
 
 // ReadResponse reads one newline-delimited JSON line from r and decodes it into
 // a Response.
 func ReadResponse(r io.Reader) (Response, error) {
-	br, ok := r.(*bufio.Reader)
-	if !ok {
-		br = bufio.NewReader(r)
-	}
-	line, err := br.ReadBytes('\n')
+	line, err := readLine(r)
 	if err != nil {
 		return Response{}, err
 	}

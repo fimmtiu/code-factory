@@ -8,11 +8,11 @@ import (
 
 func TestNewModel(t *testing.T) {
 	m := NewModel("/tmp/test.sock")
-	if m.socketPath != "/tmp/test.sock" {
-		t.Errorf("expected socketPath /tmp/test.sock, got %q", m.socketPath)
-	}
 	if m.focused != NavigatorFocused {
 		t.Errorf("expected NavigatorFocused initial focus, got %v", m.focused)
+	}
+	if m.client == nil {
+		t.Error("expected client to be initialized")
 	}
 }
 

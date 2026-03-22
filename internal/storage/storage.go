@@ -148,14 +148,11 @@ func traverseDir(dir, ticketsDir, parentIdentifier string, results *[]*models.Wo
 			if err != nil {
 				return fmt.Errorf("TraverseAll: read ticket %s: %w", ticketPath, err)
 			}
-			// Compute identifier from path relative to ticketsDir.
 			rel, err := filepath.Rel(ticketsDir, ticketPath)
 			if err != nil {
 				return fmt.Errorf("TraverseAll: compute relative path: %w", err)
 			}
-			// Convert OS path separators to "/" and strip the .json suffix.
-			rel = filepath.ToSlash(rel)
-			rel = strings.TrimSuffix(rel, ".json")
+			rel = strings.TrimSuffix(filepath.ToSlash(rel), ".json")
 			wu.Identifier = rel
 			wu.IsProject = false
 			wu.Parent = parentIdentifier
@@ -218,7 +215,6 @@ func WriteWorkUnit(path string, wu *models.WorkUnit) error {
 // contain "/" to represent nested projects (e.g., "my-feature/sub-task"),
 // in which case intermediate directories are created as needed.
 func CreateProjectDir(ticketsDir, identifier string) error {
-	// Convert "/" separators to OS path separators for directory creation.
 	relPath := filepath.FromSlash(identifier)
 	projDir := filepath.Join(ticketsDir, relPath)
 
