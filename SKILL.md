@@ -106,7 +106,7 @@ Expected output:
 {
   "id": "auth-feature/login-endpoint",
   "description": "Implement the login endpoint: POST /auth/login. Accept email and password, return a JWT on success.",
-  "status": "in_progress"
+  "status": "in-progress"
 }
 ```
 
@@ -130,7 +130,7 @@ Expected output:
 ```json
 {
   "id": "auth-feature/login-endpoint",
-  "status": "review_ready"
+  "status": "review-ready"
 }
 ```
 
@@ -147,7 +147,7 @@ Expected output:
 {
   "id": "auth-feature/login-endpoint",
   "description": "Implement the login endpoint: POST /auth/login. Accept email and password, return a JWT on success.",
-  "status": "in_review"
+  "status": "in-review"
 }
 ```
 
@@ -187,7 +187,7 @@ Expected output (JSON array of work units):
   {
     "id": "auth-feature",
     "description": "Add user authentication to the web app...",
-    "status": "in_progress",
+    "status": "in-progress",
     "children": [
       {
         "id": "auth-feature/login-endpoint",
@@ -195,7 +195,7 @@ Expected output (JSON array of work units):
       },
       {
         "id": "auth-feature/logout-endpoint",
-        "status": "in_progress"
+        "status": "in-progress"
       }
     ]
   }
@@ -252,17 +252,17 @@ echo '{"description": "Implement POST /auth/logout — invalidate session.", "de
 
 # 4. Claim work — daemon returns the first available ticket (login-endpoint)
 tickets get-work
-# {"id": "auth-feature/login-endpoint", "status": "in_progress", ...}
+# {"id": "auth-feature/login-endpoint", "status": "in-progress", ...}
 
 # 5. Do the implementation work...
 
 # 6. Signal implementation is complete and ready for review
 tickets review-ready auth-feature/login-endpoint
-# {"id": "auth-feature/login-endpoint", "status": "review_ready"}
+# {"id": "auth-feature/login-endpoint", "status": "review-ready"}
 
 # 7. A reviewer claims the review
 tickets get-review
-# {"id": "auth-feature/login-endpoint", "status": "in_review", ...}
+# {"id": "auth-feature/login-endpoint", "status": "in-review", ...}
 
 # 8. Review passes — mark done
 tickets done auth-feature/login-endpoint
@@ -270,7 +270,7 @@ tickets done auth-feature/login-endpoint
 
 # 9. Now logout-endpoint is unblocked — claim it
 tickets get-work
-# {"id": "auth-feature/logout-endpoint", "status": "in_progress", ...}
+# {"id": "auth-feature/logout-endpoint", "status": "in-progress", ...}
 
 # 10. Check overall progress at any time
 tickets status
