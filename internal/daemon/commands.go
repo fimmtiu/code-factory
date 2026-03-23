@@ -10,7 +10,6 @@ import (
 	"github.com/fimmtiu/tickets/internal/storage"
 )
 
-
 // parseDependencies splits a comma-separated dependency string into a slice,
 // discarding empty entries.
 func parseDependencies(raw string) []string {
@@ -78,7 +77,7 @@ func makeStatusHandler(d *Daemon) HandlerFunc {
 }
 
 // makeCreateProjectHandler returns a handler that creates a new project
-// directory and .project.json file, then updates the in-memory state.
+// directory and project.json file, then updates the in-memory state.
 func makeCreateProjectHandler(d *Daemon) HandlerFunc {
 	return func(cmd protocol.Command) protocol.Response {
 		identifier := cmd.Params["identifier"]

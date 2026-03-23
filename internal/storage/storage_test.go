@@ -129,28 +129,16 @@ func TestInitTicketsDir_Idempotent(t *testing.T) {
 	}
 }
 
-// ===== IsProjectDir =====
+// ===== ProjectMetaPath / TicketDirPath / TicketMetaPath / TicketWorktreePath =====
 
-func TestIsProjectDir(t *testing.T) {
-	tests := []struct {
-		name string
-		want bool
-	}{
-		{"my-feature", true},
-		{"sub-task", true},
-		{".hidden", false},
-		{".tickets", false},
-		{"", false},
-	}
-	for _, tc := range tests {
-		got := storage.IsProjectDir(tc.name)
-		if got != tc.want {
-			t.Errorf("IsProjectDir(%q) = %v; want %v", tc.name, got, tc.want)
-		}
+func TestProjectMetaPath(t *testing.T) {
+	projectDir := "/repo/.tickets/my-project"
+	got := storage.ProjectMetaPath(projectDir)
+	want := filepath.Join(projectDir, "project.json")
+	if got != want {
+		t.Errorf("ProjectMetaPath: got %q, want %q", got, want)
 	}
 }
-
-// ===== TicketDirPath / TicketMetaPath / TicketWorktreePath =====
 
 func TestTicketDirPath(t *testing.T) {
 	ticketsDir := "/repo/.tickets"
@@ -217,7 +205,7 @@ func buildTicketsDir(t *testing.T, ticketsDir string) {
 
 	// Top-level project: my-feature/
 	projDir := filepath.Join(ticketsDir, "my-feature")
-	writeWU(filepath.Join(projDir, ".project.json"), &models.WorkUnit{
+	writeWU(filepath.Join(projDir, "project.json"), &models.WorkUnit{
 		Identifier:   "my-feature",
 		Description:  "My feature project",
 		Status:       models.ProjectOpen,
@@ -238,7 +226,7 @@ func buildTicketsDir(t *testing.T, ticketsDir string) {
 
 	// Nested project: my-feature/sub-task/
 	subDir := filepath.Join(projDir, "sub-task")
-	writeWU(filepath.Join(subDir, ".project.json"), &models.WorkUnit{
+	writeWU(filepath.Join(subDir, "project.json"), &models.WorkUnit{
 		Identifier:   "my-feature/sub-task",
 		Description:  "Sub-task project",
 		Status:       models.ProjectOpen,
@@ -454,10 +442,10 @@ func TestCreateProjectDir_TopLevel(t *testing.T) {
 		t.Errorf("expected directory at %s", projDir)
 	}
 
-	projectFile := filepath.Join(projDir, ".project.json")
+	projectFile := filepath.Join(projDir, "project.json")
 	_, err = os.Stat(projectFile)
 	if err != nil {
-		t.Fatalf(".project.json does not exist: %v", err)
+		t.Fatalf("project.json does not exist: %v", err)
 	}
 
 	wu, err := storage.ReadWorkUnit(projectFile)
@@ -468,7 +456,7 @@ func TestCreateProjectDir_TopLevel(t *testing.T) {
 		t.Errorf("Identifier: got %q, want %q", wu.Identifier, "my-feature")
 	}
 	// Note: IsProject is json:"-" so it is not persisted; it is set by
-	// TraverseAll based on whether the file is .project.json. The raw
+	// TraverseAll based on whether the file is project.json. The raw
 	// ReadWorkUnit call will return IsProject=false, which is expected.
 }
 
@@ -487,7 +475,7 @@ func TestCreateProjectDir_Nested(t *testing.T) {
 		t.Errorf("expected directory at %s", projDir)
 	}
 
-	wu, err := storage.ReadWorkUnit(filepath.Join(projDir, ".project.json"))
+	wu, err := storage.ReadWorkUnit(filepath.Join(projDir, "project.json"))
 	if err != nil {
 		t.Fatalf("ReadWorkUnit: %v", err)
 	}

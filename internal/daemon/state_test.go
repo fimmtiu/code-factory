@@ -294,7 +294,7 @@ func TestStateParent(t *testing.T) {
 		t.Fatalf("MkdirAll: %v", err)
 	}
 	proj := models.NewProject("my-project", "a project")
-	if err := storage.WriteWorkUnit(filepath.Join(projDir, ".project.json"), proj); err != nil {
+	if err := storage.WriteWorkUnit(filepath.Join(projDir, "project.json"), proj); err != nil {
 		t.Fatalf("WriteWorkUnit project: %v", err)
 	}
 
@@ -335,7 +335,7 @@ func TestStateAllDone(t *testing.T) {
 		t.Fatalf("MkdirAll: %v", err)
 	}
 	proj := models.NewProject("proj", "parent")
-	if err := storage.WriteWorkUnit(filepath.Join(projDir, ".project.json"), proj); err != nil {
+	if err := storage.WriteWorkUnit(filepath.Join(projDir, "project.json"), proj); err != nil {
 		t.Fatalf("WriteWorkUnit: %v", err)
 	}
 

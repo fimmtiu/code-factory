@@ -62,11 +62,9 @@ func InitTicketsDir(repoRoot string) error {
 	return nil
 }
 
-// IsProjectDir reports whether name (the base name of a directory entry inside
-// .tickets/) identifies a project directory. A project directory is any directory
-// whose name does NOT begin with a period.
-func IsProjectDir(name string) bool {
-	return name != "" && name[0] != '.'
+// ProjectMetaPath returns the path to the project.json file inside a project directory.
+func ProjectMetaPath(projectDir string) string {
+	return filepath.Join(projectDir, "project.json")
 }
 
 // TicketMetaPath returns the path to the ticket.json file inside a ticket directory.
@@ -85,8 +83,8 @@ func TicketDirPath(ticketsDir, identifier string) string {
 }
 
 // TraverseAll recursively walks ticketsDir and returns all work units found.
-// Non-dot directories are treated as project directories (their .project.json
-// is read). Non-dot .json files are treated as ticket files.
+// Only directories are examined. A directory containing ticket.json is a ticket
+// (leaf); one containing project.json is a project (recurse into it).
 // The Parent field of each WorkUnit is set to the identifier of its containing
 // project, or "" for top-level items.
 func TraverseAll(ticketsDir string) ([]*models.WorkUnit, error) {
@@ -104,14 +102,12 @@ func traverseDir(dir, parentIdentifier string) ([]*models.WorkUnit, error) {
 
 	var results []*models.WorkUnit
 	for _, entry := range entries {
-		name := entry.Name()
-
 		if !entry.IsDir() {
 			continue
 		}
-		if !IsProjectDir(name) {
-			continue
-		}
+
+		name := entry.Name()
+		subDir := filepath.Join(dir, name)
 
 		var id string
 		if parentIdentifier == "" {
@@ -120,25 +116,19 @@ func traverseDir(dir, parentIdentifier string) ([]*models.WorkUnit, error) {
 			id = parentIdentifier + "/" + name
 		}
 
-		subDir := filepath.Join(dir, name)
-		ticketMetaPath := filepath.Join(subDir, "ticket.json")
-		projectFilePath := filepath.Join(subDir, ".project.json")
-
-		if _, err := os.Stat(ticketMetaPath); err == nil {
-			// It's a ticket directory — read ticket.json and do NOT recurse.
-			wu, err := ReadWorkUnit(ticketMetaPath)
+		if _, err := os.Stat(TicketMetaPath(subDir)); err == nil {
+			wu, err := ReadWorkUnit(TicketMetaPath(subDir))
 			if err != nil {
-				return nil, fmt.Errorf("TraverseAll: read ticket %s: %w", ticketMetaPath, err)
+				return nil, fmt.Errorf("TraverseAll: read ticket %s: %w", subDir, err)
 			}
 			wu.Identifier = id
 			wu.IsProject = false
 			wu.Parent = parentIdentifier
 			results = append(results, wu)
-		} else if _, err := os.Stat(projectFilePath); err == nil {
-			// It's a project directory — read .project.json and recurse.
-			wu, err := ReadWorkUnit(projectFilePath)
+		} else if _, err := os.Stat(ProjectMetaPath(subDir)); err == nil {
+			wu, err := ReadWorkUnit(ProjectMetaPath(subDir))
 			if err != nil {
-				return nil, fmt.Errorf("TraverseAll: read project %s: %w", projectFilePath, err)
+				return nil, fmt.Errorf("TraverseAll: read project %s: %w", subDir, err)
 			}
 			wu.Identifier = id
 			wu.IsProject = true
@@ -151,7 +141,6 @@ func traverseDir(dir, parentIdentifier string) ([]*models.WorkUnit, error) {
 			}
 			results = append(results, children...)
 		}
-		// else: neither ticket.json nor .project.json — skip
 	}
 
 	return results, nil
@@ -170,37 +159,15 @@ func ReadWorkUnit(path string) (*models.WorkUnit, error) {
 	return &wu, nil
 }
 
-// WriteWorkUnit writes wu to path as indented JSON using an atomic
-// write-to-temp-then-rename sequence.
+// WriteWorkUnit writes wu to path as indented JSON.
 func WriteWorkUnit(path string, wu *models.WorkUnit) error {
 	data, err := json.MarshalIndent(wu, "", "  ")
 	if err != nil {
 		return fmt.Errorf("WriteWorkUnit marshal: %w", err)
 	}
-
-	// Write to a temp file in the same directory so os.Rename is atomic.
-	dir := filepath.Dir(path)
-	tmp, err := os.CreateTemp(dir, ".tickets-tmp-*")
-	if err != nil {
-		return fmt.Errorf("WriteWorkUnit create temp: %w", err)
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		return fmt.Errorf("WriteWorkUnit write: %w", err)
 	}
-	tmpPath := tmp.Name()
-
-	if _, err := tmp.Write(data); err != nil {
-		tmp.Close()
-		os.Remove(tmpPath)
-		return fmt.Errorf("WriteWorkUnit write temp: %w", err)
-	}
-	if err := tmp.Close(); err != nil {
-		os.Remove(tmpPath)
-		return fmt.Errorf("WriteWorkUnit close temp: %w", err)
-	}
-
-	if err := os.Rename(tmpPath, path); err != nil {
-		os.Remove(tmpPath)
-		return fmt.Errorf("WriteWorkUnit rename: %w", err)
-	}
-
 	return nil
 }
 
@@ -221,12 +188,11 @@ func CreateTicketDir(ticketsDir, identifier string) error {
 }
 
 // CreateProjectDir creates a project directory for the given identifier under
-// ticketsDir and writes an initial .project.json file. The identifier may
+// ticketsDir and writes an initial project.json file. The identifier may
 // contain "/" to represent nested projects (e.g., "my-feature/sub-task"),
 // in which case intermediate directories are created as needed.
 func CreateProjectDir(ticketsDir, identifier string) error {
-	relPath := filepath.FromSlash(identifier)
-	projDir := filepath.Join(ticketsDir, relPath)
+	projDir := filepath.Join(ticketsDir, filepath.FromSlash(identifier))
 
 	if err := os.MkdirAll(projDir, 0755); err != nil {
 		return fmt.Errorf("CreateProjectDir: mkdir %s: %w", projDir, err)
@@ -241,9 +207,8 @@ func CreateProjectDir(ticketsDir, identifier string) error {
 		IsProject:    true,
 	}
 
-	projectFile := filepath.Join(projDir, ".project.json")
-	if err := WriteWorkUnit(projectFile, wu); err != nil {
-		return fmt.Errorf("CreateProjectDir: write .project.json: %w", err)
+	if err := WriteWorkUnit(ProjectMetaPath(projDir), wu); err != nil {
+		return fmt.Errorf("CreateProjectDir: write project.json: %w", err)
 	}
 
 	return nil

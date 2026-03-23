@@ -269,7 +269,7 @@ func makeTempProjectDir(t *testing.T, ticketsDir, projectID string) string {
 
 func writeProjectFile(t *testing.T, projDir string, wu *models.WorkUnit) error {
 	t.Helper()
-	path := projDir + "/.project.json"
+	path := projDir + "/project.json"
 	return writeWorkUnitToPath(t, path, wu)
 }
 

@@ -297,7 +297,7 @@ func (g *generator) writeProject(p *projectNode) error {
 		return err
 	}
 	wu := models.NewProject(p.identifier, p.description)
-	if err := storage.WriteWorkUnit(filepath.Join(projDir, ".project.json"), wu); err != nil {
+	if err := storage.WriteWorkUnit(filepath.Join(projDir, "project.json"), wu); err != nil {
 		return err
 	}
 	if err := g.writeTickets(p, projDir); err != nil {

@@ -195,7 +195,7 @@ func (s *State) writeToDisk(wu *models.WorkUnit) error {
 	relPath := filepath.FromSlash(wu.Identifier)
 	var filename string
 	if wu.IsProject {
-		filename = ".project.json"
+		filename = "project.json"
 	} else {
 		filename = "ticket.json"
 	}
