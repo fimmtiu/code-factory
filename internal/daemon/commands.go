@@ -10,14 +10,6 @@ import (
 	"github.com/fimmtiu/tickets/internal/storage"
 )
 
-// mergeTargetBranch returns the branch that wu should be merged into: the
-// parent's identifier when one exists, or "main" for top-level work units.
-func mergeTargetBranch(parentIdentifier string, hasParent bool) string {
-	if hasParent {
-		return parentIdentifier
-	}
-	return "main"
-}
 
 // parseDependencies splits a comma-separated dependency string into a slice,
 // discarding empty entries.
@@ -250,12 +242,8 @@ func makeDoneHandler(d *Daemon) HandlerFunc {
 
 		repoRoot := d.RepoRoot()
 
-		parent, hasParent := d.state.Parent(wu)
-		var parentID string
-		if hasParent {
-			parentID = parent.Identifier
-		}
-		intoBranch := mergeTargetBranch(parentID, hasParent)
+		parent, _ := d.state.Parent(wu)
+		intoBranch := wu.MergeTargetBranch(parent)
 
 		if err := d.gitClient.MergeBranch(repoRoot, wu.Identifier, intoBranch); err != nil {
 			return protocol.Response{Success: false, Error: "merge failed: " + err.Error()}
@@ -270,7 +258,7 @@ func makeDoneHandler(d *Daemon) HandlerFunc {
 		worktreePath := storage.TicketWorktreePath(ticketDir)
 		d.gitClient.RemoveWorktree(repoRoot, worktreePath, wu.Identifier) //nolint:errcheck
 
-		if hasParent {
+		if parent != nil {
 			if err := d.cascadeDone(repoRoot, wu); err != nil {
 				return protocol.Response{Success: false, Error: "cascade done failed: " + err.Error()}
 			}
@@ -297,12 +285,8 @@ func (d *Daemon) cascadeDone(repoRoot string, wu *models.WorkUnit) error {
 		return err
 	}
 
-	grandparent, hasGrandparent := d.state.Parent(parent)
-	var grandparentID string
-	if hasGrandparent {
-		grandparentID = grandparent.Identifier
-	}
-	intoBranch := mergeTargetBranch(grandparentID, hasGrandparent)
+	grandparent, _ := d.state.Parent(parent)
+	intoBranch := parent.MergeTargetBranch(grandparent)
 
 	if err := d.gitClient.MergeBranch(repoRoot, parent.Identifier, intoBranch); err != nil {
 		return err
@@ -312,7 +296,7 @@ func (d *Daemon) cascadeDone(repoRoot string, wu *models.WorkUnit) error {
 	worktreePath := storage.TicketWorktreePath(projectDir)
 	d.gitClient.RemoveWorktree(repoRoot, worktreePath, parent.Identifier) //nolint:errcheck
 
-	if hasGrandparent {
+	if grandparent != nil {
 		return d.cascadeDone(repoRoot, parent)
 	}
 	return nil

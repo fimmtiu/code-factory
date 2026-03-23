@@ -41,6 +41,16 @@ func NewProject(identifier, description string) *WorkUnit {
 	}
 }
 
+// MergeTargetBranch returns the branch this work unit should be merged into
+// when done: the parent's identifier when one exists, or "main" for top-level
+// work units. Pass the result of State.Parent as parent (nil when no parent).
+func (wu *WorkUnit) MergeTargetBranch(parent *WorkUnit) string {
+	if parent != nil {
+		return parent.Identifier
+	}
+	return "main"
+}
+
 // IsCompletable reports whether the ticket is in a state that allows it to be
 // marked done (i.e. in-progress or in-review).
 func (wu *WorkUnit) IsCompletable() bool {
