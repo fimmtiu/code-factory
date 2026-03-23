@@ -317,8 +317,11 @@ func (g *generator) writeTickets(p *projectNode, projDir string) error {
 		if dep := p.depIdentifier(spec); dep != "" {
 			t.SetDependencies([]string{dep})
 		}
-		ticketPath := filepath.Join(projDir, ticketSlug(spec.identifier)+".json")
-		if err := storage.WriteWorkUnit(ticketPath, t); err != nil {
+		ticketDir := filepath.Join(projDir, ticketSlug(spec.identifier))
+		if err := os.MkdirAll(ticketDir, 0755); err != nil {
+			return fmt.Errorf("ticket %d (%s): %w", i, spec.identifier, err)
+		}
+		if err := storage.WriteWorkUnit(storage.TicketMetaPath(ticketDir), t); err != nil {
 			return fmt.Errorf("ticket %d (%s): %w", i, spec.identifier, err)
 		}
 	}
