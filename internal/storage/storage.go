@@ -54,7 +54,6 @@ func InitTicketsDir(repoRoot string) error {
 
 	settingsPath := filepath.Join(ticketsDir, ".settings.json")
 	if _, err := os.Stat(settingsPath); errors.Is(err, os.ErrNotExist) {
-		// Write default settings only when the file does not yet exist.
 		if err := config.Save(ticketsDir, config.Default()); err != nil {
 			return fmt.Errorf("InitTicketsDir: write .settings.json: %w", err)
 		}
@@ -91,26 +90,19 @@ func TicketDirPath(ticketsDir, identifier string) string {
 // The Parent field of each WorkUnit is set to the identifier of its containing
 // project, or "" for top-level items.
 func TraverseAll(ticketsDir string) ([]*models.WorkUnit, error) {
-	var results []*models.WorkUnit
-
-	err := traverseDir(ticketsDir, ticketsDir, "", &results)
-	if err != nil {
-		return nil, err
-	}
-
-	return results, nil
+	return traverseDir(ticketsDir, "")
 }
 
 // traverseDir is the recursive helper for TraverseAll.
 // dir is the current directory being scanned.
-// ticketsDir is the root .tickets/ path (used to compute relative identifiers).
 // parentIdentifier is the identifier of the enclosing project ("" at top level).
-func traverseDir(dir, ticketsDir, parentIdentifier string, results *[]*models.WorkUnit) error {
+func traverseDir(dir, parentIdentifier string) ([]*models.WorkUnit, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return fmt.Errorf("TraverseAll: read dir %s: %w", dir, err)
+		return nil, fmt.Errorf("TraverseAll: read dir %s: %w", dir, err)
 	}
 
+	var results []*models.WorkUnit
 	for _, entry := range entries {
 		name := entry.Name()
 
@@ -121,7 +113,6 @@ func traverseDir(dir, ticketsDir, parentIdentifier string, results *[]*models.Wo
 			continue
 		}
 
-		// Compute identifier for this directory entry.
 		var id string
 		if parentIdentifier == "" {
 			id = name
@@ -130,8 +121,6 @@ func traverseDir(dir, ticketsDir, parentIdentifier string, results *[]*models.Wo
 		}
 
 		subDir := filepath.Join(dir, name)
-
-		// Determine whether this is a ticket directory or a project directory.
 		ticketMetaPath := filepath.Join(subDir, "ticket.json")
 		projectFilePath := filepath.Join(subDir, ".project.json")
 
@@ -139,31 +128,33 @@ func traverseDir(dir, ticketsDir, parentIdentifier string, results *[]*models.Wo
 			// It's a ticket directory — read ticket.json and do NOT recurse.
 			wu, err := ReadWorkUnit(ticketMetaPath)
 			if err != nil {
-				return fmt.Errorf("TraverseAll: read ticket %s: %w", ticketMetaPath, err)
+				return nil, fmt.Errorf("TraverseAll: read ticket %s: %w", ticketMetaPath, err)
 			}
 			wu.Identifier = id
 			wu.IsProject = false
 			wu.Parent = parentIdentifier
-			*results = append(*results, wu)
+			results = append(results, wu)
 		} else if _, err := os.Stat(projectFilePath); err == nil {
 			// It's a project directory — read .project.json and recurse.
 			wu, err := ReadWorkUnit(projectFilePath)
 			if err != nil {
-				return fmt.Errorf("TraverseAll: read project %s: %w", projectFilePath, err)
+				return nil, fmt.Errorf("TraverseAll: read project %s: %w", projectFilePath, err)
 			}
 			wu.Identifier = id
 			wu.IsProject = true
 			wu.Parent = parentIdentifier
-			*results = append(*results, wu)
+			results = append(results, wu)
 
-			if err := traverseDir(subDir, ticketsDir, id, results); err != nil {
-				return err
+			children, err := traverseDir(subDir, id)
+			if err != nil {
+				return nil, err
 			}
+			results = append(results, children...)
 		}
 		// else: neither ticket.json nor .project.json — skip
 	}
 
-	return nil
+	return results, nil
 }
 
 // ReadWorkUnit reads a JSON-encoded WorkUnit from path.

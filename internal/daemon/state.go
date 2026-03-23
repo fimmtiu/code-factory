@@ -192,18 +192,15 @@ func (s *State) unsatisfiedDepsLocked(wu *models.WorkUnit) int {
 // writeToDisk serialises wu and writes it to the appropriate path under
 // ticketsDir, creating subdirectories as needed.
 func (s *State) writeToDisk(wu *models.WorkUnit) error {
-	var path string
+	relPath := filepath.FromSlash(wu.Identifier)
+	var filename string
 	if wu.IsProject {
-		// Projects are stored as ticketsDir/<identifier>/.project.json
-		relPath := filepath.FromSlash(wu.Identifier)
-		path = filepath.Join(s.ticketsDir, relPath, ".project.json")
+		filename = ".project.json"
 	} else {
-		// Tickets are stored as ticketsDir/<identifier>/ticket.json
-		relPath := filepath.FromSlash(wu.Identifier)
-		path = filepath.Join(s.ticketsDir, relPath, "ticket.json")
+		filename = "ticket.json"
 	}
+	path := filepath.Join(s.ticketsDir, relPath, filename)
 
-	// Ensure the parent directory exists.
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return err
