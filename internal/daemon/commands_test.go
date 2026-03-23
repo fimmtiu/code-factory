@@ -393,6 +393,9 @@ func TestCreateProject_Subproject(t *testing.T) {
 	if wu.Description != "child project" {
 		t.Errorf("create-project subproject: expected description 'child project', got %q", wu.Description)
 	}
+	if wu.Parent != "parent-proj" {
+		t.Errorf("create-project subproject: expected Parent 'parent-proj', got %q", wu.Parent)
+	}
 }
 
 // TestCreateProject_MissingParent verifies that creating a subproject when the

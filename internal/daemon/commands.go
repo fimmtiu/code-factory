@@ -87,7 +87,8 @@ func makeCreateProjectHandler(d *Daemon) HandlerFunc {
 			return protocol.Response{Success: false, Error: err.Error()}
 		}
 
-		if parentID, ok := parentIdentifierOf(identifier); ok {
+		parentID, hasParent := parentIdentifierOf(identifier)
+		if hasParent {
 			if _, ok := d.state.Get(parentID); !ok {
 				return protocol.Response{
 					Success: false,
@@ -101,6 +102,9 @@ func makeCreateProjectHandler(d *Daemon) HandlerFunc {
 		}
 
 		wu := models.NewProject(identifier, description)
+		if hasParent {
+			wu.Parent = parentID
+		}
 		if err := d.state.Add(wu); err != nil {
 			return protocol.Response{Success: false, Error: "failed to add project to state: " + err.Error()}
 		}
