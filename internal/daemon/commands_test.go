@@ -43,6 +43,10 @@ func (m *MockGitClient) GetRepoRoot(path string) (string, error) {
 	return "/fake/repo", nil
 }
 
+func (m *MockGitClient) GetHeadCommit(path string) (string, error) {
+	return "abc1234", nil
+}
+
 // newTestDaemonWithMockGit creates a Daemon backed by a MockGitClient.
 func newTestDaemonWithMockGit(t *testing.T, ticketsDir string) (*daemon.Daemon, *MockGitClient) {
 	t.Helper()

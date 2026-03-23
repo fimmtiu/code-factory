@@ -13,6 +13,9 @@ type GitClient interface {
 	MergeBranch(repoRoot, fromBranch, intoBranch string) error
 	RemoveWorktree(repoRoot, worktreePath, branchName string) error
 	GetRepoRoot(path string) (string, error)
+	// GetHeadCommit returns the abbreviated HEAD commit hash for the git
+	// repository rooted at path.
+	GetHeadCommit(path string) (string, error)
 }
 
 // RealGitClient implements GitClient using actual git commands.
@@ -98,6 +101,12 @@ func (g *RealGitClient) MergeBranch(repoRoot, fromBranch, intoBranch string) err
 	}
 
 	return mergeErr
+}
+
+// GetHeadCommit returns the abbreviated HEAD commit hash for the git
+// repository at path.
+func (g *RealGitClient) GetHeadCommit(path string) (string, error) {
+	return runGitOutput("-C", path, "rev-parse", "--short", "HEAD")
 }
 
 // RemoveWorktree removes the linked worktree at worktreePath and deletes its

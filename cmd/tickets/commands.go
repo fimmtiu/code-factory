@@ -101,6 +101,18 @@ func runCommand(subcommand string, args []string) error {
 			return err
 		}
 		return runDone(sockPath, args)
+	case "add-comment":
+		sockPath, err := ensureDaemon()
+		if err != nil {
+			return err
+		}
+		return runAddComment(sockPath, args)
+	case "close-thread":
+		sockPath, err := ensureDaemon()
+		if err != nil {
+			return err
+		}
+		return runCloseThread(sockPath, args)
 	default:
 		return fmt.Errorf("unknown subcommand %q; run 'tickets' for usage", subcommand)
 	}
@@ -315,6 +327,43 @@ func runDone(socketPath string, args []string) error {
 	resp, err := c.SendCommand(protocol.Command{
 		Name:   "done",
 		Params: map[string]string{"identifier": identifier},
+	})
+	if err != nil {
+		return err
+	}
+	return printResponseData(resp)
+}
+
+// runAddComment sends "add-comment" with identifier, code location, author, and text.
+func runAddComment(socketPath string, args []string) error {
+	if len(args) < 4 {
+		return fmt.Errorf("usage: tickets add-comment <identifier> <code-location> <author> <text>")
+	}
+	c := client.NewClient(socketPath)
+	resp, err := c.SendCommand(protocol.Command{
+		Name: "add-comment",
+		Params: map[string]string{
+			"identifier":    args[0],
+			"code_location": args[1],
+			"author":        args[2],
+			"text":          strings.Join(args[3:], " "),
+		},
+	})
+	if err != nil {
+		return err
+	}
+	return printResponseData(resp)
+}
+
+// runCloseThread sends "close-thread" with the given thread ID.
+func runCloseThread(socketPath string, args []string) error {
+	if len(args) < 1 {
+		return fmt.Errorf("usage: tickets close-thread <thread-id>")
+	}
+	c := client.NewClient(socketPath)
+	resp, err := c.SendCommand(protocol.Command{
+		Name:   "close-thread",
+		Params: map[string]string{"thread_id": args[0]},
 	})
 	if err != nil {
 		return err

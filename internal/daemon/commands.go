@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/fimmtiu/tickets/internal/models"
 	"github.com/fimmtiu/tickets/internal/protocol"
@@ -34,9 +35,9 @@ func parentIdentifierOf(identifier string) (string, bool) {
 }
 
 // RegisterCommands registers the exit, status, create-project,
-// create-ticket, get-work, review-ready, get-review, and done command
-// handlers on the given worker. The ping handler is registered automatically
-// by NewWorker.
+// create-ticket, get-work, review-ready, get-review, done, add-comment,
+// and close-thread command handlers on the given worker. The ping handler
+// is registered automatically by NewWorker.
 func RegisterCommands(w *Worker, d *Daemon) {
 	w.RegisterHandler("exit", makeExitHandler(w))
 	w.RegisterHandler("status", makeStatusHandler(d))
@@ -46,6 +47,8 @@ func RegisterCommands(w *Worker, d *Daemon) {
 	w.RegisterHandler("review-ready", makeReviewReadyHandler(d))
 	w.RegisterHandler("get-review", makeGetReviewHandler(d))
 	w.RegisterHandler("done", makeDoneHandler(d))
+	w.RegisterHandler("add-comment", makeAddCommentHandler(d))
+	w.RegisterHandler("close-thread", makeCloseThreadHandler(d))
 }
 
 // makeExitHandler returns a handler that calls the worker's stopFn
@@ -272,6 +275,103 @@ func makeDoneHandler(d *Daemon) HandlerFunc {
 		}
 
 		return protocol.Response{Success: true}
+	}
+}
+
+// makeAddCommentHandler returns a handler that appends a comment to an existing
+// open comment thread at the given code location, or creates a new thread if
+// none exists. The commit hash is read from the work unit's worktree HEAD.
+func makeAddCommentHandler(d *Daemon) HandlerFunc {
+	return func(cmd protocol.Command) protocol.Response {
+		identifier := cmd.Params["identifier"]
+		codeLocation := cmd.Params["code_location"]
+		author := cmd.Params["author"]
+		text := cmd.Params["text"]
+
+		if identifier == "" {
+			return protocol.Response{Success: false, Error: "add-comment: identifier is required"}
+		}
+		if codeLocation == "" {
+			return protocol.Response{Success: false, Error: "add-comment: code_location is required"}
+		}
+		if author == "" {
+			return protocol.Response{Success: false, Error: "add-comment: author is required"}
+		}
+		if text == "" {
+			return protocol.Response{Success: false, Error: "add-comment: text is required"}
+		}
+
+		wu, ok := d.state.Get(identifier)
+		if !ok {
+			return protocol.Response{Success: false, Error: fmt.Sprintf("work unit %q not found", identifier)}
+		}
+
+		// Try to get HEAD commit from the worktree; fall back to empty string
+		// when the worktree does not exist yet.
+		ticketDir := storage.TicketDirPath(d.ticketsDir, identifier)
+		worktreePath := storage.TicketWorktreePath(ticketDir)
+		commitHash, _ := d.gitClient.GetHeadCommit(worktreePath)
+
+		comment := models.Comment{
+			Date:   time.Now().UTC(),
+			Author: author,
+			Text:   text,
+		}
+
+		// Find the first open thread for this code location.
+		for i := range wu.CommentThreads {
+			if wu.CommentThreads[i].CodeLocation == codeLocation &&
+				wu.CommentThreads[i].Status == models.ThreadOpen {
+				wu.CommentThreads[i].Comments = append(wu.CommentThreads[i].Comments, comment)
+				if err := d.state.Update(wu); err != nil {
+					return protocol.Response{Success: false, Error: "failed to update work unit: " + err.Error()}
+				}
+				return protocol.Response{Success: true}
+			}
+		}
+
+		// No open thread for this location — create a new one.
+		threadID, err := models.NewCommentThreadID()
+		if err != nil {
+			return protocol.Response{Success: false, Error: "failed to generate thread ID: " + err.Error()}
+		}
+		thread := models.CommentThread{
+			ID:           threadID,
+			CommitHash:   commitHash,
+			CodeLocation: codeLocation,
+			Status:       models.ThreadOpen,
+			Comments:     []models.Comment{comment},
+		}
+		wu.CommentThreads = append(wu.CommentThreads, thread)
+		if err := d.state.Update(wu); err != nil {
+			return protocol.Response{Success: false, Error: "failed to update work unit: " + err.Error()}
+		}
+		return protocol.Response{Success: true}
+	}
+}
+
+// makeCloseThreadHandler returns a handler that finds the comment thread with
+// the given ID (across all work units) and sets its status to closed.
+func makeCloseThreadHandler(d *Daemon) HandlerFunc {
+	return func(cmd protocol.Command) protocol.Response {
+		threadID := cmd.Params["thread_id"]
+		if threadID == "" {
+			return protocol.Response{Success: false, Error: "close-thread: thread_id is required"}
+		}
+
+		for _, wu := range d.state.All() {
+			for i := range wu.CommentThreads {
+				if wu.CommentThreads[i].ID == threadID {
+					wu.CommentThreads[i].Status = models.ThreadClosed
+					if err := d.state.Update(wu); err != nil {
+						return protocol.Response{Success: false, Error: "failed to update work unit: " + err.Error()}
+					}
+					return protocol.Response{Success: true}
+				}
+			}
+		}
+
+		return protocol.Response{Success: false, Error: fmt.Sprintf("comment thread %q not found", threadID)}
 	}
 }
 
