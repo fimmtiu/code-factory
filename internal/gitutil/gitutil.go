@@ -77,14 +77,12 @@ func (g *RealGitClient) MergeBranch(repoRoot, fromBranch, intoBranch string) err
 		return fmt.Errorf("MergeBranch: could not determine current branch: %w", err)
 	}
 
-	// Checkout the target branch.
 	if originalBranch != intoBranch {
 		if err := runGit("-C", repoRoot, "checkout", intoBranch); err != nil {
 			return fmt.Errorf("MergeBranch: checkout %q: %w", intoBranch, err)
 		}
 	}
 
-	// Merge with a descriptive commit message.
 	mergeMsg := fmt.Sprintf("merge %s into %s", fromBranch, intoBranch)
 	mergeErr := runGit("-C", repoRoot, "merge", "--no-ff", fromBranch, "-m", mergeMsg)
 
