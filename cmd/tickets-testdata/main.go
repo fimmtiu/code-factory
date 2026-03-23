@@ -48,6 +48,65 @@ var nouns = []string{
 	"vault", "vein", "vessel",
 }
 
+// fake Go source file paths for code location generation
+var fakeFilePaths = []string{
+	"cmd/server/main.go",
+	"cmd/worker/main.go",
+	"internal/auth/handler.go",
+	"internal/auth/middleware.go",
+	"internal/cache/store.go",
+	"internal/config/loader.go",
+	"internal/db/migrations.go",
+	"internal/db/queries.go",
+	"internal/export/csv.go",
+	"internal/export/json.go",
+	"internal/ingestion/parser.go",
+	"internal/ingestion/worker.go",
+	"internal/metrics/collector.go",
+	"internal/notify/dispatcher.go",
+	"internal/ratelimit/limiter.go",
+	"internal/scheduler/cron.go",
+	"internal/search/index.go",
+	"internal/session/manager.go",
+	"internal/storage/reader.go",
+	"internal/storage/writer.go",
+	"pkg/retry/backoff.go",
+	"pkg/util/slices.go",
+	"pkg/util/strings.go",
+}
+
+// fake author names for comment generation
+var fakeAuthors = []string{
+	"Ada Okonkwo", "Ben Hartley", "Celia Marsh", "Diego Fuentes",
+	"Elena Sorokina", "Felix Gruber", "Gina Tran", "Hugo Lefevre",
+	"Ingrid Holm", "Jae-won Oh", "Kira Patel", "Luca Ferretti",
+	"Maya Lindqvist", "Nate Osei", "Orla Byrne", "Priya Nair",
+}
+
+// comment text fragments for realistic review comments
+var commentTexts = []string{
+	"This will panic on an empty slice — add a bounds check before indexing.",
+	"We covered this pattern in the design review; please use the shared helper in pkg/util instead.",
+	"The error message here loses the original context. Wrap with fmt.Errorf and %%w.",
+	"Nit: the variable name doesn't convey intent. Something like `deadline` would read better.",
+	"This duplicates the logic in internal/storage/writer.go — worth extracting to avoid drift.",
+	"Good catch on the potential race. LGTM once the mutex scope is narrowed a bit.",
+	"This function is doing too much. Consider splitting validation from persistence.",
+	"The TODO comment predates the ticket system. Can we track this properly and remove the comment?",
+	"Looks correct, but a table-driven test would make the edge cases much easier to see.",
+	"Minor: prefer an early return here over the deep nesting — easier to follow.",
+	"This log line fires at ERROR level but it's a normal operational event. Should be DEBUG.",
+	"Context is threaded through the call chain here but dropped before the DB call. Please propagate.",
+	"We'll need to revisit this before the multi-tenant rollout — the assumption of a single tenant is baked in.",
+	"The retry interval is hardcoded. Should come from config to allow tuning in production.",
+	"Happy with this approach. Nice and readable.",
+	"Can we add a comment explaining why we need the second mutex here? Non-obvious.",
+	"This branch is unreachable given the earlier guard — safe to delete.",
+	"Approved, but please resolve the other thread on this file before merging.",
+	"The benchmark shows a 3× regression on the hot path. Worth profiling before we land this.",
+	"Straightforward fix. Thanks for the clear commit message too.",
+}
+
 // sentence parts for lorem-ipsum-style descriptions
 var subjects = []string{
 	"The authentication layer", "The caching subsystem", "The data pipeline",
@@ -317,6 +376,7 @@ func (g *generator) writeTickets(p *projectNode, projDir string) error {
 		if dep := p.depIdentifier(spec); dep != "" {
 			t.SetDependencies([]string{dep})
 		}
+		t.CommentThreads = g.generateCommentThreads()
 		ticketDir := filepath.Join(projDir, ticketSlug(spec.identifier))
 		if err := os.MkdirAll(ticketDir, 0755); err != nil {
 			return fmt.Errorf("ticket %d (%s): %w", i, spec.identifier, err)
@@ -326,6 +386,92 @@ func (g *generator) writeTickets(p *projectNode, projDir string) error {
 		}
 	}
 	return nil
+}
+
+// threadID returns a random 16-character hex string using the generator's rng.
+func (g *generator) threadID() string {
+	b := make([]byte, 8)
+	for i := range b {
+		b[i] = byte(g.rng.Intn(256))
+	}
+	return fmt.Sprintf("%x", b)
+}
+
+// fakeCommitHash returns a short fake commit hash using the generator's rng.
+func (g *generator) fakeCommitHash() string {
+	b := make([]byte, 4)
+	for i := range b {
+		b[i] = byte(g.rng.Intn(256))
+	}
+	return fmt.Sprintf("%x", b)
+}
+
+// codeLocation returns a random "file:line" string.
+func (g *generator) codeLocation() string {
+	file := fakeFilePaths[g.rng.Intn(len(fakeFilePaths))]
+	line := 1 + g.rng.Intn(300)
+	return fmt.Sprintf("%s:%d", file, line)
+}
+
+// generateComments returns n comments with dates spread over the past 60 days,
+// sorted oldest-first.
+func (g *generator) generateComments(n int, newest time.Time) []models.Comment {
+	comments := make([]models.Comment, n)
+	for i := range comments {
+		// Each subsequent comment is newer than the previous (spread over 60 days).
+		offsetHours := g.rng.Intn(60 * 24)
+		comments[i] = models.Comment{
+			Date:   newest.Add(-time.Duration(offsetHours) * time.Hour),
+			Author: fakeAuthors[g.rng.Intn(len(fakeAuthors))],
+			Text:   commentTexts[g.rng.Intn(len(commentTexts))],
+		}
+	}
+	// Sort ascending by date so the thread reads chronologically.
+	for i := 1; i < len(comments); i++ {
+		for j := i; j > 0 && comments[j].Date.Before(comments[j-1].Date); j-- {
+			comments[j], comments[j-1] = comments[j-1], comments[j]
+		}
+	}
+	return comments
+}
+
+// generateCommentThreads returns a random set of comment threads for a ticket,
+// or nil (~60% probability) when the ticket should have no comments.
+func (g *generator) generateCommentThreads() []models.CommentThread {
+	if g.rng.Float32() >= 0.4 {
+		return nil
+	}
+	numThreads := 1 + g.rng.Intn(3) // 1–3 threads
+	now := time.Now().UTC()
+	threads := make([]models.CommentThread, numThreads)
+	usedLocations := map[string]bool{}
+	for i := range threads {
+		// Pick a code location not already used by an open thread.
+		var loc string
+		for {
+			loc = g.codeLocation()
+			if !usedLocations[loc] {
+				break
+			}
+		}
+
+		status := models.ThreadOpen
+		if g.rng.Float32() < 0.35 {
+			status = models.ThreadClosed
+		}
+		if status == models.ThreadOpen {
+			usedLocations[loc] = true
+		}
+
+		threads[i] = models.CommentThread{
+			ID:           g.threadID(),
+			CommitHash:   g.fakeCommitHash(),
+			CodeLocation: loc,
+			Status:       status,
+			Comments:     g.generateComments(1+g.rng.Intn(4), now),
+		}
+	}
+	return threads
 }
 
 // ticketSlug returns the final path component of a slash-separated identifier.
