@@ -123,7 +123,8 @@ func makeCreateTicketHandler(d *Daemon) HandlerFunc {
 
 		deps := parseDependencies(depsRaw)
 
-		if parentID, ok := parentIdentifierOf(identifier); ok {
+		parentID, hasParent := parentIdentifierOf(identifier)
+		if hasParent {
 			if _, ok := d.state.Get(parentID); !ok {
 				return protocol.Response{
 					Success: false,
@@ -134,6 +135,9 @@ func makeCreateTicketHandler(d *Daemon) HandlerFunc {
 
 		wu := models.NewTicket(identifier, description)
 		wu.SetDependencies(deps)
+		if hasParent {
+			wu.Parent = parentID
+		}
 
 		if err := d.state.Add(wu); err != nil {
 			return protocol.Response{Success: false, Error: "failed to add ticket to state: " + err.Error()}

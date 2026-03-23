@@ -460,6 +460,9 @@ func TestCreateTicket_Success(t *testing.T) {
 	if wu.Description != "a ticket" {
 		t.Errorf("create-ticket: expected description 'a ticket', got %q", wu.Description)
 	}
+	if wu.Parent != "my-proj" {
+		t.Errorf("create-ticket: expected Parent 'my-proj', got %q", wu.Parent)
+	}
 }
 
 // TestCreateTicket_BlockedByDeps verifies that a ticket created with
