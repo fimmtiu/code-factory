@@ -129,7 +129,7 @@ func TestInitTicketsDir_Idempotent(t *testing.T) {
 	}
 }
 
-// ===== IsProjectDir / IsTicketFile =====
+// ===== IsProjectDir =====
 
 func TestIsProjectDir(t *testing.T) {
 	tests := []struct {
@@ -150,24 +150,32 @@ func TestIsProjectDir(t *testing.T) {
 	}
 }
 
-func TestIsTicketFile(t *testing.T) {
-	tests := []struct {
-		name string
-		want bool
-	}{
-		{"fix-bug.json", true},
-		{"my-ticket.json", true},
-		{".project.json", false},
-		{".settings.json", false},
-		{"readme.txt", false},
-		{"ticket", false},
-		{"", false},
+// ===== TicketDirPath / TicketMetaPath / TicketWorktreePath =====
+
+func TestTicketDirPath(t *testing.T) {
+	ticketsDir := "/repo/.tickets"
+	got := storage.TicketDirPath(ticketsDir, "my-project/fix-bug")
+	want := filepath.Join(ticketsDir, "my-project", "fix-bug")
+	if got != want {
+		t.Errorf("TicketDirPath: got %q, want %q", got, want)
 	}
-	for _, tc := range tests {
-		got := storage.IsTicketFile(tc.name)
-		if got != tc.want {
-			t.Errorf("IsTicketFile(%q) = %v; want %v", tc.name, got, tc.want)
-		}
+}
+
+func TestTicketMetaPath(t *testing.T) {
+	ticketDir := "/repo/.tickets/my-project/fix-bug"
+	got := storage.TicketMetaPath(ticketDir)
+	want := filepath.Join(ticketDir, "ticket.json")
+	if got != want {
+		t.Errorf("TicketMetaPath: got %q, want %q", got, want)
+	}
+}
+
+func TestTicketWorktreePath(t *testing.T) {
+	ticketDir := "/repo/.tickets/my-project/fix-bug"
+	got := storage.TicketWorktreePath(ticketDir)
+	want := filepath.Join(ticketDir, "worktree")
+	if got != want {
+		t.Errorf("TicketWorktreePath: got %q, want %q", got, want)
 	}
 }
 
@@ -197,8 +205,8 @@ func buildTicketsDir(t *testing.T, ticketsDir string) {
 
 	now := time.Now().UTC()
 
-	// Top-level ticket: fix-bug.json
-	writeWU(filepath.Join(ticketsDir, "fix-bug.json"), &models.WorkUnit{
+	// Top-level ticket: fix-bug/ticket.json
+	writeWU(filepath.Join(ticketsDir, "fix-bug", "ticket.json"), &models.WorkUnit{
 		Identifier:   "fix-bug",
 		Description:  "Fix the bug",
 		Status:       models.StatusOpen,
@@ -218,8 +226,8 @@ func buildTicketsDir(t *testing.T, ticketsDir string) {
 		IsProject:    true,
 	})
 
-	// Ticket inside my-feature
-	writeWU(filepath.Join(projDir, "implement.json"), &models.WorkUnit{
+	// Ticket inside my-feature: my-feature/implement/ticket.json
+	writeWU(filepath.Join(projDir, "implement", "ticket.json"), &models.WorkUnit{
 		Identifier:   "my-feature/implement",
 		Description:  "Implement the feature",
 		Status:       models.StatusOpen,
@@ -239,8 +247,8 @@ func buildTicketsDir(t *testing.T, ticketsDir string) {
 		IsProject:    true,
 	})
 
-	// Ticket inside nested project
-	writeWU(filepath.Join(subDir, "do-thing.json"), &models.WorkUnit{
+	// Ticket inside nested project: my-feature/sub-task/do-thing/ticket.json
+	writeWU(filepath.Join(subDir, "do-thing", "ticket.json"), &models.WorkUnit{
 		Identifier:   "my-feature/sub-task/do-thing",
 		Description:  "Do the thing",
 		Status:       models.StatusOpen,

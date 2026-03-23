@@ -3,6 +3,7 @@ package daemon
 import (
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/fimmtiu/tickets/internal/models"
@@ -155,7 +156,9 @@ func makeGetWorkHandler(d *Daemon) HandlerFunc {
 		}
 
 		repoRoot := d.RepoRoot()
-		if err := d.gitClient.CreateWorktree(repoRoot, ticket.Identifier); err != nil {
+		ticketDir := storage.TicketDirPath(d.ticketsDir, ticket.Identifier)
+		worktreePath := storage.TicketWorktreePath(ticketDir)
+		if err := d.gitClient.CreateWorktree(repoRoot, worktreePath, ticket.Identifier); err != nil {
 			return protocol.Response{Success: false, Error: "failed to create worktree: " + err.Error()}
 		}
 
@@ -255,7 +258,9 @@ func makeDoneHandler(d *Daemon) HandlerFunc {
 			return protocol.Response{Success: false, Error: "failed to update ticket: " + err.Error()}
 		}
 
-		d.gitClient.RemoveWorktree(repoRoot, wu.Identifier) //nolint:errcheck
+		ticketDir := storage.TicketDirPath(d.ticketsDir, wu.Identifier)
+		worktreePath := storage.TicketWorktreePath(ticketDir)
+		d.gitClient.RemoveWorktree(repoRoot, worktreePath, wu.Identifier) //nolint:errcheck
 
 		// Cascade done up the project hierarchy.
 		if hasParent {
@@ -295,7 +300,9 @@ func (d *Daemon) cascadeDone(repoRoot string, wu *models.WorkUnit) error {
 		return err
 	}
 
-	d.gitClient.RemoveWorktree(repoRoot, parent.Identifier) //nolint:errcheck
+	projectDir := filepath.Join(d.ticketsDir, filepath.FromSlash(parent.Identifier))
+	worktreePath := filepath.Join(projectDir, "worktree")
+	d.gitClient.RemoveWorktree(repoRoot, worktreePath, parent.Identifier) //nolint:errcheck
 
 	if hasGrandparent {
 		return d.cascadeDone(repoRoot, parent)

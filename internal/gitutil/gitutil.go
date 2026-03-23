@@ -4,15 +4,14 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 )
 
 // GitClient defines the git operations needed by the tickets tool.
 type GitClient interface {
-	CreateWorktree(repoRoot, identifier string) error
+	CreateWorktree(repoRoot, worktreePath, branchName string) error
 	MergeBranch(repoRoot, fromBranch, intoBranch string) error
-	RemoveWorktree(repoRoot, identifier string) error
+	RemoveWorktree(repoRoot, worktreePath, branchName string) error
 	GetRepoRoot(path string) (string, error)
 }
 
@@ -55,19 +54,16 @@ func (g *RealGitClient) GetRepoRoot(path string) (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
-// CreateWorktree creates a new git branch named identifier and a linked worktree
-// at <repoRoot>/worktrees/<identifier>/. Intermediate directories are created as
-// needed.
-func (g *RealGitClient) CreateWorktree(repoRoot, identifier string) error {
-	worktreePath := filepath.Join(repoRoot, "worktrees", identifier)
-
+// CreateWorktree creates a new git branch named branchName and a linked worktree
+// at worktreePath. Intermediate directories are created as needed.
+func (g *RealGitClient) CreateWorktree(repoRoot, worktreePath, branchName string) error {
 	if err := os.MkdirAll(worktreePath, 0755); err != nil {
 		return fmt.Errorf("failed to create worktree directory %s: %w", worktreePath, err)
 	}
 
 	// git worktree add <path> -b <branch>
-	if err := runGit("-C", repoRoot, "worktree", "add", worktreePath, "-b", identifier); err != nil {
-		return fmt.Errorf("CreateWorktree(%q, %q): %w", repoRoot, identifier, err)
+	if err := runGit("-C", repoRoot, "worktree", "add", worktreePath, "-b", branchName); err != nil {
+		return fmt.Errorf("CreateWorktree(%q, %q): %w", repoRoot, worktreePath, err)
 	}
 	return nil
 }
@@ -106,17 +102,15 @@ func (g *RealGitClient) MergeBranch(repoRoot, fromBranch, intoBranch string) err
 	return mergeErr
 }
 
-// RemoveWorktree removes the linked worktree at <repoRoot>/worktrees/<identifier>/
-// and deletes its associated branch.
-func (g *RealGitClient) RemoveWorktree(repoRoot, identifier string) error {
-	worktreePath := filepath.Join(repoRoot, "worktrees", identifier)
-
+// RemoveWorktree removes the linked worktree at worktreePath and deletes its
+// associated branch branchName.
+func (g *RealGitClient) RemoveWorktree(repoRoot, worktreePath, branchName string) error {
 	if err := runGit("-C", repoRoot, "worktree", "remove", "--force", worktreePath); err != nil {
-		return fmt.Errorf("RemoveWorktree(%q, %q): %w", repoRoot, identifier, err)
+		return fmt.Errorf("RemoveWorktree(%q, %q): %w", repoRoot, worktreePath, err)
 	}
 
-	if err := runGit("-C", repoRoot, "branch", "-d", identifier); err != nil {
-		return fmt.Errorf("RemoveWorktree: delete branch %q: %w", identifier, err)
+	if err := runGit("-C", repoRoot, "branch", "-d", branchName); err != nil {
+		return fmt.Errorf("RemoveWorktree: delete branch %q: %w", branchName, err)
 	}
 
 	return nil

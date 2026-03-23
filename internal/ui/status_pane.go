@@ -64,7 +64,7 @@ func (sp StatusPane) View(units []*models.WorkUnit, width, height int) string {
 	}
 
 	paneStyle := lipgloss.NewStyle().
-		Width(width - 2).
+		Width(width-2).
 		Height(contentHeight).
 		Border(lipgloss.NormalBorder(), true).
 		BorderForeground(lipgloss.Color("240"))

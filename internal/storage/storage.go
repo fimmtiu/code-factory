@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/fimmtiu/tickets/internal/config"
@@ -71,11 +70,19 @@ func IsProjectDir(name string) bool {
 	return name != "" && name[0] != '.'
 }
 
-// IsTicketFile reports whether name (the base name of a file entry inside
-// .tickets/) identifies a ticket file. A ticket file is any file whose name
-// does NOT begin with a period and whose name ends with ".json".
-func IsTicketFile(name string) bool {
-	return name != "" && name[0] != '.' && strings.HasSuffix(name, ".json")
+// TicketMetaPath returns the path to the ticket.json file inside a ticket directory.
+func TicketMetaPath(ticketDir string) string {
+	return filepath.Join(ticketDir, "ticket.json")
+}
+
+// TicketWorktreePath returns the path where the worktree should be placed for a ticket.
+func TicketWorktreePath(ticketDir string) string {
+	return filepath.Join(ticketDir, "worktree")
+}
+
+// TicketDirPath returns the directory path for a ticket given its identifier.
+func TicketDirPath(ticketsDir, identifier string) string {
+	return filepath.Join(ticketsDir, filepath.FromSlash(identifier))
 }
 
 // TraverseAll recursively walks ticketsDir and returns all work units found.
@@ -107,26 +114,41 @@ func traverseDir(dir, ticketsDir, parentIdentifier string, results *[]*models.Wo
 	for _, entry := range entries {
 		name := entry.Name()
 
-		if entry.IsDir() {
-			if !IsProjectDir(name) {
-				continue
-			}
-			// Compute identifier for this project directory.
-			var id string
-			if parentIdentifier == "" {
-				id = name
-			} else {
-				id = parentIdentifier + "/" + name
-			}
+		if !entry.IsDir() {
+			continue
+		}
+		if !IsProjectDir(name) {
+			continue
+		}
 
-			// Read the .project.json file.
-			projectFilePath := filepath.Join(dir, name, ".project.json")
+		// Compute identifier for this directory entry.
+		var id string
+		if parentIdentifier == "" {
+			id = name
+		} else {
+			id = parentIdentifier + "/" + name
+		}
+
+		subDir := filepath.Join(dir, name)
+
+		// Determine whether this is a ticket directory or a project directory.
+		ticketMetaPath := filepath.Join(subDir, "ticket.json")
+		projectFilePath := filepath.Join(subDir, ".project.json")
+
+		if _, err := os.Stat(ticketMetaPath); err == nil {
+			// It's a ticket directory — read ticket.json and do NOT recurse.
+			wu, err := ReadWorkUnit(ticketMetaPath)
+			if err != nil {
+				return fmt.Errorf("TraverseAll: read ticket %s: %w", ticketMetaPath, err)
+			}
+			wu.Identifier = id
+			wu.IsProject = false
+			wu.Parent = parentIdentifier
+			*results = append(*results, wu)
+		} else if _, err := os.Stat(projectFilePath); err == nil {
+			// It's a project directory — read .project.json and recurse.
 			wu, err := ReadWorkUnit(projectFilePath)
 			if err != nil {
-				if errors.Is(err, os.ErrNotExist) {
-					// No .project.json — skip this directory (it isn't a project).
-					continue
-				}
 				return fmt.Errorf("TraverseAll: read project %s: %w", projectFilePath, err)
 			}
 			wu.Identifier = id
@@ -134,30 +156,11 @@ func traverseDir(dir, ticketsDir, parentIdentifier string, results *[]*models.Wo
 			wu.Parent = parentIdentifier
 			*results = append(*results, wu)
 
-			// Recurse into the project directory.
-			if err := traverseDir(filepath.Join(dir, name), ticketsDir, id, results); err != nil {
+			if err := traverseDir(subDir, ticketsDir, id, results); err != nil {
 				return err
 			}
-
-		} else {
-			if !IsTicketFile(name) {
-				continue
-			}
-			ticketPath := filepath.Join(dir, name)
-			wu, err := ReadWorkUnit(ticketPath)
-			if err != nil {
-				return fmt.Errorf("TraverseAll: read ticket %s: %w", ticketPath, err)
-			}
-			rel, err := filepath.Rel(ticketsDir, ticketPath)
-			if err != nil {
-				return fmt.Errorf("TraverseAll: compute relative path: %w", err)
-			}
-			rel = strings.TrimSuffix(filepath.ToSlash(rel), ".json")
-			wu.Identifier = rel
-			wu.IsProject = false
-			wu.Parent = parentIdentifier
-			*results = append(*results, wu)
 		}
+		// else: neither ticket.json nor .project.json — skip
 	}
 
 	return nil
@@ -208,6 +211,22 @@ func WriteWorkUnit(path string, wu *models.WorkUnit) error {
 	}
 
 	return nil
+}
+
+// CreateTicketDir creates the ticket directory and writes an initial ticket.json.
+func CreateTicketDir(ticketsDir, identifier string) error {
+	ticketDir := filepath.Join(ticketsDir, filepath.FromSlash(identifier))
+	if err := os.MkdirAll(ticketDir, 0755); err != nil {
+		return fmt.Errorf("CreateTicketDir: mkdir %s: %w", ticketDir, err)
+	}
+	wu := &models.WorkUnit{
+		Identifier:   identifier,
+		Status:       models.StatusOpen,
+		Dependencies: []string{},
+		LastUpdated:  time.Now().UTC(),
+		IsProject:    false,
+	}
+	return WriteWorkUnit(TicketMetaPath(ticketDir), wu)
 }
 
 // CreateProjectDir creates a project directory for the given identifier under

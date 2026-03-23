@@ -22,13 +22,15 @@ func makeTempTicketsDir(t *testing.T) string {
 	return ticketsDir
 }
 
-// writeTicket writes a ticket JSON file directly into ticketsDir.
+// writeTicket writes a ticket JSON file directly into ticketsDir using the
+// new directory layout: ticketsDir/<identifier>/ticket.json.
 func writeTicket(t *testing.T, ticketsDir string, wu *models.WorkUnit) {
 	t.Helper()
-	path := filepath.Join(ticketsDir, wu.Identifier+".json")
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+	ticketDir := filepath.Join(ticketsDir, filepath.FromSlash(wu.Identifier))
+	if err := os.MkdirAll(ticketDir, 0755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}
+	path := filepath.Join(ticketDir, "ticket.json")
 	if err := storage.WriteWorkUnit(path, wu); err != nil {
 		t.Fatalf("WriteWorkUnit: %v", err)
 	}
@@ -296,8 +298,12 @@ func TestStateParent(t *testing.T) {
 		t.Fatalf("WriteWorkUnit project: %v", err)
 	}
 
+	ticketDir := filepath.Join(projDir, "sub-ticket")
+	if err := os.MkdirAll(ticketDir, 0755); err != nil {
+		t.Fatalf("MkdirAll ticket dir: %v", err)
+	}
 	ticket := models.NewTicket("my-project/sub-ticket", "nested")
-	if err := storage.WriteWorkUnit(filepath.Join(projDir, "sub-ticket.json"), ticket); err != nil {
+	if err := storage.WriteWorkUnit(filepath.Join(ticketDir, "ticket.json"), ticket); err != nil {
 		t.Fatalf("WriteWorkUnit ticket: %v", err)
 	}
 
@@ -333,14 +339,22 @@ func TestStateAllDone(t *testing.T) {
 		t.Fatalf("WriteWorkUnit: %v", err)
 	}
 
+	doneChildDir := filepath.Join(projDir, "done-child")
+	if err := os.MkdirAll(doneChildDir, 0755); err != nil {
+		t.Fatalf("MkdirAll done-child: %v", err)
+	}
 	doneChild := models.NewTicket("proj/done-child", "done")
 	doneChild.Status = models.StatusDone
-	if err := storage.WriteWorkUnit(filepath.Join(projDir, "done-child.json"), doneChild); err != nil {
+	if err := storage.WriteWorkUnit(filepath.Join(doneChildDir, "ticket.json"), doneChild); err != nil {
 		t.Fatalf("WriteWorkUnit: %v", err)
 	}
 
+	openChildDir := filepath.Join(projDir, "open-child")
+	if err := os.MkdirAll(openChildDir, 0755); err != nil {
+		t.Fatalf("MkdirAll open-child: %v", err)
+	}
 	openChild := models.NewTicket("proj/open-child", "open")
-	if err := storage.WriteWorkUnit(filepath.Join(projDir, "open-child.json"), openChild); err != nil {
+	if err := storage.WriteWorkUnit(filepath.Join(openChildDir, "ticket.json"), openChild); err != nil {
 		t.Fatalf("WriteWorkUnit: %v", err)
 	}
 

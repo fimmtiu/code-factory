@@ -85,21 +85,21 @@ func TestCreateWorktree(t *testing.T) {
 	dir := initTestRepo(t)
 	client := gitutil.NewRealGitClient()
 
-	identifier := "my-feature"
-	err := client.CreateWorktree(dir, identifier)
+	branchName := "my-feature"
+	worktreePath := filepath.Join(dir, ".tickets", "my-feature", "worktree")
+	err := client.CreateWorktree(dir, worktreePath, branchName)
 	if err != nil {
 		t.Fatalf("CreateWorktree returned error: %v", err)
 	}
 
 	// The worktree directory should exist.
-	worktreePath := filepath.Join(dir, "worktrees", identifier)
 	if _, err := os.Stat(worktreePath); os.IsNotExist(err) {
 		t.Fatalf("worktree directory %q was not created", worktreePath)
 	}
 
 	// The branch should exist.
-	if !branchExists(t, dir, identifier) {
-		t.Fatalf("branch %q was not created", identifier)
+	if !branchExists(t, dir, branchName) {
+		t.Fatalf("branch %q was not created", branchName)
 	}
 }
 
@@ -107,19 +107,19 @@ func TestCreateWorktreeWithSlashIdentifier(t *testing.T) {
 	dir := initTestRepo(t)
 	client := gitutil.NewRealGitClient()
 
-	identifier := "project/fix-bug"
-	err := client.CreateWorktree(dir, identifier)
+	branchName := "project/fix-bug"
+	worktreePath := filepath.Join(dir, ".tickets", "project", "fix-bug", "worktree")
+	err := client.CreateWorktree(dir, worktreePath, branchName)
 	if err != nil {
 		t.Fatalf("CreateWorktree returned error for slash identifier: %v", err)
 	}
 
-	worktreePath := filepath.Join(dir, "worktrees", identifier)
 	if _, err := os.Stat(worktreePath); os.IsNotExist(err) {
 		t.Fatalf("worktree directory %q was not created", worktreePath)
 	}
 
-	if !branchExists(t, dir, identifier) {
-		t.Fatalf("branch %q was not created", identifier)
+	if !branchExists(t, dir, branchName) {
+		t.Fatalf("branch %q was not created", branchName)
 	}
 }
 
@@ -180,20 +180,20 @@ func TestRemoveWorktree(t *testing.T) {
 	dir := initTestRepo(t)
 	client := gitutil.NewRealGitClient()
 
-	identifier := "remove-me"
+	branchName := "remove-me"
+	worktreePath := filepath.Join(dir, ".tickets", "remove-me", "worktree")
 
 	// Create the worktree first.
-	if err := client.CreateWorktree(dir, identifier); err != nil {
+	if err := client.CreateWorktree(dir, worktreePath, branchName); err != nil {
 		t.Fatalf("CreateWorktree failed: %v", err)
 	}
 
-	worktreePath := filepath.Join(dir, "worktrees", identifier)
 	if _, err := os.Stat(worktreePath); os.IsNotExist(err) {
 		t.Fatal("worktree was not created before removal test")
 	}
 
 	// Now remove it.
-	if err := client.RemoveWorktree(dir, identifier); err != nil {
+	if err := client.RemoveWorktree(dir, worktreePath, branchName); err != nil {
 		t.Fatalf("RemoveWorktree returned error: %v", err)
 	}
 

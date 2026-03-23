@@ -198,10 +198,9 @@ func (s *State) writeToDisk(wu *models.WorkUnit) error {
 		relPath := filepath.FromSlash(wu.Identifier)
 		path = filepath.Join(s.ticketsDir, relPath, ".project.json")
 	} else {
-		// Tickets are stored as ticketsDir/<identifier>.json
-		// The identifier may contain "/" for nested tickets.
+		// Tickets are stored as ticketsDir/<identifier>/ticket.json
 		relPath := filepath.FromSlash(wu.Identifier)
-		path = filepath.Join(s.ticketsDir, relPath+".json")
+		path = filepath.Join(s.ticketsDir, relPath, "ticket.json")
 	}
 
 	// Ensure the parent directory exists.

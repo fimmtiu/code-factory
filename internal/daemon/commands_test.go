@@ -24,8 +24,8 @@ type MockGitClient struct {
 	RemoveWorktreeErr error
 }
 
-func (m *MockGitClient) CreateWorktree(repoRoot, identifier string) error {
-	m.CreatedWorktrees = append(m.CreatedWorktrees, identifier)
+func (m *MockGitClient) CreateWorktree(repoRoot, worktreePath, branchName string) error {
+	m.CreatedWorktrees = append(m.CreatedWorktrees, branchName)
 	return m.CreateWorktreeErr
 }
 
@@ -34,8 +34,8 @@ func (m *MockGitClient) MergeBranch(repoRoot, fromBranch, intoBranch string) err
 	return m.MergeBranchErr
 }
 
-func (m *MockGitClient) RemoveWorktree(repoRoot, identifier string) error {
-	m.RemovedWorktrees = append(m.RemovedWorktrees, identifier)
+func (m *MockGitClient) RemoveWorktree(repoRoot, worktreePath, branchName string) error {
+	m.RemovedWorktrees = append(m.RemovedWorktrees, branchName)
 	return m.RemoveWorktreeErr
 }
 
@@ -277,7 +277,11 @@ func writeProjectFile(t *testing.T, projDir string, wu *models.WorkUnit) error {
 
 func writeTicketToDir(t *testing.T, dir, name string, wu *models.WorkUnit) {
 	t.Helper()
-	path := dir + "/" + name + ".json"
+	ticketDir := dir + "/" + name
+	if err := os.MkdirAll(ticketDir, 0755); err != nil {
+		t.Fatalf("writeTicketToDir MkdirAll: %v", err)
+	}
+	path := ticketDir + "/ticket.json"
 	if err := writeWorkUnitToPath(t, path, wu); err != nil {
 		t.Fatalf("writeTicketToDir: %v", err)
 	}

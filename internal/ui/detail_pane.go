@@ -80,7 +80,7 @@ func (dp DetailPane) View(width, height int, focused bool) string {
 	}
 
 	paneStyle := lipgloss.NewStyle().
-		Width(width - 2).
+		Width(width-2).
 		Height(contentHeight).
 		Border(lipgloss.NormalBorder(), true).
 		BorderForeground(borderColor)
