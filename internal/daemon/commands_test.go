@@ -257,8 +257,6 @@ func makeTempProjectDir(t *testing.T, ticketsDir, projectID string) string {
 	}
 
 	proj := models.NewProject(projectID, "test project")
-	from := "github.com/fimmtiu/tickets/internal/storage"
-	_ = from // storage imported in state_test.go
 	if err := writeProjectFile(t, projDir, proj); err != nil {
 		t.Fatalf("writeProjectFile: %v", err)
 	}
