@@ -43,10 +43,10 @@ func NewProject(identifier, description string) *WorkUnit {
 
 // MergeTargetBranch returns the branch this work unit should be merged into
 // when done: the parent's identifier when one exists, or "main" for top-level
-// work units. Pass the result of State.Parent as parent (nil when no parent).
-func (wu *WorkUnit) MergeTargetBranch(parent *WorkUnit) string {
-	if parent != nil {
-		return parent.Identifier
+// work units.
+func (wu *WorkUnit) MergeTargetBranch() string {
+	if wu.Parent != "" {
+		return wu.Parent
 	}
 	return "main"
 }

@@ -243,7 +243,7 @@ func makeDoneHandler(d *Daemon) HandlerFunc {
 		repoRoot := d.RepoRoot()
 
 		parent, _ := d.state.Parent(wu)
-		intoBranch := wu.MergeTargetBranch(parent)
+		intoBranch := wu.MergeTargetBranch()
 
 		if err := d.gitClient.MergeBranch(repoRoot, wu.Identifier, intoBranch); err != nil {
 			return protocol.Response{Success: false, Error: "merge failed: " + err.Error()}
@@ -285,8 +285,7 @@ func (d *Daemon) cascadeDone(repoRoot string, wu *models.WorkUnit) error {
 		return err
 	}
 
-	grandparent, _ := d.state.Parent(parent)
-	intoBranch := parent.MergeTargetBranch(grandparent)
+	intoBranch := parent.MergeTargetBranch()
 
 	if err := d.gitClient.MergeBranch(repoRoot, parent.Identifier, intoBranch); err != nil {
 		return err
@@ -296,7 +295,7 @@ func (d *Daemon) cascadeDone(repoRoot string, wu *models.WorkUnit) error {
 	worktreePath := storage.TicketWorktreePath(projectDir)
 	d.gitClient.RemoveWorktree(repoRoot, worktreePath, parent.Identifier) //nolint:errcheck
 
-	if grandparent != nil {
+	if parent.Parent != "" {
 		return d.cascadeDone(repoRoot, parent)
 	}
 	return nil
