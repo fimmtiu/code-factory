@@ -182,29 +182,8 @@ func makeSetStatusHandler(d *Daemon) HandlerFunc {
 			return protocol.Response{Success: false, Error: fmt.Sprintf("invalid ticket status %q", newStatus)}
 		}
 
-		repoRoot := d.RepoRoot()
-
 		if newPhase == models.PhaseDone {
-			intoBranch := wu.MergeTargetBranch()
-			if err := d.gitClient.MergeBranch(repoRoot, wu.Identifier, intoBranch); err != nil {
-				return protocol.Response{Success: false, Error: "merge failed: " + err.Error()}
-			}
-			wu.Phase = models.PhaseDone
-			wu.Status = models.StatusIdle
-			wu.ClaimedBy = ""
-			if err := d.state.Update(wu); err != nil {
-				return protocol.Response{Success: false, Error: "failed to update ticket: " + err.Error()}
-			}
-			ticketDir := storage.TicketDirPath(d.ticketsDir, wu.Identifier)
-			if err := d.gitClient.RemoveWorktree(repoRoot, storage.TicketWorktreePath(ticketDir), wu.Identifier); err != nil {
-				panic(err)
-			}
-			if wu.Parent != "" {
-				if err := d.cascadeDone(repoRoot, wu); err != nil {
-					return protocol.Response{Success: false, Error: "cascade done failed: " + err.Error()}
-				}
-			}
-			return protocol.Response{Success: true}
+			return d.markTicketDone(wu)
 		}
 
 		if newPhase == models.PhaseImplement && newStatus == models.StatusInProgress {
@@ -212,7 +191,7 @@ func makeSetStatusHandler(d *Daemon) HandlerFunc {
 			worktreePath := storage.TicketWorktreePath(ticketDir)
 			// Create the worktree only if it doesn't already exist.
 			if _, err := d.gitClient.GetHeadCommit(worktreePath); err != nil {
-				if err := d.gitClient.CreateWorktree(repoRoot, worktreePath, wu.Identifier); err != nil {
+				if err := d.gitClient.CreateWorktree(d.RepoRoot(), worktreePath, wu.Identifier); err != nil {
 					return protocol.Response{Success: false, Error: "failed to create worktree: " + err.Error()}
 				}
 			}
@@ -375,10 +354,36 @@ func makeCloseThreadHandler(d *Daemon) HandlerFunc {
 	}
 }
 
+// markTicketDone merges the ticket's branch, marks it done, removes its
+// worktree, and cascades done to ancestor projects when all siblings are done.
+func (d *Daemon) markTicketDone(wu *models.WorkUnit) protocol.Response {
+	repoRoot := d.RepoRoot()
+	intoBranch := wu.MergeTargetBranch()
+	if err := d.gitClient.MergeBranch(repoRoot, wu.Identifier, intoBranch); err != nil {
+		return protocol.Response{Success: false, Error: "merge failed: " + err.Error()}
+	}
+	wu.Phase = models.PhaseDone
+	wu.Status = models.StatusIdle
+	wu.ClaimedBy = ""
+	if err := d.state.Update(wu); err != nil {
+		return protocol.Response{Success: false, Error: "failed to update ticket: " + err.Error()}
+	}
+	ticketDir := storage.TicketDirPath(d.ticketsDir, wu.Identifier)
+	if err := d.gitClient.RemoveWorktree(repoRoot, storage.TicketWorktreePath(ticketDir), wu.Identifier); err != nil {
+		panic(err)
+	}
+	if wu.Parent != "" {
+		if err := d.cascadeDone(wu); err != nil {
+			return protocol.Response{Success: false, Error: "cascade done failed: " + err.Error()}
+		}
+	}
+	return protocol.Response{Success: true}
+}
+
 // cascadeDone checks whether the parent of wu has all children done. If so,
 // merges its branch into its own parent (or main), removes its worktree, and
 // recurses upward.
-func (d *Daemon) cascadeDone(repoRoot string, wu *models.WorkUnit) error {
+func (d *Daemon) cascadeDone(wu *models.WorkUnit) error {
 	parent, hasParent := d.state.Parent(wu)
 	if !hasParent {
 		return nil
@@ -391,6 +396,7 @@ func (d *Daemon) cascadeDone(repoRoot string, wu *models.WorkUnit) error {
 		return err
 	}
 
+	repoRoot := d.RepoRoot()
 	intoBranch := parent.MergeTargetBranch()
 
 	if err := d.gitClient.MergeBranch(repoRoot, parent.Identifier, intoBranch); err != nil {
@@ -404,7 +410,7 @@ func (d *Daemon) cascadeDone(repoRoot string, wu *models.WorkUnit) error {
 	}
 
 	if parent.Parent != "" {
-		return d.cascadeDone(repoRoot, parent)
+		return d.cascadeDone(parent)
 	}
 	return nil
 }
