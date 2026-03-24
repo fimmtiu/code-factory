@@ -35,10 +35,12 @@ func startPingServer(t *testing.T, socketPath string) (stop func()) {
 				}
 				if cmd.Name == "ping" {
 					data, _ := json.Marshal(map[string]int{"pid": os.Getpid()})
-					protocol.WriteResponse(c, protocol.Response{ //nolint:errcheck
+					if err := protocol.WriteResponse(c, protocol.Response{
 						Success: true,
 						Data:    json.RawMessage(data),
-					})
+					}); err != nil {
+						panic(err)
+					}
 				}
 			}(conn)
 		}

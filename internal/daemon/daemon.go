@@ -164,7 +164,9 @@ func (d *Daemon) Stop() {
 		d.listener.Close()
 	}
 	d.wg.Wait()
-	os.Remove(d.socketPath) //nolint:errcheck
+	if err := os.Remove(d.socketPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+		panic(err)
+	}
 	close(d.queue)
 }
 
@@ -201,7 +203,9 @@ func (d *Daemon) handleConnection(conn net.Conn) {
 	// even while blocked waiting for the client to send a command.
 	const pollInterval = 200 * time.Millisecond
 	for {
-		conn.SetReadDeadline(time.Now().Add(pollInterval)) //nolint:errcheck
+		if err := conn.SetReadDeadline(time.Now().Add(pollInterval)); err != nil {
+			return
+		}
 		cmd, err := protocol.ReadCommand(conn)
 		if err != nil {
 			if ne, ok := err.(net.Error); ok && ne.Timeout() {
@@ -217,7 +221,9 @@ func (d *Daemon) handleConnection(conn net.Conn) {
 		}
 
 		// Got a valid command. Clear the deadline for the rest of this exchange.
-		conn.SetDeadline(time.Time{}) //nolint:errcheck
+		if err := conn.SetDeadline(time.Time{}); err != nil {
+			return
+		}
 
 		respCh := make(chan protocol.Response, 1)
 		item := &QueueItem{
@@ -233,7 +239,9 @@ func (d *Daemon) handleConnection(conn net.Conn) {
 
 		select {
 		case resp := <-respCh:
-			protocol.WriteResponse(conn, resp) //nolint:errcheck
+			if err := protocol.WriteResponse(conn, resp); err != nil {
+				return
+			}
 		case <-d.ctx.Done():
 			return
 		}
@@ -253,7 +261,9 @@ func IsRunning(socketPath string) (bool, error) {
 	}
 	defer conn.Close()
 
-	conn.SetDeadline(time.Now().Add(time.Second)) //nolint:errcheck
+	if err := conn.SetDeadline(time.Now().Add(time.Second)); err != nil {
+		return false, nil
+	}
 
 	if err := protocol.WriteCommand(conn, protocol.Command{Name: "ping"}); err != nil {
 		return false, nil

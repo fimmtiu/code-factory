@@ -51,7 +51,9 @@ func startMockServer(t *testing.T, handler func(cmd protocol.Command) protocol.R
 			return
 		}
 		resp := handler(cmd)
-		protocol.WriteResponse(conn, resp) //nolint:errcheck
+		if err := protocol.WriteResponse(conn, resp); err != nil {
+			panic(err)
+		}
 	}()
 
 	return socketPath, done
@@ -83,7 +85,9 @@ func startMultiMockServer(t *testing.T, n int, handler func(cmd protocol.Command
 					return
 				}
 				resp := handler(cmd)
-				protocol.WriteResponse(conn, resp) //nolint:errcheck
+				if err := protocol.WriteResponse(conn, resp); err != nil {
+					panic(err)
+				}
 			}()
 		}
 	}()
@@ -263,7 +267,9 @@ func TestSendCommand_ClosesConnectionAfterResponse(t *testing.T) {
 			sawClose <- false
 			return
 		}
-		protocol.WriteResponse(conn, protocol.Response{Success: true}) //nolint:errcheck
+		if err := protocol.WriteResponse(conn, protocol.Response{Success: true}); err != nil {
+		panic(err)
+	}
 
 		// Try to read one more byte — should get EOF because client closed.
 		buf := make([]byte, 1)

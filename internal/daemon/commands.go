@@ -188,7 +188,9 @@ func makeSetStatusHandler(d *Daemon) HandlerFunc {
 				return protocol.Response{Success: false, Error: "failed to update ticket: " + err.Error()}
 			}
 			ticketDir := storage.TicketDirPath(d.ticketsDir, wu.Identifier)
-			d.gitClient.RemoveWorktree(repoRoot, storage.TicketWorktreePath(ticketDir), wu.Identifier) //nolint:errcheck
+			if err := d.gitClient.RemoveWorktree(repoRoot, storage.TicketWorktreePath(ticketDir), wu.Identifier); err != nil {
+				panic(err)
+			}
 			if wu.Parent != "" {
 				if err := d.cascadeDone(repoRoot, wu); err != nil {
 					return protocol.Response{Success: false, Error: "cascade done failed: " + err.Error()}
@@ -395,7 +397,9 @@ func (d *Daemon) cascadeDone(repoRoot string, wu *models.WorkUnit) error {
 
 	projectDir := storage.TicketDirPath(d.ticketsDir, parent.Identifier)
 	worktreePath := storage.TicketWorktreePath(projectDir)
-	d.gitClient.RemoveWorktree(repoRoot, worktreePath, parent.Identifier) //nolint:errcheck
+	if err := d.gitClient.RemoveWorktree(repoRoot, worktreePath, parent.Identifier); err != nil {
+		panic(err)
+	}
 
 	if parent.Parent != "" {
 		return d.cascadeDone(repoRoot, parent)
