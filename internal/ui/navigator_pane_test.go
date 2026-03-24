@@ -35,8 +35,8 @@ func TestNavigatorBuildTreeChildren(t *testing.T) {
 	np := NavigatorPane{}
 	units := []*models.WorkUnit{
 		{Identifier: "proj-a", IsProject: true},
-		{Identifier: "proj-a/ticket-1", IsProject: false, Phase: models.PhasePlan, Status: models.StatusIdle, Parent: "proj-a"},
-		{Identifier: "proj-a/ticket-2", IsProject: false, Phase: models.PhasePlan, Status: models.StatusIdle, Parent: "proj-a"},
+		{Identifier: "proj-a/ticket-1", IsProject: false, Phase: models.PhaseImplement, Status: models.StatusIdle, Parent: "proj-a"},
+		{Identifier: "proj-a/ticket-2", IsProject: false, Phase: models.PhaseImplement, Status: models.StatusIdle, Parent: "proj-a"},
 	}
 	np.SetUnits(units)
 
@@ -116,7 +116,7 @@ func TestNavigatorToggleExpand(t *testing.T) {
 	np := NavigatorPane{}
 	units := []*models.WorkUnit{
 		{Identifier: "proj-a", IsProject: true},
-		{Identifier: "proj-a/ticket-1", IsProject: false, Phase: models.PhasePlan, Status: models.StatusIdle, Parent: "proj-a"},
+		{Identifier: "proj-a/ticket-1", IsProject: false, Phase: models.PhaseImplement, Status: models.StatusIdle, Parent: "proj-a"},
 	}
 	np.SetUnits(units)
 
@@ -157,7 +157,7 @@ func TestNavigatorViewShowsShortName(t *testing.T) {
 	units := []*models.WorkUnit{
 		{Identifier: "proj-a", IsProject: true},
 		{Identifier: "proj-a/sub", IsProject: true, Parent: "proj-a"},
-		{Identifier: "proj-a/sub/fix-bug", IsProject: false, Phase: models.PhasePlan, Status: models.StatusIdle, Parent: "proj-a/sub"},
+		{Identifier: "proj-a/sub/fix-bug", IsProject: false, Phase: models.PhaseImplement, Status: models.StatusIdle, Parent: "proj-a/sub"},
 	}
 	np.SetUnits(units)
 
@@ -183,7 +183,7 @@ func TestNavigatorViewCollapsedHidesChildren(t *testing.T) {
 	np := NavigatorPane{}
 	units := []*models.WorkUnit{
 		{Identifier: "proj-a", IsProject: true},
-		{Identifier: "proj-a/ticket-1", IsProject: false, Phase: models.PhasePlan, Status: models.StatusIdle, Parent: "proj-a"},
+		{Identifier: "proj-a/ticket-1", IsProject: false, Phase: models.PhaseImplement, Status: models.StatusIdle, Parent: "proj-a"},
 	}
 	np.SetUnits(units)
 
@@ -205,7 +205,7 @@ func makeTickets(n int) []*models.WorkUnit {
 		units[i] = &models.WorkUnit{
 			Identifier: fmt.Sprintf("ticket-%d", i),
 			IsProject:  false,
-			Phase:      models.PhasePlan,
+			Phase:      models.PhaseImplement,
 			Status:     models.StatusIdle,
 		}
 	}
@@ -308,7 +308,7 @@ func TestNavigatorDepth(t *testing.T) {
 	units := []*models.WorkUnit{
 		{Identifier: "proj-a", IsProject: true},
 		{Identifier: "proj-a/sub", IsProject: true, Parent: "proj-a"},
-		{Identifier: "proj-a/sub/ticket-1", IsProject: false, Phase: models.PhasePlan, Status: models.StatusIdle, Parent: "proj-a/sub"},
+		{Identifier: "proj-a/sub/ticket-1", IsProject: false, Phase: models.PhaseImplement, Status: models.StatusIdle, Parent: "proj-a/sub"},
 	}
 	np.SetUnits(units)
 

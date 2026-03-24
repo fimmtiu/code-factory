@@ -179,7 +179,7 @@ func CreateTicketDir(ticketsDir, identifier string) error {
 	}
 	wu := &models.WorkUnit{
 		Identifier:   identifier,
-		Phase:        models.PhasePlan,
+		Phase:        models.PhaseImplement,
 		Status:       models.StatusIdle,
 		Dependencies: []string{},
 		LastUpdated:  time.Now().UTC(),

@@ -12,7 +12,7 @@ func TestDetailPaneSetUnit(t *testing.T) {
 	unit := &models.WorkUnit{
 		Identifier:  "proj/ticket-1",
 		Description: "A test ticket",
-		Phase:       models.PhasePlan,
+		Phase:       models.PhaseImplement,
 		Status:      models.StatusIdle,
 	}
 	dp.SetUnit(unit)
@@ -31,7 +31,7 @@ func TestDetailPaneScrollDown(t *testing.T) {
 	unit := &models.WorkUnit{
 		Identifier:  "proj/ticket-1",
 		Description: "Line1\nLine2\nLine3\nLine4\nLine5\nLine6\nLine7\nLine8\nLine9\nLine10",
-		Phase:       models.PhasePlan,
+		Phase:       models.PhaseImplement,
 		Status:      models.StatusIdle,
 	}
 	dp.SetUnit(unit)
@@ -48,7 +48,7 @@ func TestDetailPaneScrollUp(t *testing.T) {
 	unit := &models.WorkUnit{
 		Identifier:  "proj/ticket-1",
 		Description: "Line1\nLine2\nLine3\nLine4\nLine5\nLine6",
-		Phase:       models.PhasePlan,
+		Phase:       models.PhaseImplement,
 		Status:      models.StatusIdle,
 	}
 	dp.SetUnit(unit)
@@ -65,7 +65,7 @@ func TestDetailPaneScrollUpAtTop(t *testing.T) {
 	unit := &models.WorkUnit{
 		Identifier:  "proj/ticket-1",
 		Description: "Some description",
-		Phase:       models.PhasePlan,
+		Phase:       models.PhaseImplement,
 		Status:      models.StatusIdle,
 	}
 	dp.SetUnit(unit)
@@ -116,7 +116,7 @@ func TestDetailPaneViewShowsDescription(t *testing.T) {
 	unit := &models.WorkUnit{
 		Identifier:  "proj/ticket-1",
 		Description: "This is the unique description text",
-		Phase:       models.PhasePlan,
+		Phase:       models.PhaseImplement,
 		Status:      models.StatusIdle,
 	}
 	dp.SetUnit(unit)
@@ -148,7 +148,7 @@ func TestDetailPaneViewHeightMatchesRequested(t *testing.T) {
 		unit := &models.WorkUnit{
 			Identifier:  "proj/ticket-1",
 			Description: "some description",
-			Phase:       models.PhasePlan,
+			Phase:       models.PhaseImplement,
 			Status:      models.StatusIdle,
 		}
 		dp.SetUnit(unit)
@@ -176,7 +176,7 @@ func TestDetailPanePageDown(t *testing.T) {
 	dp.SetUnit(&models.WorkUnit{
 		Identifier:  "proj/t",
 		Description: strings.Repeat("line\n", 30),
-		Phase:       models.PhasePlan,
+		Phase:       models.PhaseImplement,
 		Status:      models.StatusIdle,
 	})
 
@@ -191,7 +191,7 @@ func TestDetailPanePageDownClampsAtEnd(t *testing.T) {
 	dp.SetUnit(&models.WorkUnit{
 		Identifier:  "proj/t",
 		Description: "short",
-		Phase:       models.PhasePlan,
+		Phase:       models.PhaseImplement,
 		Status:      models.StatusIdle,
 	})
 
@@ -208,7 +208,7 @@ func TestDetailPanePageUp(t *testing.T) {
 	dp.SetUnit(&models.WorkUnit{
 		Identifier:  "proj/t",
 		Description: strings.Repeat("line\n", 30),
-		Phase:       models.PhasePlan,
+		Phase:       models.PhaseImplement,
 		Status:      models.StatusIdle,
 	})
 	dp.scrollY = 20
@@ -224,7 +224,7 @@ func TestDetailPanePageUpClampsAtZero(t *testing.T) {
 	dp.SetUnit(&models.WorkUnit{
 		Identifier:  "proj/t",
 		Description: strings.Repeat("line\n", 30),
-		Phase:       models.PhasePlan,
+		Phase:       models.PhaseImplement,
 		Status:      models.StatusIdle,
 	})
 	dp.scrollY = 3
@@ -241,7 +241,7 @@ func TestDetailPaneScrollDoesNotGoBeyondContent(t *testing.T) {
 	unit := &models.WorkUnit{
 		Identifier:  "proj/ticket-1",
 		Description: "Short description",
-		Phase:       models.PhasePlan,
+		Phase:       models.PhaseImplement,
 		Status:      models.StatusIdle,
 	}
 	dp.SetUnit(unit)

@@ -462,7 +462,7 @@ func TestCreateTicket_Success(t *testing.T) {
 	if !ok {
 		t.Fatal("create-ticket: expected ticket in state after create")
 	}
-	if wu.Phase != models.PhasePlan {
+	if wu.Phase != models.PhaseImplement {
 		t.Errorf("create-ticket: expected phase plan, got %q", wu.Phase)
 	}
 	if wu.Description != "a ticket" {
@@ -541,7 +541,7 @@ func TestCreateTicket_TopLevel(t *testing.T) {
 	if !ok {
 		t.Fatal("create-ticket top-level: expected ticket in state")
 	}
-	if wu.Phase != models.PhasePlan {
+	if wu.Phase != models.PhaseImplement {
 		t.Errorf("create-ticket top-level: expected status open, got %q", wu.Phase)
 	}
 }

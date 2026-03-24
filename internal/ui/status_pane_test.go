@@ -56,7 +56,7 @@ func TestStatusPaneCounts(t *testing.T) {
 
 	units := []*models.WorkUnit{
 		{Identifier: "proj-a", IsProject: true},
-		{Identifier: "proj-a/ticket-1", IsProject: false, Phase: models.PhasePlan, Status: models.StatusIdle},
+		{Identifier: "proj-a/ticket-1", IsProject: false, Phase: models.PhaseImplement, Status: models.StatusIdle},
 		{Identifier: "proj-a/ticket-2", IsProject: false, Phase: models.PhaseImplement, Status: models.StatusInProgress},
 		{Identifier: "proj-a/ticket-3", IsProject: false, Phase: models.PhaseDone, Status: models.StatusIdle},
 	}

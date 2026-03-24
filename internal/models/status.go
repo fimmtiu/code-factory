@@ -4,7 +4,6 @@ type TicketPhase = string
 
 const (
 	PhaseBlocked   TicketPhase = "blocked"
-	PhasePlan      TicketPhase = "plan"
 	PhaseImplement TicketPhase = "implement"
 	PhaseReview    TicketPhase = "review"
 	PhaseRespond   TicketPhase = "respond"
@@ -23,7 +22,7 @@ const (
 
 func IsValidTicketPhase(s string) bool {
 	switch s {
-	case PhaseBlocked, PhasePlan, PhaseImplement, PhaseReview, PhaseRespond, PhaseRefactor, PhaseDone:
+	case PhaseBlocked, PhaseImplement, PhaseReview, PhaseRespond, PhaseRefactor, PhaseDone:
 		return true
 	}
 	return false

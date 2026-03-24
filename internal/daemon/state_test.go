@@ -277,7 +277,7 @@ func TestStateUnsatisfiedDeps(t *testing.T) {
 	writeTicket(t, ticketsDir, done)
 
 	open := models.NewTicket("open-dep", "open")
-	open.Phase = models.PhasePlan
+	open.Phase = models.PhaseImplement
 	writeTicket(t, ticketsDir, open)
 
 	wu := models.NewTicket("my-ticket", "has deps")

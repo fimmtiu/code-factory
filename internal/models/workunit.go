@@ -59,7 +59,7 @@ func NewTicket(identifier, description string) *WorkUnit {
 	return &WorkUnit{
 		Identifier:   identifier,
 		Description:  description,
-		Phase:        PhasePlan,
+		Phase:        PhaseImplement,
 		Status:       StatusIdle,
 		Dependencies: []string{},
 		LastUpdated:  time.Now().UTC(),
@@ -103,7 +103,7 @@ func (wu *WorkUnit) SetDependencies(deps []string) {
 	if len(deps) > 0 {
 		wu.Phase = PhaseBlocked
 	} else {
-		wu.Phase = PhasePlan
+		wu.Phase = PhaseImplement
 	}
 	wu.Status = StatusIdle
 }

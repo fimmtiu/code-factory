@@ -8,7 +8,7 @@ func TestIsValidTicketPhase(t *testing.T) {
 		want  bool
 	}{
 		{"blocked", true},
-		{"plan", true},
+		{"plan", false},
 		{"implement", true},
 		{"review", true},
 		{"respond", true},
@@ -55,9 +55,6 @@ func TestIsValidTicketStatus(t *testing.T) {
 func TestTicketPhaseConstants(t *testing.T) {
 	if PhaseBlocked != "blocked" {
 		t.Errorf("PhaseBlocked = %q, want %q", PhaseBlocked, "blocked")
-	}
-	if PhasePlan != "plan" {
-		t.Errorf("PhasePlan = %q, want %q", PhasePlan, "plan")
 	}
 	if PhaseImplement != "implement" {
 		t.Errorf("PhaseImplement = %q, want %q", PhaseImplement, "implement")

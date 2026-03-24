@@ -14,8 +14,8 @@ func TestNewTicket(t *testing.T) {
 	if wu.Description != "Fix the rounding bug" {
 		t.Errorf("Description = %q, want %q", wu.Description, "Fix the rounding bug")
 	}
-	if wu.Phase != PhasePlan {
-		t.Errorf("Phase = %q, want %q", wu.Phase, PhasePlan)
+	if wu.Phase != PhaseImplement {
+		t.Errorf("Phase = %q, want %q", wu.Phase, PhaseImplement)
 	}
 	if wu.Status != StatusIdle {
 		t.Errorf("Status = %q, want %q", wu.Status, StatusIdle)
@@ -114,7 +114,7 @@ func TestWorkUnitJSONFieldNames(t *testing.T) {
 	wu := &WorkUnit{
 		Identifier:   "fix-bug",
 		Description:  "desc",
-		Phase:        PhasePlan,
+		Phase:        PhaseImplement,
 		Status:       StatusIdle,
 		Dependencies: []string{},
 		LastUpdated:  time.Now().UTC(),
