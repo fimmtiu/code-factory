@@ -77,30 +77,24 @@ func runCommand(subcommand string, args []string) error {
 			return err
 		}
 		return runCreateTicket(sockPath, args, os.Stdin)
-	case "get-work":
+	case "set-status":
 		sockPath, err := ensureDaemon()
 		if err != nil {
 			return err
 		}
-		return runGetWork(sockPath)
-	case "review-ready":
+		return runSetStatus(sockPath, args)
+	case "claim":
 		sockPath, err := ensureDaemon()
 		if err != nil {
 			return err
 		}
-		return runReviewReady(sockPath, args)
-	case "get-review":
+		return runClaim(sockPath, args)
+	case "release":
 		sockPath, err := ensureDaemon()
 		if err != nil {
 			return err
 		}
-		return runGetReview(sockPath)
-	case "done":
-		sockPath, err := ensureDaemon()
-		if err != nil {
-			return err
-		}
-		return runDone(sockPath, args)
+		return runRelease(sockPath, args)
 	case "add-comment":
 		sockPath, err := ensureDaemon()
 		if err != nil {
@@ -278,27 +272,15 @@ func runCreateTicket(socketPath string, args []string, stdin io.Reader) error {
 	return printResponseData(resp)
 }
 
-// runGetWork sends "get-work" and pretty-prints the response.
-func runGetWork(socketPath string) error {
-	c := client.NewClient(socketPath)
-	resp, err := c.SendCommand(protocol.Command{Name: "get-work"})
-	if err != nil {
-		return err
+// runSetStatus sends "set-status" with the given identifier and new status.
+func runSetStatus(socketPath string, args []string) error {
+	if len(args) < 2 {
+		return fmt.Errorf("usage: tickets set-status <identifier> <new-status>")
 	}
-	return printResponseData(resp)
-}
-
-// runReviewReady sends "review-ready" with the given identifier.
-func runReviewReady(socketPath string, args []string) error {
-	if len(args) < 1 {
-		return fmt.Errorf("usage: tickets review-ready <identifier>")
-	}
-	identifier := args[0]
-
 	c := client.NewClient(socketPath)
 	resp, err := c.SendCommand(protocol.Command{
-		Name:   "review-ready",
-		Params: map[string]string{"identifier": identifier},
+		Name:   "set-status",
+		Params: map[string]string{"identifier": args[0], "status": args[1]},
 	})
 	if err != nil {
 		return err
@@ -306,27 +288,31 @@ func runReviewReady(socketPath string, args []string) error {
 	return printResponseData(resp)
 }
 
-// runGetReview sends "get-review" and pretty-prints the response.
-func runGetReview(socketPath string) error {
+// runClaim sends "claim" with the given PID and pretty-prints the response.
+func runClaim(socketPath string, args []string) error {
+	if len(args) < 1 {
+		return fmt.Errorf("usage: tickets claim <pid>")
+	}
 	c := client.NewClient(socketPath)
-	resp, err := c.SendCommand(protocol.Command{Name: "get-review"})
+	resp, err := c.SendCommand(protocol.Command{
+		Name:   "claim",
+		Params: map[string]string{"pid": args[0]},
+	})
 	if err != nil {
 		return err
 	}
 	return printResponseData(resp)
 }
 
-// runDone sends "done" with the given identifier and prints the response.
-func runDone(socketPath string, args []string) error {
+// runRelease sends "release" with the given identifier.
+func runRelease(socketPath string, args []string) error {
 	if len(args) < 1 {
-		return fmt.Errorf("usage: tickets done <identifier>")
+		return fmt.Errorf("usage: tickets release <identifier>")
 	}
-	identifier := args[0]
-
 	c := client.NewClient(socketPath)
 	resp, err := c.SendCommand(protocol.Command{
-		Name:   "done",
-		Params: map[string]string{"identifier": identifier},
+		Name:   "release",
+		Params: map[string]string{"identifier": args[0]},
 	})
 	if err != nil {
 		return err

@@ -32,10 +32,9 @@ Subcommands (auto-start daemon if needed):
   status                          Show daemon status
   create-project <id>             Create a project (reads JSON description from stdin)
   create-ticket <id>              Create a ticket (reads JSON description from stdin)
-  get-work                        Get the next work item
-  review-ready <id>               Mark a ticket as ready for review
-  get-review                      Get the next ticket to review
-  done <id>                       Mark a ticket as done
+  set-status <id> <status>        Set a ticket's status (use "done" to merge and cascade)
+  claim <pid>                     Claim the next available ticket for the given process ID
+  release <id>                    Release the claim on a ticket
   add-comment <id> <loc> <author> <text>
                                   Add a comment to a work unit at a code location
   close-thread <thread-id>        Close a comment thread`)

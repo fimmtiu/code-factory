@@ -41,8 +41,9 @@ func StartHousekeepingTimer(d *Daemon, interval time.Duration) *time.Ticker {
 }
 
 // makeHousekeepingHandler returns a HandlerFunc that:
-//   - Resets stale in-progress tickets to open.
-//   - Resets stale in-review tickets to review-ready.
+//   - Resets stale in-progress tickets to open and releases their claim.
+//   - Resets stale in-review tickets to review-ready and releases their claim.
+//   - Releases the claim on any other stale claimed ticket.
 //   - Calls stopFn if the daemon has been idle for longer than ExitAfterMinutes.
 func makeHousekeepingHandler(w *Worker, d *Daemon) HandlerFunc {
 	return func(cmd protocol.Command) protocol.Response {
@@ -58,22 +59,27 @@ func makeHousekeepingHandler(w *Worker, d *Daemon) HandlerFunc {
 			if wu.IsProject {
 				continue
 			}
+			if now.Sub(wu.LastUpdated) <= staleThreshold {
+				continue
+			}
 
+			changed := false
 			switch wu.Status {
 			case models.StatusInProgress:
-				if now.Sub(wu.LastUpdated) > staleThreshold {
-					wu.Status = models.StatusOpen
-					if err := d.state.Update(wu); err != nil {
-						// Best-effort; continue processing other units.
-						continue
-					}
-				}
+				wu.Status = models.StatusOpen
+				changed = true
 			case models.StatusInReview:
-				if now.Sub(wu.LastUpdated) > staleThreshold {
-					wu.Status = models.StatusReviewReady
-					if err := d.state.Update(wu); err != nil {
-						continue
-					}
+				wu.Status = models.StatusReviewReady
+				changed = true
+			}
+			if wu.ClaimedBy != "" {
+				wu.ClaimedBy = ""
+				changed = true
+			}
+			if changed {
+				if err := d.state.Update(wu); err != nil {
+					// Best-effort; continue processing other units.
+					continue
 				}
 			}
 		}

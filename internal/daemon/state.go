@@ -69,34 +69,22 @@ func (s *State) All() []*models.WorkUnit {
 	return out
 }
 
-// FindOpen returns the first open (non-project) ticket whose dependencies are
-// all satisfied (status=done). Returns nil if none found.
-func (s *State) FindOpen() *models.WorkUnit {
+// FindClaimable returns the first unclaimed non-project ticket whose status is
+// neither "blocked" nor "done". Returns nil if none is available.
+func (s *State) FindClaimable() *models.WorkUnit {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	for _, wu := range s.units {
 		if wu.IsProject {
 			continue
 		}
-		if wu.Status != models.StatusOpen {
+		if wu.Status == models.StatusBlocked || wu.Status == models.StatusDone {
 			continue
 		}
-		if s.unsatisfiedDepsLocked(wu) == 0 {
-			return wu
+		if wu.ClaimedBy != "" {
+			continue
 		}
-	}
-	return nil
-}
-
-// FindReviewReady returns the first ticket with status review-ready.
-// Returns nil if none found.
-func (s *State) FindReviewReady() *models.WorkUnit {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	for _, wu := range s.units {
-		if !wu.IsProject && wu.Status == models.StatusReviewReady {
-			return wu
-		}
+		return wu
 	}
 	return nil
 }
@@ -170,7 +158,9 @@ func (s *State) MarkAncestorsInProgress(wu *models.WorkUnit) {
 	for ok {
 		if parent.Status != models.ProjectInProgress {
 			parent.Status = models.ProjectInProgress
-			s.Update(parent) //nolint:errcheck
+			if err := s.Update(parent); err != nil {
+				panic("failed to write ancestor to disk: " + err.Error())
+			}
 		}
 		parent, ok = s.Parent(parent)
 	}

@@ -34,19 +34,17 @@ func parentIdentifierOf(identifier string) (string, bool) {
 	return identifier[:idx], true
 }
 
-// RegisterCommands registers the exit, status, create-project,
-// create-ticket, get-work, review-ready, get-review, done, add-comment,
-// and close-thread command handlers on the given worker. The ping handler
-// is registered automatically by NewWorker.
+// RegisterCommands registers the exit, status, create-project, create-ticket,
+// set-status, claim, release, add-comment, and close-thread command handlers
+// on the given worker. The ping handler is registered automatically by NewWorker.
 func RegisterCommands(w *Worker, d *Daemon) {
 	w.RegisterHandler("exit", makeExitHandler(w))
 	w.RegisterHandler("status", makeStatusHandler(d))
 	w.RegisterHandler("create-project", makeCreateProjectHandler(d))
 	w.RegisterHandler("create-ticket", makeCreateTicketHandler(d))
-	w.RegisterHandler("get-work", makeGetWorkHandler(d))
-	w.RegisterHandler("review-ready", makeReviewReadyHandler(d))
-	w.RegisterHandler("get-review", makeGetReviewHandler(d))
-	w.RegisterHandler("done", makeDoneHandler(d))
+	w.RegisterHandler("set-status", makeSetStatusHandler(d))
+	w.RegisterHandler("claim", makeClaimHandler(d))
+	w.RegisterHandler("release", makeReleaseHandler(d))
 	w.RegisterHandler("add-comment", makeAddCommentHandler(d))
 	w.RegisterHandler("close-thread", makeCloseThreadHandler(d))
 }
@@ -154,69 +152,93 @@ func makeCreateTicketHandler(d *Daemon) HandlerFunc {
 	}
 }
 
-// makeGetWorkHandler returns a handler that finds an open ticket with all
-// dependencies satisfied, creates a git worktree for it, marks it
-// in-progress, cascades in-progress to all ancestor projects, and returns
-// the ticket JSON.
-func makeGetWorkHandler(d *Daemon) HandlerFunc {
-	return func(cmd protocol.Command) protocol.Response {
-		ticket := d.state.FindOpen()
-		if ticket == nil {
-			return protocol.Response{Success: false, Error: "no work available"}
-		}
-
-		repoRoot := d.RepoRoot()
-		ticketDir := storage.TicketDirPath(d.ticketsDir, ticket.Identifier)
-		worktreePath := storage.TicketWorktreePath(ticketDir)
-		if err := d.gitClient.CreateWorktree(repoRoot, worktreePath, ticket.Identifier); err != nil {
-			return protocol.Response{Success: false, Error: "failed to create worktree: " + err.Error()}
-		}
-
-		ticket.Status = models.StatusInProgress
-		if err := d.state.Update(ticket); err != nil {
-			return protocol.Response{Success: false, Error: "failed to update ticket: " + err.Error()}
-		}
-
-		d.state.MarkAncestorsInProgress(ticket)
-
-		data, err := json.Marshal(ticket)
-		if err != nil {
-			return protocol.Response{Success: false, Error: "failed to marshal ticket: " + err.Error()}
-		}
-		return protocol.Response{Success: true, Data: json.RawMessage(data)}
-	}
-}
-
-// makeReviewReadyHandler returns a handler that marks the identified ticket
-// as review-ready.
-func makeReviewReadyHandler(d *Daemon) HandlerFunc {
+// makeSetStatusHandler returns a handler that sets a ticket's status to the
+// requested value. When the new status is "done" it additionally merges the
+// ticket's branch, removes its worktree, and cascades done to ancestor
+// projects when all siblings are complete. When the new status is
+// "in-progress" it creates a git worktree for the ticket (if one does not
+// already exist) and cascades in-progress to ancestor projects.
+func makeSetStatusHandler(d *Daemon) HandlerFunc {
 	return func(cmd protocol.Command) protocol.Response {
 		identifier := cmd.Params["identifier"]
+		newStatus := cmd.Params["status"]
 
 		wu, ok := d.state.Get(identifier)
 		if !ok {
 			return protocol.Response{Success: false, Error: fmt.Sprintf("ticket %q not found", identifier)}
 		}
+		if wu.IsProject {
+			return protocol.Response{Success: false, Error: fmt.Sprintf("%q is a project, not a ticket", identifier)}
+		}
 
-		wu.Status = models.StatusReviewReady
+		if !models.IsValidTicketStatus(newStatus) {
+			return protocol.Response{Success: false, Error: fmt.Sprintf("invalid ticket status %q", newStatus)}
+		}
+
+		repoRoot := d.RepoRoot()
+
+		if newStatus == models.StatusDone {
+			intoBranch := wu.MergeTargetBranch()
+			if err := d.gitClient.MergeBranch(repoRoot, wu.Identifier, intoBranch); err != nil {
+				return protocol.Response{Success: false, Error: "merge failed: " + err.Error()}
+			}
+			wu.Status = models.StatusDone
+			wu.ClaimedBy = ""
+			if err := d.state.Update(wu); err != nil {
+				return protocol.Response{Success: false, Error: "failed to update ticket: " + err.Error()}
+			}
+			ticketDir := storage.TicketDirPath(d.ticketsDir, wu.Identifier)
+			d.gitClient.RemoveWorktree(repoRoot, storage.TicketWorktreePath(ticketDir), wu.Identifier) //nolint:errcheck
+			if wu.Parent != "" {
+				if err := d.cascadeDone(repoRoot, wu); err != nil {
+					return protocol.Response{Success: false, Error: "cascade done failed: " + err.Error()}
+				}
+			}
+			return protocol.Response{Success: true}
+		}
+
+		if newStatus == models.StatusInProgress {
+			ticketDir := storage.TicketDirPath(d.ticketsDir, wu.Identifier)
+			worktreePath := storage.TicketWorktreePath(ticketDir)
+			// Create the worktree only if it doesn't already exist.
+			if _, err := d.gitClient.GetHeadCommit(worktreePath); err != nil {
+				if err := d.gitClient.CreateWorktree(repoRoot, worktreePath, wu.Identifier); err != nil {
+					return protocol.Response{Success: false, Error: "failed to create worktree: " + err.Error()}
+				}
+			}
+			wu.Status = models.StatusInProgress
+			if err := d.state.Update(wu); err != nil {
+				return protocol.Response{Success: false, Error: "failed to update ticket: " + err.Error()}
+			}
+			d.state.MarkAncestorsInProgress(wu)
+			return protocol.Response{Success: true}
+		}
+
+		wu.Status = newStatus
 		if err := d.state.Update(wu); err != nil {
 			return protocol.Response{Success: false, Error: "failed to update ticket: " + err.Error()}
 		}
-
 		return protocol.Response{Success: true}
 	}
 }
 
-// makeGetReviewHandler returns a handler that finds a review-ready ticket,
-// marks it in-review, and returns the ticket JSON.
-func makeGetReviewHandler(d *Daemon) HandlerFunc {
+// makeClaimHandler returns a handler that assigns the first available
+// claimable ticket to the requesting process (identified by pid). A ticket
+// is claimable when it is not a project, not blocked, not done, and not
+// already claimed. The handler returns the claimed ticket as JSON.
+func makeClaimHandler(d *Daemon) HandlerFunc {
 	return func(cmd protocol.Command) protocol.Response {
-		ticket := d.state.FindReviewReady()
-		if ticket == nil {
-			return protocol.Response{Success: false, Error: "no reviews available"}
+		pid := cmd.Params["pid"]
+		if pid == "" {
+			return protocol.Response{Success: false, Error: "claim: pid is required"}
 		}
 
-		ticket.Status = models.StatusInReview
+		ticket := d.state.FindClaimable()
+		if ticket == nil {
+			return protocol.Response{Success: false, Error: "no claimable ticket available"}
+		}
+
+		ticket.ClaimedBy = pid
 		if err := d.state.Update(ticket); err != nil {
 			return protocol.Response{Success: false, Error: "failed to update ticket: " + err.Error()}
 		}
@@ -229,51 +251,24 @@ func makeGetReviewHandler(d *Daemon) HandlerFunc {
 	}
 }
 
-// makeDoneHandler returns a handler that merges the ticket's branch into its
-// parent's branch (or main for top-level), marks the ticket done, removes
-// its worktree, and cascades done to ancestor projects when all siblings
-// are done.
-func makeDoneHandler(d *Daemon) HandlerFunc {
+// makeReleaseHandler returns a handler that clears the claim on a ticket,
+// making it available for other processes to claim.
+func makeReleaseHandler(d *Daemon) HandlerFunc {
 	return func(cmd protocol.Command) protocol.Response {
 		identifier := cmd.Params["identifier"]
+		if identifier == "" {
+			return protocol.Response{Success: false, Error: "release: identifier is required"}
+		}
 
 		wu, ok := d.state.Get(identifier)
 		if !ok {
 			return protocol.Response{Success: false, Error: fmt.Sprintf("ticket %q not found", identifier)}
 		}
 
-		// Accept in-review or in-progress (lenient).
-		if !wu.IsCompletable() {
-			return protocol.Response{
-				Success: false,
-				Error:   fmt.Sprintf("ticket %q is not in-review or in-progress (status: %s)", identifier, wu.Status),
-			}
-		}
-
-		repoRoot := d.RepoRoot()
-
-		parent, _ := d.state.Parent(wu)
-		intoBranch := wu.MergeTargetBranch()
-
-		if err := d.gitClient.MergeBranch(repoRoot, wu.Identifier, intoBranch); err != nil {
-			return protocol.Response{Success: false, Error: "merge failed: " + err.Error()}
-		}
-
-		wu.Status = models.StatusDone
+		wu.ClaimedBy = ""
 		if err := d.state.Update(wu); err != nil {
 			return protocol.Response{Success: false, Error: "failed to update ticket: " + err.Error()}
 		}
-
-		ticketDir := storage.TicketDirPath(d.ticketsDir, wu.Identifier)
-		worktreePath := storage.TicketWorktreePath(ticketDir)
-		d.gitClient.RemoveWorktree(repoRoot, worktreePath, wu.Identifier) //nolint:errcheck
-
-		if parent != nil {
-			if err := d.cascadeDone(repoRoot, wu); err != nil {
-				return protocol.Response{Success: false, Error: "cascade done failed: " + err.Error()}
-			}
-		}
-
 		return protocol.Response{Success: true}
 	}
 }

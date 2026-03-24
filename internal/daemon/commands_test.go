@@ -22,6 +22,7 @@ type MockGitClient struct {
 	CreateWorktreeErr error
 	MergeBranchErr    error
 	RemoveWorktreeErr error
+	GetHeadCommitErr  error
 }
 
 func (m *MockGitClient) CreateWorktree(repoRoot, worktreePath, branchName string) error {
@@ -44,7 +45,7 @@ func (m *MockGitClient) GetRepoRoot(path string) (string, error) {
 }
 
 func (m *MockGitClient) GetHeadCommit(path string) (string, error) {
-	return "abc1234", nil
+	return "abc1234", m.GetHeadCommitErr
 }
 
 // newTestDaemonWithMockGit creates a Daemon backed by a MockGitClient.
@@ -569,16 +570,45 @@ func TestCreateTicket_MissingParent(t *testing.T) {
 }
 
 // --------------------------------------------------------------------------
-// get-work tests
+// set-status tests
 // --------------------------------------------------------------------------
 
-// TestGetWork_Success verifies that get-work returns an open ticket, creates
-// a worktree, marks the ticket in-progress, and cascades in-progress to the
-// parent project.
-func TestGetWork_Success(t *testing.T) {
+// TestSetStatus_Simple verifies that set-status updates a ticket's status.
+func TestSetStatus_Simple(t *testing.T) {
 	ticketsDir := makeTempTicketsDir(t)
 
-	// Create a project with one open ticket.
+	ticket := models.NewTicket("my-ticket", "do work")
+	writeTicket(t, ticketsDir, ticket)
+
+	d, _ := newTestDaemonWithMockGit(t, ticketsDir)
+	if err := d.State().Load(); err != nil {
+		t.Fatalf("State.Load: %v", err)
+	}
+	cancel := startWorker(t, d)
+	defer cancel()
+
+	resp := sendCommand(t, d, protocol.Command{
+		Name:   "set-status",
+		Params: map[string]string{"identifier": "my-ticket", "status": "review-ready"},
+	})
+	if !resp.Success {
+		t.Fatalf("set-status: expected success, got %q", resp.Error)
+	}
+
+	wu, ok := d.State().Get("my-ticket")
+	if !ok {
+		t.Fatal("set-status: ticket not found")
+	}
+	if wu.Status != models.StatusReviewReady {
+		t.Errorf("set-status: expected review-ready, got %q", wu.Status)
+	}
+}
+
+// TestSetStatus_InProgress_CreatesWorktree verifies that set-status to
+// in-progress creates a git worktree and cascades in-progress to the parent.
+func TestSetStatus_InProgress_CreatesWorktree(t *testing.T) {
+	ticketsDir := makeTempTicketsDir(t)
+
 	projDir := ticketsDir + "/my-proj"
 	if err := os.MkdirAll(projDir, 0755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
@@ -591,252 +621,49 @@ func TestGetWork_Success(t *testing.T) {
 	writeTicketToDir(t, projDir, "work-ticket", ticket)
 
 	d, mock := newTestDaemonWithMockGit(t, ticketsDir)
+	// Make GetHeadCommit fail so the worktree creation path is exercised.
+	mock.GetHeadCommitErr = errors.New("no worktree")
 	if err := d.State().Load(); err != nil {
 		t.Fatalf("State.Load: %v", err)
 	}
 	cancel := startWorker(t, d)
 	defer cancel()
 
-	resp := sendCommand(t, d, protocol.Command{Name: "get-work"})
+	resp := sendCommand(t, d, protocol.Command{
+		Name:   "set-status",
+		Params: map[string]string{"identifier": "my-proj/work-ticket", "status": "in-progress"},
+	})
 	if !resp.Success {
-		t.Fatalf("get-work: expected success, got error: %q", resp.Error)
+		t.Fatalf("set-status in-progress: expected success, got %q", resp.Error)
 	}
 
-	// Response should be the ticket JSON.
-	var wu models.WorkUnit
-	if err := json.Unmarshal(resp.Data, &wu); err != nil {
-		t.Fatalf("get-work: unmarshal data: %v", err)
-	}
-	if wu.Identifier != "my-proj/work-ticket" {
-		t.Errorf("get-work: expected identifier 'my-proj/work-ticket', got %q", wu.Identifier)
-	}
-
-	// Ticket should be in-progress.
-	ticketState, ok := d.State().Get("my-proj/work-ticket")
+	wu, ok := d.State().Get("my-proj/work-ticket")
 	if !ok {
-		t.Fatal("get-work: ticket not found in state")
+		t.Fatal("set-status: ticket not found in state")
 	}
-	if ticketState.Status != models.StatusInProgress {
-		t.Errorf("get-work: expected ticket status in-progress, got %q", ticketState.Status)
+	if wu.Status != models.StatusInProgress {
+		t.Errorf("set-status: expected in-progress, got %q", wu.Status)
 	}
 
-	// Parent project should be in-progress.
 	projState, ok := d.State().Get("my-proj")
 	if !ok {
-		t.Fatal("get-work: project not found in state")
+		t.Fatal("set-status: project not found")
 	}
 	if projState.Status != models.ProjectInProgress {
-		t.Errorf("get-work: expected project status in-progress, got %q", projState.Status)
+		t.Errorf("set-status: expected project in-progress, got %q", projState.Status)
 	}
 
-	// Worktree should have been created.
 	if len(mock.CreatedWorktrees) != 1 || mock.CreatedWorktrees[0] != "my-proj/work-ticket" {
-		t.Errorf("get-work: expected CreateWorktree called with 'my-proj/work-ticket', got %v", mock.CreatedWorktrees)
+		t.Errorf("set-status: expected CreateWorktree('my-proj/work-ticket'), got %v", mock.CreatedWorktrees)
 	}
 }
 
-// TestGetWork_NoWork verifies that get-work returns failure when no open
-// tickets are available.
-func TestGetWork_NoWork(t *testing.T) {
+// TestSetStatus_Done_MergesAndCascades verifies that set-status done merges
+// the branch, marks the ticket done, removes the worktree, and cascades to
+// the parent project when all siblings are done.
+func TestSetStatus_Done_MergesAndCascades(t *testing.T) {
 	ticketsDir := makeTempTicketsDir(t)
 
-	d, _ := newTestDaemonWithMockGit(t, ticketsDir)
-	if err := d.State().Load(); err != nil {
-		t.Fatalf("State.Load: %v", err)
-	}
-	cancel := startWorker(t, d)
-	defer cancel()
-
-	resp := sendCommand(t, d, protocol.Command{Name: "get-work"})
-	if resp.Success {
-		t.Fatal("get-work no-work: expected failure, got success")
-	}
-	if resp.Error == "" {
-		t.Error("get-work no-work: expected non-empty error message")
-	}
-}
-
-// TestGetWork_ParentCascade verifies that get-work cascades in-progress up
-// through nested parent projects.
-func TestGetWork_ParentCascade(t *testing.T) {
-	ticketsDir := makeTempTicketsDir(t)
-
-	// Create grandparent > parent > ticket hierarchy.
-	grandDir := ticketsDir + "/grand"
-	parentDir := grandDir + "/child-proj"
-	if err := os.MkdirAll(parentDir, 0755); err != nil {
-		t.Fatalf("MkdirAll: %v", err)
-	}
-
-	grand := models.NewProject("grand", "grandparent")
-	if err := writeProjectFile(t, grandDir, grand); err != nil {
-		t.Fatalf("writeProjectFile grand: %v", err)
-	}
-
-	parent := models.NewProject("grand/child-proj", "parent")
-	if err := writeProjectFile(t, parentDir, parent); err != nil {
-		t.Fatalf("writeProjectFile parent: %v", err)
-	}
-
-	ticket := models.NewTicket("grand/child-proj/leaf-ticket", "leaf")
-	writeTicketToDir(t, parentDir, "leaf-ticket", ticket)
-
-	d, mock := newTestDaemonWithMockGit(t, ticketsDir)
-	if err := d.State().Load(); err != nil {
-		t.Fatalf("State.Load: %v", err)
-	}
-	cancel := startWorker(t, d)
-	defer cancel()
-
-	resp := sendCommand(t, d, protocol.Command{Name: "get-work"})
-	if !resp.Success {
-		t.Fatalf("get-work cascade: expected success, got %q", resp.Error)
-	}
-
-	// Both ancestor projects should be in-progress.
-	for _, id := range []string{"grand", "grand/child-proj"} {
-		wu, ok := d.State().Get(id)
-		if !ok {
-			t.Fatalf("get-work cascade: %q not found in state", id)
-		}
-		if wu.Status != models.ProjectInProgress {
-			t.Errorf("get-work cascade: expected %q status in-progress, got %q", id, wu.Status)
-		}
-	}
-
-	if len(mock.CreatedWorktrees) != 1 {
-		t.Errorf("get-work cascade: expected 1 worktree created, got %d", len(mock.CreatedWorktrees))
-	}
-}
-
-// --------------------------------------------------------------------------
-// review-ready tests
-// --------------------------------------------------------------------------
-
-// TestReviewReady_Success verifies that review-ready marks a ticket as
-// review-ready.
-func TestReviewReady_Success(t *testing.T) {
-	ticketsDir := makeTempTicketsDir(t)
-
-	ticket := models.NewTicket("fix-bug", "fix a bug")
-	ticket.Status = models.StatusInProgress
-	writeTicket(t, ticketsDir, ticket)
-
-	d, _ := newTestDaemonWithMockGit(t, ticketsDir)
-	if err := d.State().Load(); err != nil {
-		t.Fatalf("State.Load: %v", err)
-	}
-	cancel := startWorker(t, d)
-	defer cancel()
-
-	resp := sendCommand(t, d, protocol.Command{
-		Name:   "review-ready",
-		Params: map[string]string{"identifier": "fix-bug"},
-	})
-	if !resp.Success {
-		t.Fatalf("review-ready: expected success, got %q", resp.Error)
-	}
-
-	wu, ok := d.State().Get("fix-bug")
-	if !ok {
-		t.Fatal("review-ready: ticket not found")
-	}
-	if wu.Status != models.StatusReviewReady {
-		t.Errorf("review-ready: expected status review-ready, got %q", wu.Status)
-	}
-}
-
-// TestReviewReady_NotFound verifies that review-ready returns an error when
-// the identifier does not exist.
-func TestReviewReady_NotFound(t *testing.T) {
-	ticketsDir := makeTempTicketsDir(t)
-
-	d, _ := newTestDaemonWithMockGit(t, ticketsDir)
-	if err := d.State().Load(); err != nil {
-		t.Fatalf("State.Load: %v", err)
-	}
-	cancel := startWorker(t, d)
-	defer cancel()
-
-	resp := sendCommand(t, d, protocol.Command{
-		Name:   "review-ready",
-		Params: map[string]string{"identifier": "nonexistent"},
-	})
-	if resp.Success {
-		t.Fatal("review-ready not-found: expected failure, got success")
-	}
-}
-
-// --------------------------------------------------------------------------
-// get-review tests
-// --------------------------------------------------------------------------
-
-// TestGetReview_Success verifies that get-review returns a review-ready ticket
-// and marks it in-review.
-func TestGetReview_Success(t *testing.T) {
-	ticketsDir := makeTempTicketsDir(t)
-
-	ticket := models.NewTicket("review-me", "needs review")
-	ticket.Status = models.StatusReviewReady
-	writeTicket(t, ticketsDir, ticket)
-
-	d, _ := newTestDaemonWithMockGit(t, ticketsDir)
-	if err := d.State().Load(); err != nil {
-		t.Fatalf("State.Load: %v", err)
-	}
-	cancel := startWorker(t, d)
-	defer cancel()
-
-	resp := sendCommand(t, d, protocol.Command{Name: "get-review"})
-	if !resp.Success {
-		t.Fatalf("get-review: expected success, got %q", resp.Error)
-	}
-
-	var wu models.WorkUnit
-	if err := json.Unmarshal(resp.Data, &wu); err != nil {
-		t.Fatalf("get-review: unmarshal: %v", err)
-	}
-	if wu.Identifier != "review-me" {
-		t.Errorf("get-review: expected 'review-me', got %q", wu.Identifier)
-	}
-
-	ticketState, ok := d.State().Get("review-me")
-	if !ok {
-		t.Fatal("get-review: ticket not found in state")
-	}
-	if ticketState.Status != models.StatusInReview {
-		t.Errorf("get-review: expected status in-review, got %q", ticketState.Status)
-	}
-}
-
-// TestGetReview_NoReviews verifies that get-review returns failure when no
-// review-ready tickets exist.
-func TestGetReview_NoReviews(t *testing.T) {
-	ticketsDir := makeTempTicketsDir(t)
-
-	d, _ := newTestDaemonWithMockGit(t, ticketsDir)
-	if err := d.State().Load(); err != nil {
-		t.Fatalf("State.Load: %v", err)
-	}
-	cancel := startWorker(t, d)
-	defer cancel()
-
-	resp := sendCommand(t, d, protocol.Command{Name: "get-review"})
-	if resp.Success {
-		t.Fatal("get-review no-reviews: expected failure, got success")
-	}
-}
-
-// --------------------------------------------------------------------------
-// done tests
-// --------------------------------------------------------------------------
-
-// TestDone_Success verifies that done merges the ticket branch, marks the
-// ticket done, and removes its worktree.
-func TestDone_Success(t *testing.T) {
-	ticketsDir := makeTempTicketsDir(t)
-
-	// Create a project with one ticket in-review.
 	projDir := ticketsDir + "/my-proj"
 	if err := os.MkdirAll(projDir, 0755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
@@ -845,118 +672,12 @@ func TestDone_Success(t *testing.T) {
 	if err := writeProjectFile(t, projDir, proj); err != nil {
 		t.Fatalf("writeProjectFile: %v", err)
 	}
-	ticket := models.NewTicket("my-proj/fix-bug", "fix bug")
-	ticket.Status = models.StatusInReview
-	writeTicketToDir(t, projDir, "fix-bug", ticket)
-
-	d, mock := newTestDaemonWithMockGit(t, ticketsDir)
-	if err := d.State().Load(); err != nil {
-		t.Fatalf("State.Load: %v", err)
-	}
-	cancel := startWorker(t, d)
-	defer cancel()
-
-	resp := sendCommand(t, d, protocol.Command{
-		Name:   "done",
-		Params: map[string]string{"identifier": "my-proj/fix-bug"},
-	})
-	if !resp.Success {
-		t.Fatalf("done: expected success, got %q", resp.Error)
-	}
-
-	// Ticket should be marked done.
-	wu, ok := d.State().Get("my-proj/fix-bug")
-	if !ok {
-		t.Fatal("done: ticket not found")
-	}
-	if wu.Status != models.StatusDone {
-		t.Errorf("done: expected status done, got %q", wu.Status)
-	}
-
-	// Branch should have been merged into the parent project branch.
-	if len(mock.MergedBranches) == 0 {
-		t.Fatal("done: expected MergeBranch to be called")
-	}
-	if mock.MergedBranches[0] != "my-proj/fix-bug->my-proj" {
-		t.Errorf("done: expected merge 'my-proj/fix-bug->my-proj', got %q", mock.MergedBranches[0])
-	}
-
-	// Worktree should have been removed.
-	if len(mock.RemovedWorktrees) == 0 || mock.RemovedWorktrees[0] != "my-proj/fix-bug" {
-		t.Errorf("done: expected RemoveWorktree('my-proj/fix-bug'), got %v", mock.RemovedWorktrees)
-	}
-}
-
-// TestDone_NotFound verifies that done returns error for unknown identifier.
-func TestDone_NotFound(t *testing.T) {
-	ticketsDir := makeTempTicketsDir(t)
-
-	d, _ := newTestDaemonWithMockGit(t, ticketsDir)
-	if err := d.State().Load(); err != nil {
-		t.Fatalf("State.Load: %v", err)
-	}
-	cancel := startWorker(t, d)
-	defer cancel()
-
-	resp := sendCommand(t, d, protocol.Command{
-		Name:   "done",
-		Params: map[string]string{"identifier": "nonexistent"},
-	})
-	if resp.Success {
-		t.Fatal("done not-found: expected failure, got success")
-	}
-}
-
-// TestDone_MergeFailure verifies that done returns an error when the git
-// merge fails.
-func TestDone_MergeFailure(t *testing.T) {
-	ticketsDir := makeTempTicketsDir(t)
-
-	ticket := models.NewTicket("my-ticket", "some work")
-	ticket.Status = models.StatusInReview
-	writeTicket(t, ticketsDir, ticket)
-
-	d, mock := newTestDaemonWithMockGit(t, ticketsDir)
-	mock.MergeBranchErr = errors.New("merge conflict")
-	if err := d.State().Load(); err != nil {
-		t.Fatalf("State.Load: %v", err)
-	}
-	cancel := startWorker(t, d)
-	defer cancel()
-
-	resp := sendCommand(t, d, protocol.Command{
-		Name:   "done",
-		Params: map[string]string{"identifier": "my-ticket"},
-	})
-	if resp.Success {
-		t.Fatal("done merge-failure: expected failure, got success")
-	}
-	if resp.Error == "" {
-		t.Error("done merge-failure: expected non-empty error")
-	}
-}
-
-// TestDone_ProjectCascade verifies that when all tickets in a project are done,
-// the project itself is marked done and its branch is merged.
-func TestDone_ProjectCascade(t *testing.T) {
-	ticketsDir := makeTempTicketsDir(t)
-
-	// Create a top-level project with two tickets; one already done, one in-review.
-	projDir := ticketsDir + "/my-proj"
-	if err := os.MkdirAll(projDir, 0755); err != nil {
-		t.Fatalf("MkdirAll: %v", err)
-	}
-	proj := models.NewProject("my-proj", "project")
-	if err := writeProjectFile(t, projDir, proj); err != nil {
-		t.Fatalf("writeProjectFile: %v", err)
-	}
-
 	ticketA := models.NewTicket("my-proj/ticket-a", "already done")
 	ticketA.Status = models.StatusDone
 	writeTicketToDir(t, projDir, "ticket-a", ticketA)
 
 	ticketB := models.NewTicket("my-proj/ticket-b", "last ticket")
-	ticketB.Status = models.StatusInReview
+	ticketB.Status = models.StatusInProgress
 	writeTicketToDir(t, projDir, "ticket-b", ticketB)
 
 	d, mock := newTestDaemonWithMockGit(t, ticketsDir)
@@ -967,75 +688,49 @@ func TestDone_ProjectCascade(t *testing.T) {
 	defer cancel()
 
 	resp := sendCommand(t, d, protocol.Command{
-		Name:   "done",
-		Params: map[string]string{"identifier": "my-proj/ticket-b"},
+		Name:   "set-status",
+		Params: map[string]string{"identifier": "my-proj/ticket-b", "status": "done"},
 	})
 	if !resp.Success {
-		t.Fatalf("done cascade: expected success, got %q", resp.Error)
+		t.Fatalf("set-status done: expected success, got %q", resp.Error)
 	}
 
-	// Project should be marked done.
-	projState, ok := d.State().Get("my-proj")
+	wu, ok := d.State().Get("my-proj/ticket-b")
 	if !ok {
-		t.Fatal("done cascade: project not found in state")
-	}
-	if projState.Status != models.ProjectDone {
-		t.Errorf("done cascade: expected project done, got %q", projState.Status)
-	}
-
-	// Project branch should be merged into main (top-level project → main).
-	foundProjectMerge := false
-	for _, m := range mock.MergedBranches {
-		if m == "my-proj->main" {
-			foundProjectMerge = true
-		}
-	}
-	if !foundProjectMerge {
-		t.Errorf("done cascade: expected merge 'my-proj->main', got %v", mock.MergedBranches)
-	}
-}
-
-// TestDone_InProgress verifies that done accepts a ticket in in-progress
-// status (lenient mode).
-func TestDone_InProgress(t *testing.T) {
-	ticketsDir := makeTempTicketsDir(t)
-
-	ticket := models.NewTicket("quick-fix", "quick fix")
-	ticket.Status = models.StatusInProgress
-	writeTicket(t, ticketsDir, ticket)
-
-	d, _ := newTestDaemonWithMockGit(t, ticketsDir)
-	if err := d.State().Load(); err != nil {
-		t.Fatalf("State.Load: %v", err)
-	}
-	cancel := startWorker(t, d)
-	defer cancel()
-
-	resp := sendCommand(t, d, protocol.Command{
-		Name:   "done",
-		Params: map[string]string{"identifier": "quick-fix"},
-	})
-	if !resp.Success {
-		t.Fatalf("done in-progress: expected success, got %q", resp.Error)
-	}
-
-	wu, ok := d.State().Get("quick-fix")
-	if !ok {
-		t.Fatal("done in-progress: ticket not found")
+		t.Fatal("set-status done: ticket not found")
 	}
 	if wu.Status != models.StatusDone {
-		t.Errorf("done in-progress: expected done, got %q", wu.Status)
+		t.Errorf("set-status done: expected done, got %q", wu.Status)
+	}
+
+	if len(mock.MergedBranches) == 0 {
+		t.Fatal("set-status done: expected MergeBranch to be called")
+	}
+	if mock.MergedBranches[0] != "my-proj/ticket-b->my-proj" {
+		t.Errorf("set-status done: expected merge 'my-proj/ticket-b->my-proj', got %q", mock.MergedBranches[0])
+	}
+
+	if len(mock.RemovedWorktrees) == 0 || mock.RemovedWorktrees[0] != "my-proj/ticket-b" {
+		t.Errorf("set-status done: expected RemoveWorktree('my-proj/ticket-b'), got %v", mock.RemovedWorktrees)
+	}
+
+	projState, ok := d.State().Get("my-proj")
+	if !ok {
+		t.Fatal("set-status done: project not found")
+	}
+	if projState.Status != models.ProjectDone {
+		t.Errorf("set-status done: expected project done, got %q", projState.Status)
 	}
 }
 
-// TestDone_InvalidStatus verifies that done rejects tickets not in in-review
-// or in-progress state.
-func TestDone_InvalidStatus(t *testing.T) {
+// TestSetStatus_Done_ClearsClaimedBy verifies that marking a ticket done also
+// clears its ClaimedBy field.
+func TestSetStatus_Done_ClearsClaimedBy(t *testing.T) {
 	ticketsDir := makeTempTicketsDir(t)
 
-	ticket := models.NewTicket("fresh-ticket", "not started")
-	// StatusOpen is not acceptable for done.
-	ticket.Status = models.StatusOpen
+	ticket := models.NewTicket("my-ticket", "claimed work")
+	ticket.Status = models.StatusInProgress
+	ticket.ClaimedBy = "42"
 	writeTicket(t, ticketsDir, ticket)
 
 	d, _ := newTestDaemonWithMockGit(t, ticketsDir)
@@ -1046,44 +741,28 @@ func TestDone_InvalidStatus(t *testing.T) {
 	defer cancel()
 
 	resp := sendCommand(t, d, protocol.Command{
-		Name:   "done",
-		Params: map[string]string{"identifier": "fresh-ticket"},
+		Name:   "set-status",
+		Params: map[string]string{"identifier": "my-ticket", "status": "done"},
 	})
-	if resp.Success {
-		t.Fatal("done invalid-status: expected failure, got success")
+	if !resp.Success {
+		t.Fatalf("set-status done: expected success, got %q", resp.Error)
 	}
-	if resp.Error == "" {
-		t.Error("done invalid-status: expected non-empty error message")
+
+	wu, ok := d.State().Get("my-ticket")
+	if !ok {
+		t.Fatal("set-status done: ticket not found")
+	}
+	if wu.ClaimedBy != "" {
+		t.Errorf("set-status done: expected ClaimedBy cleared, got %q", wu.ClaimedBy)
 	}
 }
 
-// TestDone_NestedProjectCascade verifies that done cascades through multiple
-// levels of project hierarchy when all siblings are complete.
-func TestDone_NestedProjectCascade(t *testing.T) {
+// TestSetStatus_NotFound verifies that set-status returns error for an unknown
+// identifier.
+func TestSetStatus_NotFound(t *testing.T) {
 	ticketsDir := makeTempTicketsDir(t)
 
-	// Build: grand > child-proj > leaf-ticket (only ticket, in-review)
-	grandDir := ticketsDir + "/grand"
-	childDir := grandDir + "/child-proj"
-	if err := os.MkdirAll(childDir, 0755); err != nil {
-		t.Fatalf("MkdirAll: %v", err)
-	}
-
-	grand := models.NewProject("grand", "grandparent project")
-	if err := writeProjectFile(t, grandDir, grand); err != nil {
-		t.Fatalf("writeProjectFile grand: %v", err)
-	}
-
-	child := models.NewProject("grand/child-proj", "child project")
-	if err := writeProjectFile(t, childDir, child); err != nil {
-		t.Fatalf("writeProjectFile child: %v", err)
-	}
-
-	leaf := models.NewTicket("grand/child-proj/leaf", "leaf ticket")
-	leaf.Status = models.StatusInReview
-	writeTicketToDir(t, childDir, "leaf", leaf)
-
-	d, mock := newTestDaemonWithMockGit(t, ticketsDir)
+	d, _ := newTestDaemonWithMockGit(t, ticketsDir)
 	if err := d.State().Load(); err != nil {
 		t.Fatalf("State.Load: %v", err)
 	}
@@ -1091,39 +770,240 @@ func TestDone_NestedProjectCascade(t *testing.T) {
 	defer cancel()
 
 	resp := sendCommand(t, d, protocol.Command{
-		Name:   "done",
-		Params: map[string]string{"identifier": "grand/child-proj/leaf"},
+		Name:   "set-status",
+		Params: map[string]string{"identifier": "nonexistent", "status": "open"},
+	})
+	if resp.Success {
+		t.Fatal("set-status not-found: expected failure, got success")
+	}
+}
+
+// TestSetStatus_InvalidStatus verifies that set-status rejects unknown statuses.
+func TestSetStatus_InvalidStatus(t *testing.T) {
+	ticketsDir := makeTempTicketsDir(t)
+
+	ticket := models.NewTicket("my-ticket", "a ticket")
+	writeTicket(t, ticketsDir, ticket)
+
+	d, _ := newTestDaemonWithMockGit(t, ticketsDir)
+	if err := d.State().Load(); err != nil {
+		t.Fatalf("State.Load: %v", err)
+	}
+	cancel := startWorker(t, d)
+	defer cancel()
+
+	resp := sendCommand(t, d, protocol.Command{
+		Name:   "set-status",
+		Params: map[string]string{"identifier": "my-ticket", "status": "flying"},
+	})
+	if resp.Success {
+		t.Fatal("set-status invalid: expected failure, got success")
+	}
+}
+
+// TestSetStatus_RejectsProject verifies that set-status returns an error when
+// the identifier refers to a project.
+func TestSetStatus_RejectsProject(t *testing.T) {
+	ticketsDir := makeTempTicketsDir(t)
+
+	d, _ := newTestDaemonWithMockGit(t, ticketsDir)
+	cancel := startWorker(t, d)
+	defer cancel()
+
+	sendCommand(t, d, protocol.Command{
+		Name:   "create-project",
+		Params: map[string]string{"identifier": "my-proj", "description": "a project"},
+	})
+
+	resp := sendCommand(t, d, protocol.Command{
+		Name:   "set-status",
+		Params: map[string]string{"identifier": "my-proj", "status": "done"},
+	})
+	if resp.Success {
+		t.Fatal("set-status project: expected failure, got success")
+	}
+}
+
+// --------------------------------------------------------------------------
+// claim tests
+// --------------------------------------------------------------------------
+
+// TestClaim_Success verifies that claim assigns an available ticket to the
+// given PID and returns it.
+func TestClaim_Success(t *testing.T) {
+	ticketsDir := makeTempTicketsDir(t)
+
+	ticket := models.NewTicket("open-ticket", "unclaimed work")
+	writeTicket(t, ticketsDir, ticket)
+
+	d, _ := newTestDaemonWithMockGit(t, ticketsDir)
+	if err := d.State().Load(); err != nil {
+		t.Fatalf("State.Load: %v", err)
+	}
+	cancel := startWorker(t, d)
+	defer cancel()
+
+	resp := sendCommand(t, d, protocol.Command{
+		Name:   "claim",
+		Params: map[string]string{"pid": "1234"},
 	})
 	if !resp.Success {
-		t.Fatalf("done nested cascade: expected success, got %q", resp.Error)
+		t.Fatalf("claim: expected success, got %q", resp.Error)
 	}
 
-	// Both projects should be done.
-	for _, id := range []string{"grand/child-proj", "grand"} {
-		wu, ok := d.State().Get(id)
-		if !ok {
-			t.Fatalf("done nested cascade: %q not found in state", id)
-		}
-		if wu.Status != models.ProjectDone {
-			t.Errorf("done nested cascade: expected %q done, got %q", id, wu.Status)
-		}
+	var wu models.WorkUnit
+	if err := json.Unmarshal(resp.Data, &wu); err != nil {
+		t.Fatalf("claim: unmarshal: %v", err)
+	}
+	if wu.Identifier != "open-ticket" {
+		t.Errorf("claim: expected 'open-ticket', got %q", wu.Identifier)
+	}
+	if wu.ClaimedBy != "1234" {
+		t.Errorf("claim: expected ClaimedBy='1234', got %q", wu.ClaimedBy)
 	}
 
-	// grand/child-proj should have been merged into grand, and grand into main.
-	foundChildMerge := false
-	foundGrandMerge := false
-	for _, m := range mock.MergedBranches {
-		if m == "grand/child-proj->grand" {
-			foundChildMerge = true
-		}
-		if m == "grand->main" {
-			foundGrandMerge = true
-		}
+	// Verify the claim is persisted in state.
+	state, ok := d.State().Get("open-ticket")
+	if !ok {
+		t.Fatal("claim: ticket not found in state")
 	}
-	if !foundChildMerge {
-		t.Errorf("done nested cascade: expected 'grand/child-proj->grand', got %v", mock.MergedBranches)
+	if state.ClaimedBy != "1234" {
+		t.Errorf("claim: state ClaimedBy expected '1234', got %q", state.ClaimedBy)
 	}
-	if !foundGrandMerge {
-		t.Errorf("done nested cascade: expected 'grand->main', got %v", mock.MergedBranches)
+}
+
+// TestClaim_SkipsClaimedTickets verifies that claim does not return a ticket
+// already claimed by another process.
+func TestClaim_SkipsClaimedTickets(t *testing.T) {
+	ticketsDir := makeTempTicketsDir(t)
+
+	taken := models.NewTicket("taken-ticket", "already claimed")
+	taken.ClaimedBy = "999"
+	writeTicket(t, ticketsDir, taken)
+
+	free := models.NewTicket("free-ticket", "unclaimed")
+	writeTicket(t, ticketsDir, free)
+
+	d, _ := newTestDaemonWithMockGit(t, ticketsDir)
+	if err := d.State().Load(); err != nil {
+		t.Fatalf("State.Load: %v", err)
+	}
+	cancel := startWorker(t, d)
+	defer cancel()
+
+	resp := sendCommand(t, d, protocol.Command{
+		Name:   "claim",
+		Params: map[string]string{"pid": "42"},
+	})
+	if !resp.Success {
+		t.Fatalf("claim: expected success, got %q", resp.Error)
+	}
+
+	var wu models.WorkUnit
+	if err := json.Unmarshal(resp.Data, &wu); err != nil {
+		t.Fatalf("claim: unmarshal: %v", err)
+	}
+	if wu.Identifier != "free-ticket" {
+		t.Errorf("claim: expected 'free-ticket', got %q", wu.Identifier)
+	}
+}
+
+// TestClaim_NoneAvailable verifies that claim returns failure when no ticket
+// can be claimed.
+func TestClaim_NoneAvailable(t *testing.T) {
+	ticketsDir := makeTempTicketsDir(t)
+
+	done := models.NewTicket("done-ticket", "finished")
+	done.Status = models.StatusDone
+	writeTicket(t, ticketsDir, done)
+
+	d, _ := newTestDaemonWithMockGit(t, ticketsDir)
+	if err := d.State().Load(); err != nil {
+		t.Fatalf("State.Load: %v", err)
+	}
+	cancel := startWorker(t, d)
+	defer cancel()
+
+	resp := sendCommand(t, d, protocol.Command{
+		Name:   "claim",
+		Params: map[string]string{"pid": "1"},
+	})
+	if resp.Success {
+		t.Fatal("claim none-available: expected failure, got success")
+	}
+}
+
+// TestClaim_NoPID verifies that claim requires a pid parameter.
+func TestClaim_NoPID(t *testing.T) {
+	ticketsDir := makeTempTicketsDir(t)
+
+	d, _ := newTestDaemonWithMockGit(t, ticketsDir)
+	if err := d.State().Load(); err != nil {
+		t.Fatalf("State.Load: %v", err)
+	}
+	cancel := startWorker(t, d)
+	defer cancel()
+
+	resp := sendCommand(t, d, protocol.Command{Name: "claim"})
+	if resp.Success {
+		t.Fatal("claim no-pid: expected failure, got success")
+	}
+}
+
+// --------------------------------------------------------------------------
+// release tests
+// --------------------------------------------------------------------------
+
+// TestRelease_Success verifies that release clears the ClaimedBy field on a
+// claimed ticket.
+func TestRelease_Success(t *testing.T) {
+	ticketsDir := makeTempTicketsDir(t)
+
+	ticket := models.NewTicket("my-ticket", "claimed work")
+	ticket.ClaimedBy = "42"
+	writeTicket(t, ticketsDir, ticket)
+
+	d, _ := newTestDaemonWithMockGit(t, ticketsDir)
+	if err := d.State().Load(); err != nil {
+		t.Fatalf("State.Load: %v", err)
+	}
+	cancel := startWorker(t, d)
+	defer cancel()
+
+	resp := sendCommand(t, d, protocol.Command{
+		Name:   "release",
+		Params: map[string]string{"identifier": "my-ticket"},
+	})
+	if !resp.Success {
+		t.Fatalf("release: expected success, got %q", resp.Error)
+	}
+
+	wu, ok := d.State().Get("my-ticket")
+	if !ok {
+		t.Fatal("release: ticket not found")
+	}
+	if wu.ClaimedBy != "" {
+		t.Errorf("release: expected ClaimedBy cleared, got %q", wu.ClaimedBy)
+	}
+}
+
+// TestRelease_NotFound verifies that release returns an error for an unknown
+// identifier.
+func TestRelease_NotFound(t *testing.T) {
+	ticketsDir := makeTempTicketsDir(t)
+
+	d, _ := newTestDaemonWithMockGit(t, ticketsDir)
+	if err := d.State().Load(); err != nil {
+		t.Fatalf("State.Load: %v", err)
+	}
+	cancel := startWorker(t, d)
+	defer cancel()
+
+	resp := sendCommand(t, d, protocol.Command{
+		Name:   "release",
+		Params: map[string]string{"identifier": "nonexistent"},
+	})
+	if resp.Success {
+		t.Fatal("release not-found: expected failure, got success")
 	}
 }

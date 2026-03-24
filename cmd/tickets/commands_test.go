@@ -360,30 +360,65 @@ func TestRunCreateTicket_MissingIdentifier(t *testing.T) {
 	}
 }
 
-func TestRunGetWork(t *testing.T) {
-	workData := json.RawMessage(`{"identifier":"my-ticket","description":"Do something"}`)
+func TestRunSetStatus(t *testing.T) {
 	socketPath, done := startMockServer(t, func(cmd protocol.Command) protocol.Response {
-		if cmd.Name != "get-work" {
+		if cmd.Name != "set-status" {
 			return protocol.Response{Success: false, Error: "unexpected command"}
 		}
-		return protocol.Response{Success: true, Data: workData}
+		if cmd.Params["identifier"] != "my-ticket" || cmd.Params["status"] != "review-ready" {
+			return protocol.Response{Success: false, Error: "wrong params"}
+		}
+		return protocol.Response{Success: true}
 	})
 
-	out := captureOutput(func() {
-		if err := runGetWork(socketPath); err != nil {
-			t.Fatalf("runGetWork returned error: %v", err)
+	captureOutput(func() {
+		if err := runSetStatus(socketPath, []string{"my-ticket", "review-ready"}); err != nil {
+			t.Fatalf("runSetStatus returned error: %v", err)
 		}
 	})
-
 	<-done
-	if !strings.Contains(out, "identifier") {
-		t.Errorf("expected output to contain 'identifier', got: %q", out)
+}
+
+func TestRunSetStatus_MissingArgs(t *testing.T) {
+	err := runSetStatus("/tmp/unused.sock", []string{"only-one"})
+	if err == nil {
+		t.Error("expected error when status is missing, got nil")
 	}
 }
 
-func TestRunReviewReady(t *testing.T) {
+func TestRunClaim(t *testing.T) {
+	claimData := json.RawMessage(`{"identifier":"my-ticket","claimed_by":"1234"}`)
 	socketPath, done := startMockServer(t, func(cmd protocol.Command) protocol.Response {
-		if cmd.Name != "review-ready" {
+		if cmd.Name != "claim" {
+			return protocol.Response{Success: false, Error: "unexpected command"}
+		}
+		if cmd.Params["pid"] != "1234" {
+			return protocol.Response{Success: false, Error: "wrong pid"}
+		}
+		return protocol.Response{Success: true, Data: claimData}
+	})
+
+	out := captureOutput(func() {
+		if err := runClaim(socketPath, []string{"1234"}); err != nil {
+			t.Fatalf("runClaim returned error: %v", err)
+		}
+	})
+	<-done
+	if !strings.Contains(out, "claimed_by") {
+		t.Errorf("expected output to contain 'claimed_by', got: %q", out)
+	}
+}
+
+func TestRunClaim_MissingPID(t *testing.T) {
+	err := runClaim("/tmp/unused.sock", []string{})
+	if err == nil {
+		t.Error("expected error when pid is missing, got nil")
+	}
+}
+
+func TestRunRelease(t *testing.T) {
+	socketPath, done := startMockServer(t, func(cmd protocol.Command) protocol.Response {
+		if cmd.Name != "release" {
 			return protocol.Response{Success: false, Error: "unexpected command"}
 		}
 		if cmd.Params["identifier"] != "my-ticket" {
@@ -393,68 +428,15 @@ func TestRunReviewReady(t *testing.T) {
 	})
 
 	captureOutput(func() {
-		if err := runReviewReady(socketPath, []string{"my-ticket"}); err != nil {
-			t.Fatalf("runReviewReady returned error: %v", err)
+		if err := runRelease(socketPath, []string{"my-ticket"}); err != nil {
+			t.Fatalf("runRelease returned error: %v", err)
 		}
 	})
-
 	<-done
 }
 
-func TestRunReviewReady_MissingIdentifier(t *testing.T) {
-	err := runReviewReady("/tmp/unused.sock", []string{})
-	if err == nil {
-		t.Error("expected error when identifier is missing, got nil")
-	}
-}
-
-func TestRunGetReview(t *testing.T) {
-	reviewData := json.RawMessage(`{"identifier":"my-ticket","comments":"looks good"}`)
-	socketPath, done := startMockServer(t, func(cmd protocol.Command) protocol.Response {
-		if cmd.Name != "get-review" {
-			return protocol.Response{Success: false, Error: "unexpected command"}
-		}
-		return protocol.Response{Success: true, Data: reviewData}
-	})
-
-	out := captureOutput(func() {
-		if err := runGetReview(socketPath); err != nil {
-			t.Fatalf("runGetReview returned error: %v", err)
-		}
-	})
-
-	<-done
-	if !strings.Contains(out, "identifier") {
-		t.Errorf("expected output to contain 'identifier', got: %q", out)
-	}
-}
-
-func TestRunDone(t *testing.T) {
-	doneData := json.RawMessage(`{"message":"ticket closed"}`)
-	socketPath, done := startMockServer(t, func(cmd protocol.Command) protocol.Response {
-		if cmd.Name != "done" {
-			return protocol.Response{Success: false, Error: "unexpected command"}
-		}
-		if cmd.Params["identifier"] != "my-ticket" {
-			return protocol.Response{Success: false, Error: "wrong identifier"}
-		}
-		return protocol.Response{Success: true, Data: doneData}
-	})
-
-	out := captureOutput(func() {
-		if err := runDone(socketPath, []string{"my-ticket"}); err != nil {
-			t.Fatalf("runDone returned error: %v", err)
-		}
-	})
-
-	<-done
-	if !strings.Contains(out, "ticket closed") {
-		t.Errorf("expected output to contain 'ticket closed', got: %q", out)
-	}
-}
-
-func TestRunDone_MissingIdentifier(t *testing.T) {
-	err := runDone("/tmp/unused.sock", []string{})
+func TestRunRelease_MissingIdentifier(t *testing.T) {
+	err := runRelease("/tmp/unused.sock", []string{})
 	if err == nil {
 		t.Error("expected error when identifier is missing, got nil")
 	}

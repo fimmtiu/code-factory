@@ -25,6 +25,50 @@ func makeTicketsWithSettings(t *testing.T, cfg *config.Settings) string {
 	return ticketsDir
 }
 
+// TestHousekeepingReleaseStaleClaim verifies that a claimed ticket whose
+// LastUpdated is older than stale_threshold_minutes has its claim released.
+func TestHousekeepingReleaseStaleClaim(t *testing.T) {
+	cfg := &config.Settings{
+		StaleThresholdMinutes: 1,
+		ExitAfterMinutes:      60,
+	}
+	ticketsDir := makeTicketsWithSettings(t, cfg)
+
+	stale := models.NewTicket("stale-claimed", "stale claimed ticket")
+	stale.Status = models.StatusReviewReady
+	stale.ClaimedBy = "42"
+	stale.LastUpdated = time.Now().UTC().Add(-2 * time.Minute)
+	writeTicket(t, ticketsDir, stale)
+
+	d := newTestDaemonWithDir(t, ticketsDir)
+	if err := d.State().Load(); err != nil {
+		t.Fatalf("State.Load: %v", err)
+	}
+
+	w := daemon.NewWorker(d, func() {})
+	daemon.RegisterCommands(w, d)
+	daemon.RegisterHousekeeping(w, d)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go w.Run(ctx)
+
+	respCh := make(chan protocol.Response, 1)
+	d.Queue() <- &daemon.QueueItem{
+		Cmd:      protocol.Command{Name: "housekeeping"},
+		Response: respCh,
+	}
+	<-respCh
+
+	unit, ok := d.State().Get("stale-claimed")
+	if !ok {
+		t.Fatal("expected stale-claimed to exist")
+	}
+	if unit.ClaimedBy != "" {
+		t.Errorf("expected ClaimedBy cleared after stale housekeeping, got %q", unit.ClaimedBy)
+	}
+}
+
 // TestHousekeepingResetStaleInProgress verifies that an in-progress ticket
 // whose LastUpdated is older than stale_threshold_minutes is reset to open.
 func TestHousekeepingResetStaleInProgress(t *testing.T) {

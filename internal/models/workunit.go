@@ -50,6 +50,7 @@ type WorkUnit struct {
 	LastUpdated    time.Time       `json:"last_updated"`
 	IsProject      bool            `json:"is_project,omitempty"`
 	Parent         string          `json:"parent,omitempty"`
+	ClaimedBy      string          `json:"claimed_by,omitempty"`
 	CommentThreads []CommentThread `json:"comment_threads,omitempty"`
 }
 
@@ -83,12 +84,6 @@ func (wu *WorkUnit) MergeTargetBranch() string {
 		return wu.Parent
 	}
 	return "main"
-}
-
-// IsCompletable reports whether the ticket is in a state that allows it to be
-// marked done (i.e. in-progress or in-review).
-func (wu *WorkUnit) IsCompletable() bool {
-	return wu.Status == StatusInProgress || wu.Status == StatusInReview
 }
 
 // SetDependencies sets the dependencies of the ticket and adjusts the initial

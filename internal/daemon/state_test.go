@@ -77,12 +77,10 @@ func TestStateAll(t *testing.T) {
 	}
 }
 
-// TestStateFindOpen verifies that FindOpen returns an open ticket with all
-// dependencies satisfied.
-func TestStateFindOpen(t *testing.T) {
+// TestStateFindClaimable_Open verifies that FindClaimable returns an open ticket.
+func TestStateFindClaimable_Open(t *testing.T) {
 	ticketsDir := makeTempTicketsDir(t)
 
-	// ticket-a is open with no deps.
 	a := models.NewTicket("ticket-a", "open ticket")
 	writeTicket(t, ticketsDir, a)
 
@@ -91,27 +89,22 @@ func TestStateFindOpen(t *testing.T) {
 		t.Fatalf("Load: %v", err)
 	}
 
-	found := s.FindOpen()
+	found := s.FindClaimable()
 	if found == nil {
-		t.Fatal("expected FindOpen to return a ticket, got nil")
+		t.Fatal("expected FindClaimable to return a ticket, got nil")
 	}
 	if found.Identifier != "ticket-a" {
 		t.Errorf("expected 'ticket-a', got %q", found.Identifier)
 	}
 }
 
-// TestStateFindOpenBlockedByDep verifies that FindOpen skips tickets with
-// unsatisfied dependencies.
-func TestStateFindOpenBlockedByDep(t *testing.T) {
+// TestStateFindClaimable_InProgress verifies that FindClaimable returns an
+// unclaimed in-progress ticket.
+func TestStateFindClaimable_InProgress(t *testing.T) {
 	ticketsDir := makeTempTicketsDir(t)
 
-	// ticket-a depends on ticket-b which is not done.
-	b := models.NewTicket("ticket-b", "dep ticket")
-	b.Status = models.StatusOpen
-	writeTicket(t, ticketsDir, b)
-
-	a := models.NewTicket("ticket-a", "blocked ticket")
-	a.Dependencies = []string{"ticket-b"}
+	a := models.NewTicket("ticket-a", "in-progress ticket")
+	a.Status = models.StatusInProgress
 	writeTicket(t, ticketsDir, a)
 
 	s := daemon.NewState(ticketsDir)
@@ -119,27 +112,19 @@ func TestStateFindOpenBlockedByDep(t *testing.T) {
 		t.Fatalf("Load: %v", err)
 	}
 
-	// FindOpen should return ticket-b (no deps), not ticket-a.
-	found := s.FindOpen()
+	found := s.FindClaimable()
 	if found == nil {
-		t.Fatal("expected FindOpen to find ticket-b")
-	}
-	if found.Identifier != "ticket-b" {
-		t.Errorf("expected 'ticket-b', got %q", found.Identifier)
+		t.Fatal("expected FindClaimable to return a ticket, got nil")
 	}
 }
 
-// TestStateFindOpenDepSatisfied verifies that FindOpen returns a ticket when
-// its dependency is done.
-func TestStateFindOpenDepSatisfied(t *testing.T) {
+// TestStateFindClaimable_SkipsBlocked verifies that FindClaimable skips
+// blocked tickets.
+func TestStateFindClaimable_SkipsBlocked(t *testing.T) {
 	ticketsDir := makeTempTicketsDir(t)
 
-	b := models.NewTicket("ticket-b", "done dep")
-	b.Status = models.StatusDone
-	writeTicket(t, ticketsDir, b)
-
-	a := models.NewTicket("ticket-a", "ready ticket")
-	a.Dependencies = []string{"ticket-b"}
+	a := models.NewTicket("ticket-a", "blocked")
+	a.Status = models.StatusBlocked
 	writeTicket(t, ticketsDir, a)
 
 	s := daemon.NewState(ticketsDir)
@@ -147,34 +132,45 @@ func TestStateFindOpenDepSatisfied(t *testing.T) {
 		t.Fatalf("Load: %v", err)
 	}
 
-	found := s.FindOpen()
-	if found == nil {
-		t.Fatal("expected FindOpen to find ticket-a")
-	}
-	if found.Identifier != "ticket-a" {
-		t.Errorf("expected 'ticket-a', got %q", found.Identifier)
+	if found := s.FindClaimable(); found != nil {
+		t.Errorf("expected nil, got %q", found.Identifier)
 	}
 }
 
-// TestStateFindReviewReady verifies that FindReviewReady returns a review-ready ticket.
-func TestStateFindReviewReady(t *testing.T) {
+// TestStateFindClaimable_SkipsDone verifies that FindClaimable skips done tickets.
+func TestStateFindClaimable_SkipsDone(t *testing.T) {
 	ticketsDir := makeTempTicketsDir(t)
 
-	wu := models.NewTicket("review-ticket", "needs review")
-	wu.Status = models.StatusReviewReady
-	writeTicket(t, ticketsDir, wu)
+	a := models.NewTicket("ticket-a", "done")
+	a.Status = models.StatusDone
+	writeTicket(t, ticketsDir, a)
 
 	s := daemon.NewState(ticketsDir)
 	if err := s.Load(); err != nil {
 		t.Fatalf("Load: %v", err)
 	}
 
-	found := s.FindReviewReady()
-	if found == nil {
-		t.Fatal("expected FindReviewReady to find a ticket")
+	if found := s.FindClaimable(); found != nil {
+		t.Errorf("expected nil, got %q", found.Identifier)
 	}
-	if found.Identifier != "review-ticket" {
-		t.Errorf("expected 'review-ticket', got %q", found.Identifier)
+}
+
+// TestStateFindClaimable_SkipsClaimed verifies that FindClaimable skips tickets
+// already claimed by another process.
+func TestStateFindClaimable_SkipsClaimed(t *testing.T) {
+	ticketsDir := makeTempTicketsDir(t)
+
+	a := models.NewTicket("ticket-a", "claimed")
+	a.ClaimedBy = "99"
+	writeTicket(t, ticketsDir, a)
+
+	s := daemon.NewState(ticketsDir)
+	if err := s.Load(); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	if found := s.FindClaimable(); found != nil {
+		t.Errorf("expected nil, got %q", found.Identifier)
 	}
 }
 
@@ -393,31 +389,17 @@ func TestStateGetEmpty(t *testing.T) {
 	}
 }
 
-// TestStateFindOpenNone verifies FindOpen returns nil when no open tickets exist.
-func TestStateFindOpenNone(t *testing.T) {
+// TestStateFindClaimableNone verifies FindClaimable returns nil when nothing
+// is available.
+func TestStateFindClaimableNone(t *testing.T) {
 	ticketsDir := makeTempTicketsDir(t)
 	s := daemon.NewState(ticketsDir)
 	if err := s.Load(); err != nil {
 		t.Fatalf("Load: %v", err)
 	}
 
-	found := s.FindOpen()
-	if found != nil {
-		t.Errorf("expected nil from FindOpen on empty state, got %q", found.Identifier)
-	}
-}
-
-// TestStateFindReviewReadyNone verifies FindReviewReady returns nil when none exist.
-func TestStateFindReviewReadyNone(t *testing.T) {
-	ticketsDir := makeTempTicketsDir(t)
-	s := daemon.NewState(ticketsDir)
-	if err := s.Load(); err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-
-	found := s.FindReviewReady()
-	if found != nil {
-		t.Errorf("expected nil from FindReviewReady on empty state, got %q", found.Identifier)
+	if found := s.FindClaimable(); found != nil {
+		t.Errorf("expected nil from FindClaimable on empty state, got %q", found.Identifier)
 	}
 }
 
