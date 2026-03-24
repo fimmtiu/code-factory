@@ -18,6 +18,7 @@ const (
 	StatusIdle           TicketStatus = "idle"
 	StatusNeedsAttention TicketStatus = "needs-attention"
 	StatusInProgress     TicketStatus = "in-progress"
+	StatusUserReview     TicketStatus = "user-review"
 )
 
 func IsValidTicketPhase(s string) bool {
@@ -30,7 +31,7 @@ func IsValidTicketPhase(s string) bool {
 
 func IsValidTicketStatus(s string) bool {
 	switch s {
-	case StatusIdle, StatusNeedsAttention, StatusInProgress:
+	case StatusIdle, StatusNeedsAttention, StatusInProgress, StatusUserReview:
 		return true
 	}
 	return false

@@ -372,45 +372,5 @@ func (d *Daemon) markTicketDone(wu *models.WorkUnit) protocol.Response {
 	if err := d.gitClient.RemoveWorktree(repoRoot, storage.TicketWorktreePath(ticketDir), wu.Identifier); err != nil {
 		panic(err)
 	}
-	if wu.Parent != "" {
-		if err := d.cascadeDone(wu); err != nil {
-			return protocol.Response{Success: false, Error: "cascade done failed: " + err.Error()}
-		}
-	}
 	return protocol.Response{Success: true}
-}
-
-// cascadeDone checks whether the parent of wu has all children done. If so,
-// merges its branch into its own parent (or main), removes its worktree, and
-// recurses upward.
-func (d *Daemon) cascadeDone(wu *models.WorkUnit) error {
-	parent, hasParent := d.state.Parent(wu)
-	if !hasParent {
-		return nil
-	}
-	if !d.state.AllDone(parent.Identifier) {
-		return nil
-	}
-
-	if err := d.state.Update(parent); err != nil {
-		return err
-	}
-
-	repoRoot := d.RepoRoot()
-	intoBranch := parent.MergeTargetBranch()
-
-	if err := d.gitClient.MergeBranch(repoRoot, parent.Identifier, intoBranch); err != nil {
-		return err
-	}
-
-	projectDir := storage.TicketDirPath(d.ticketsDir, parent.Identifier)
-	worktreePath := storage.TicketWorktreePath(projectDir)
-	if err := d.gitClient.RemoveWorktree(repoRoot, worktreePath, parent.Identifier); err != nil {
-		panic(err)
-	}
-
-	if parent.Parent != "" {
-		return d.cascadeDone(parent)
-	}
-	return nil
 }

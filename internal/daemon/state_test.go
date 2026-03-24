@@ -341,59 +341,6 @@ func TestStateParent(t *testing.T) {
 	}
 }
 
-// TestStateAllDone verifies AllDone returns true only when all children are done.
-func TestStateAllDone(t *testing.T) {
-	ticketsDir := makeTempTicketsDir(t)
-
-	projDir := filepath.Join(ticketsDir, "proj")
-	if err := os.MkdirAll(projDir, 0755); err != nil {
-		t.Fatalf("MkdirAll: %v", err)
-	}
-	proj := models.NewProject("proj", "parent")
-	if err := storage.WriteWorkUnit(filepath.Join(projDir, "project.json"), proj); err != nil {
-		t.Fatalf("WriteWorkUnit: %v", err)
-	}
-
-	doneChildDir := filepath.Join(projDir, "done-child")
-	if err := os.MkdirAll(doneChildDir, 0755); err != nil {
-		t.Fatalf("MkdirAll done-child: %v", err)
-	}
-	doneChild := models.NewTicket("proj/done-child", "done")
-	doneChild.Phase = models.PhaseDone
-	if err := storage.WriteWorkUnit(filepath.Join(doneChildDir, "ticket.json"), doneChild); err != nil {
-		t.Fatalf("WriteWorkUnit: %v", err)
-	}
-
-	openChildDir := filepath.Join(projDir, "open-child")
-	if err := os.MkdirAll(openChildDir, 0755); err != nil {
-		t.Fatalf("MkdirAll open-child: %v", err)
-	}
-	openChild := models.NewTicket("proj/open-child", "open")
-	if err := storage.WriteWorkUnit(filepath.Join(openChildDir, "ticket.json"), openChild); err != nil {
-		t.Fatalf("WriteWorkUnit: %v", err)
-	}
-
-	s := daemon.NewState(ticketsDir)
-	if err := s.Load(); err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-
-	if s.AllDone("proj") {
-		t.Error("expected AllDone=false when some children are not done")
-	}
-
-	// Mark the open child as done.
-	child, _ := s.Get("proj/open-child")
-	child.Phase = models.PhaseDone
-	if err := s.Update(child); err != nil {
-		t.Fatalf("Update: %v", err)
-	}
-
-	if !s.AllDone("proj") {
-		t.Error("expected AllDone=true after all children marked done")
-	}
-}
-
 // TestStateGetEmpty verifies Get returns false when unit not found.
 func TestStateGetEmpty(t *testing.T) {
 	ticketsDir := makeTempTicketsDir(t)

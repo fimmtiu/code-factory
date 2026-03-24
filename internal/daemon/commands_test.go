@@ -650,28 +650,23 @@ func TestSetStatus_InProgress_CreatesWorktree(t *testing.T) {
 	}
 }
 
-// TestSetStatus_Done_MergesAndCascades verifies that set-status done merges
-// the branch, marks the ticket done, removes the worktree, and cascades to
-// the parent project when all siblings are done.
-func TestSetStatus_Done_MergesAndCascades(t *testing.T) {
+// TestSetStatus_Done_MergesAndRemovesWorktree verifies that set-status done
+// merges the ticket's branch, marks it done, and removes its worktree.
+func TestSetStatus_Done_MergesAndRemovesWorktree(t *testing.T) {
 	ticketsDir := makeTempTicketsDir(t)
 
 	projDir := ticketsDir + "/my-proj"
 	if err := os.MkdirAll(projDir, 0755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}
-	proj := models.NewProject("my-proj", "project")
-	if err := writeProjectFile(t, projDir, proj); err != nil {
+	if err := writeProjectFile(t, projDir, models.NewProject("my-proj", "project")); err != nil {
 		t.Fatalf("writeProjectFile: %v", err)
 	}
-	ticketA := models.NewTicket("my-proj/ticket-a", "already done")
-	ticketA.Phase = models.PhaseDone
-	writeTicketToDir(t, projDir, "ticket-a", ticketA)
 
-	ticketB := models.NewTicket("my-proj/ticket-b", "last ticket")
-	ticketB.Phase = models.PhaseImplement
-	ticketB.Status = models.StatusInProgress
-	writeTicketToDir(t, projDir, "ticket-b", ticketB)
+	ticket := models.NewTicket("my-proj/ticket-b", "some work")
+	ticket.Phase = models.PhaseImplement
+	ticket.Status = models.StatusInProgress
+	writeTicketToDir(t, projDir, "ticket-b", ticket)
 
 	d, mock := newTestDaemonWithMockGit(t, ticketsDir)
 	if err := d.State().Load(); err != nil {
@@ -706,7 +701,6 @@ func TestSetStatus_Done_MergesAndCascades(t *testing.T) {
 	if len(mock.RemovedWorktrees) == 0 || mock.RemovedWorktrees[0] != "my-proj/ticket-b" {
 		t.Errorf("set-status done: expected RemoveWorktree('my-proj/ticket-b'), got %v", mock.RemovedWorktrees)
 	}
-
 }
 
 // TestSetStatus_Done_ClearsClaimedBy verifies that marking a ticket done also

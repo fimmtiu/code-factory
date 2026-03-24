@@ -37,6 +37,7 @@ func TestIsValidTicketStatus(t *testing.T) {
 		{"idle", true},
 		{"needs-attention", true},
 		{"in-progress", true},
+		{"user-review", true},
 		{"", false},
 		{"open", false},
 		{"done", false},
@@ -84,5 +85,8 @@ func TestTicketStatusConstants(t *testing.T) {
 	}
 	if StatusInProgress != "in-progress" {
 		t.Errorf("StatusInProgress = %q, want %q", StatusInProgress, "in-progress")
+	}
+	if StatusUserReview != "user-review" {
+		t.Errorf("StatusUserReview = %q, want %q", StatusUserReview, "user-review")
 	}
 }

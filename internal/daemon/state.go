@@ -130,19 +130,6 @@ func (s *State) Parent(wu *models.WorkUnit) (*models.WorkUnit, bool) {
 	return parent, ok
 }
 
-// AllDone returns true if all direct children of parentID have phase "done".
-// Returns true for a parent with no children.
-func (s *State) AllDone(parentID string) bool {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	for _, wu := range s.units {
-		if wu.Parent == parentID && wu.Phase != models.PhaseDone {
-			return false
-		}
-	}
-	return true
-}
-
 // writeToDisk serialises wu and writes it to the appropriate path under
 // ticketsDir, creating subdirectories as needed.
 func (s *State) writeToDisk(wu *models.WorkUnit) error {
