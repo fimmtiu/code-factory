@@ -70,7 +70,8 @@ func (s *State) All() []*models.WorkUnit {
 }
 
 // FindClaimable returns the first unclaimed non-project ticket whose phase is
-// neither "blocked" nor "done". Returns nil if none is available.
+// neither "blocked" nor "done" and whose status is "idle". Returns nil if none
+// is available.
 func (s *State) FindClaimable() *models.WorkUnit {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -79,6 +80,9 @@ func (s *State) FindClaimable() *models.WorkUnit {
 			continue
 		}
 		if wu.Phase == models.PhaseBlocked || wu.Phase == models.PhaseDone {
+			continue
+		}
+		if wu.Status != models.StatusIdle {
 			continue
 		}
 		if wu.ClaimedBy != "" {

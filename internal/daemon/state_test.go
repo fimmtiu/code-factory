@@ -98,9 +98,9 @@ func TestStateFindClaimable_Open(t *testing.T) {
 	}
 }
 
-// TestStateFindClaimable_InProgress verifies that FindClaimable returns an
-// unclaimed in-progress ticket.
-func TestStateFindClaimable_InProgress(t *testing.T) {
+// TestStateFindClaimable_SkipsInProgress verifies that FindClaimable skips
+// tickets that are already in-progress.
+func TestStateFindClaimable_SkipsInProgress(t *testing.T) {
 	ticketsDir := makeTempTicketsDir(t)
 
 	a := models.NewTicket("ticket-a", "in-progress ticket")
@@ -113,9 +113,27 @@ func TestStateFindClaimable_InProgress(t *testing.T) {
 		t.Fatalf("Load: %v", err)
 	}
 
-	found := s.FindClaimable()
-	if found == nil {
-		t.Fatal("expected FindClaimable to return a ticket, got nil")
+	if found := s.FindClaimable(); found != nil {
+		t.Errorf("expected nil for in-progress ticket, got %q", found.Identifier)
+	}
+}
+
+// TestStateFindClaimable_SkipsNeedsAttention verifies that FindClaimable skips
+// tickets with needs-attention status.
+func TestStateFindClaimable_SkipsNeedsAttention(t *testing.T) {
+	ticketsDir := makeTempTicketsDir(t)
+
+	a := models.NewTicket("ticket-a", "needs attention")
+	a.Status = models.StatusNeedsAttention
+	writeTicket(t, ticketsDir, a)
+
+	s := daemon.NewState(ticketsDir)
+	if err := s.Load(); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	if found := s.FindClaimable(); found != nil {
+		t.Errorf("expected nil for needs-attention ticket, got %q", found.Identifier)
 	}
 }
 
