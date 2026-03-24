@@ -247,6 +247,28 @@ func TestRunExit_NoDaemon(t *testing.T) {
 
 // ---- Tests for subtask 12-2: daemon-requiring commands ----
 
+func TestServerErrorPrintsJSONToStdout(t *testing.T) {
+	socketPath, done := startMockServer(t, func(cmd protocol.Command) protocol.Response {
+		return protocol.Response{Success: false, Error: "no claimable ticket available"}
+	})
+
+	var returnedErr error
+	out := captureOutput(func() {
+		returnedErr = runClaim(socketPath, []string{"1"})
+	})
+	<-done
+
+	if returnedErr != nil {
+		t.Errorf("expected nil error for server failure, got %v", returnedErr)
+	}
+	if !strings.Contains(out, `"success"`) || !strings.Contains(out, "false") {
+		t.Errorf("expected JSON with success=false in stdout, got: %q", out)
+	}
+	if !strings.Contains(out, "no claimable ticket available") {
+		t.Errorf("expected error message in stdout, got: %q", out)
+	}
+}
+
 func TestRunStatus(t *testing.T) {
 	statusData := json.RawMessage(`{"project_count":2,"ticket_count":5}`)
 	socketPath, done := startMockServer(t, func(cmd protocol.Command) protocol.Response {

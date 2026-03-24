@@ -157,11 +157,15 @@ func runExit(socketPath string) error {
 	return nil
 }
 
-// printResponseData pretty-prints the Data field of a response, or prints an
-// error and returns it if the response indicates failure.
+// printResponseData handles a daemon response: on failure it prints the
+// response as JSON to stdout and returns nil; on success it pretty-prints the
+// Data payload (if any) and returns nil. Client-side errors (connection
+// failures, bad arguments) are returned as errors and never reach this function.
 func printResponseData(resp protocol.Response) error {
 	if !resp.Success {
-		return fmt.Errorf("%s", resp.Error)
+		out, _ := json.Marshal(resp)
+		fmt.Println(string(out))
+		return nil
 	}
 	if resp.Data == nil {
 		return nil
