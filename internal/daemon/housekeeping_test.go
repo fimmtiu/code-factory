@@ -35,7 +35,8 @@ func TestHousekeepingReleaseStaleClaim(t *testing.T) {
 	ticketsDir := makeTicketsWithSettings(t, cfg)
 
 	stale := models.NewTicket("stale-claimed", "stale claimed ticket")
-	stale.Status = models.StatusReviewReady
+	stale.Phase = models.PhaseReview
+	stale.Status = models.StatusIdle
 	stale.ClaimedBy = "42"
 	stale.LastUpdated = time.Now().UTC().Add(-2 * time.Minute)
 	writeTicket(t, ticketsDir, stale)
@@ -80,12 +81,14 @@ func TestHousekeepingResetStaleInProgress(t *testing.T) {
 
 	// Ticket that has been in-progress for 2 minutes (stale).
 	stale := models.NewTicket("stale-ticket", "stale")
+	stale.Phase = models.PhaseImplement
 	stale.Status = models.StatusInProgress
 	stale.LastUpdated = time.Now().UTC().Add(-2 * time.Minute)
 	writeTicket(t, ticketsDir, stale)
 
 	// Ticket that has been in-progress for 30 seconds (not stale).
 	fresh := models.NewTicket("fresh-ticket", "fresh")
+	fresh.Phase = models.PhaseImplement
 	fresh.Status = models.StatusInProgress
 	fresh.LastUpdated = time.Now().UTC().Add(-30 * time.Second)
 	writeTicket(t, ticketsDir, fresh)
@@ -125,8 +128,8 @@ func TestHousekeepingResetStaleInProgress(t *testing.T) {
 	if !ok {
 		t.Fatal("expected stale-ticket to exist")
 	}
-	if staleUnit.Status != models.StatusOpen {
-		t.Errorf("expected stale-ticket status=open, got %q", staleUnit.Status)
+	if staleUnit.Status != models.StatusIdle {
+		t.Errorf("expected stale-ticket status=idle, got %q", staleUnit.Status)
 	}
 
 	// Fresh ticket should remain in-progress.
@@ -149,7 +152,8 @@ func TestHousekeepingResetStaleInReview(t *testing.T) {
 	ticketsDir := makeTicketsWithSettings(t, cfg)
 
 	stale := models.NewTicket("in-review-ticket", "stale review")
-	stale.Status = models.StatusInReview
+	stale.Phase = models.PhaseReview
+	stale.Status = models.StatusInProgress
 	stale.LastUpdated = time.Now().UTC().Add(-2 * time.Minute)
 	writeTicket(t, ticketsDir, stale)
 
@@ -185,8 +189,8 @@ func TestHousekeepingResetStaleInReview(t *testing.T) {
 	if !ok {
 		t.Fatal("expected in-review-ticket to exist")
 	}
-	if unit.Status != models.StatusReviewReady {
-		t.Errorf("expected review-ready after housekeeping, got %q", unit.Status)
+	if unit.Status != models.StatusIdle {
+		t.Errorf("expected idle after housekeeping, got %q", unit.Status)
 	}
 }
 
@@ -375,6 +379,7 @@ func TestHousekeepingDiskWrite(t *testing.T) {
 	ticketsDir := makeTicketsWithSettings(t, cfg)
 
 	stale := models.NewTicket("stale-on-disk", "stale")
+	stale.Phase = models.PhaseImplement
 	stale.Status = models.StatusInProgress
 	stale.LastUpdated = time.Now().UTC().Add(-2 * time.Minute)
 	writeTicket(t, ticketsDir, stale)
@@ -408,8 +413,8 @@ func TestHousekeepingDiskWrite(t *testing.T) {
 	if !ok {
 		t.Fatal("expected stale-on-disk to exist on disk")
 	}
-	if unit.Status != models.StatusOpen {
-		t.Errorf("expected open on disk, got %q", unit.Status)
+	if unit.Status != models.StatusIdle {
+		t.Errorf("expected idle on disk, got %q", unit.Status)
 	}
 }
 

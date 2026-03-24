@@ -69,7 +69,7 @@ func (s *State) All() []*models.WorkUnit {
 	return out
 }
 
-// FindClaimable returns the first unclaimed non-project ticket whose status is
+// FindClaimable returns the first unclaimed non-project ticket whose phase is
 // neither "blocked" nor "done". Returns nil if none is available.
 func (s *State) FindClaimable() *models.WorkUnit {
 	s.mu.RLock()
@@ -78,7 +78,7 @@ func (s *State) FindClaimable() *models.WorkUnit {
 		if wu.IsProject {
 			continue
 		}
-		if wu.Status == models.StatusBlocked || wu.Status == models.StatusDone {
+		if wu.Phase == models.PhaseBlocked || wu.Phase == models.PhaseDone {
 			continue
 		}
 		if wu.ClaimedBy != "" {
@@ -111,7 +111,7 @@ func (s *State) Add(wu *models.WorkUnit) error {
 }
 
 // UnsatisfiedDeps returns the identifiers of wu's dependencies that are not
-// yet in the "done" status.
+// yet in the "done" phase.
 func (s *State) UnsatisfiedDeps(wu *models.WorkUnit) []string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -119,7 +119,7 @@ func (s *State) UnsatisfiedDeps(wu *models.WorkUnit) []string {
 	var out []string
 	for _, dep := range wu.Dependencies {
 		depUnit, ok := s.units[dep]
-		if !ok || depUnit.Status != models.StatusDone {
+		if !ok || depUnit.Phase != models.PhaseDone {
 			out = append(out, dep)
 		}
 	}
@@ -138,32 +138,17 @@ func (s *State) Parent(wu *models.WorkUnit) (*models.WorkUnit, bool) {
 	return parent, ok
 }
 
-// AllDone returns true if all direct children of parentID have status "done".
+// AllDone returns true if all direct children of parentID have phase "done".
 // Returns true for a parent with no children.
 func (s *State) AllDone(parentID string) bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	for _, wu := range s.units {
-		if wu.Parent == parentID && wu.Status != models.StatusDone {
+		if wu.Parent == parentID && wu.Phase != models.PhaseDone {
 			return false
 		}
 	}
 	return true
-}
-
-// MarkAncestorsInProgress walks up the parent chain from wu and marks every
-// ancestor project as in-progress if it is not already.
-func (s *State) MarkAncestorsInProgress(wu *models.WorkUnit) {
-	parent, ok := s.Parent(wu)
-	for ok {
-		if parent.Status != models.ProjectInProgress {
-			parent.Status = models.ProjectInProgress
-			if err := s.Update(parent); err != nil {
-				panic("failed to write ancestor to disk: " + err.Error())
-			}
-		}
-		parent, ok = s.Parent(parent)
-	}
 }
 
 // unsatisfiedDepsLocked counts unsatisfied dependencies without acquiring the
@@ -172,7 +157,7 @@ func (s *State) unsatisfiedDepsLocked(wu *models.WorkUnit) int {
 	count := 0
 	for _, dep := range wu.Dependencies {
 		depUnit, ok := s.units[dep]
-		if !ok || depUnit.Status != models.StatusDone {
+		if !ok || depUnit.Phase != models.PhaseDone {
 			count++
 		}
 	}

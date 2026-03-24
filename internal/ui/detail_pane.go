@@ -116,8 +116,8 @@ func (dp DetailPane) buildLines() []string {
 	// Header: identifier
 	lines = append(lines, labelStyle.Render(dp.unit.Identifier))
 
-	// Status line
-	lines = append(lines, labelStyle.Render("Status: ")+dp.unit.Status)
+	// Phase / Status line
+	lines = append(lines, labelStyle.Render("Phase: ")+dp.unit.Phase+"  "+labelStyle.Render("Status: ")+dp.unit.Status)
 
 	// Dependencies
 	if len(dp.unit.Dependencies) > 0 {

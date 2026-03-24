@@ -272,15 +272,23 @@ func runCreateTicket(socketPath string, args []string, stdin io.Reader) error {
 	return printResponseData(resp)
 }
 
-// runSetStatus sends "set-status" with the given identifier and new status.
+// runSetStatus sends "set-status" with the given identifier, phase, and
+// optional status (defaults to "idle" when omitted).
 func runSetStatus(socketPath string, args []string) error {
 	if len(args) < 2 {
-		return fmt.Errorf("usage: tickets set-status <identifier> <new-status>")
+		return fmt.Errorf("usage: tickets set-status <identifier> <phase> [<status>]")
+	}
+	params := map[string]string{
+		"identifier": args[0],
+		"phase":      args[1],
+	}
+	if len(args) >= 3 {
+		params["status"] = args[2]
 	}
 	c := client.NewClient(socketPath)
 	resp, err := c.SendCommand(protocol.Command{
 		Name:   "set-status",
-		Params: map[string]string{"identifier": args[0], "status": args[1]},
+		Params: params,
 	})
 	if err != nil {
 		return err

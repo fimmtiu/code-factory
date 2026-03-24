@@ -369,14 +369,33 @@ func TestRunSetStatus(t *testing.T) {
 		if cmd.Name != "set-status" {
 			return protocol.Response{Success: false, Error: "unexpected command"}
 		}
-		if cmd.Params["identifier"] != "my-ticket" || cmd.Params["status"] != "review-ready" {
+		if cmd.Params["identifier"] != "my-ticket" || cmd.Params["phase"] != "review" {
 			return protocol.Response{Success: false, Error: "wrong params"}
 		}
 		return protocol.Response{Success: true}
 	})
 
 	captureOutput(func() {
-		if err := runSetStatus(socketPath, []string{"my-ticket", "review-ready"}); err != nil {
+		if err := runSetStatus(socketPath, []string{"my-ticket", "review"}); err != nil {
+			t.Fatalf("runSetStatus returned error: %v", err)
+		}
+	})
+	<-done
+}
+
+func TestRunSetStatus_WithExplicitStatus(t *testing.T) {
+	socketPath, done := startMockServer(t, func(cmd protocol.Command) protocol.Response {
+		if cmd.Name != "set-status" {
+			return protocol.Response{Success: false, Error: "unexpected command"}
+		}
+		if cmd.Params["identifier"] != "my-ticket" || cmd.Params["phase"] != "implement" || cmd.Params["status"] != "in-progress" {
+			return protocol.Response{Success: false, Error: "wrong params"}
+		}
+		return protocol.Response{Success: true}
+	})
+
+	captureOutput(func() {
+		if err := runSetStatus(socketPath, []string{"my-ticket", "implement", "in-progress"}); err != nil {
 			t.Fatalf("runSetStatus returned error: %v", err)
 		}
 	})

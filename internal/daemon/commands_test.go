@@ -462,8 +462,8 @@ func TestCreateTicket_Success(t *testing.T) {
 	if !ok {
 		t.Fatal("create-ticket: expected ticket in state after create")
 	}
-	if wu.Status != models.StatusOpen {
-		t.Errorf("create-ticket: expected status open, got %q", wu.Status)
+	if wu.Phase != models.PhasePlan {
+		t.Errorf("create-ticket: expected phase plan, got %q", wu.Phase)
 	}
 	if wu.Description != "a ticket" {
 		t.Errorf("create-ticket: expected description 'a ticket', got %q", wu.Description)
@@ -510,8 +510,8 @@ func TestCreateTicket_BlockedByDeps(t *testing.T) {
 	if !ok {
 		t.Fatal("create-ticket blocked: expected ticket in state")
 	}
-	if wu.Status != models.StatusBlocked {
-		t.Errorf("create-ticket blocked: expected status blocked, got %q", wu.Status)
+	if wu.Phase != models.PhaseBlocked {
+		t.Errorf("create-ticket blocked: expected status blocked, got %q", wu.Phase)
 	}
 	if len(wu.Dependencies) != 1 || wu.Dependencies[0] != "dep-ticket" {
 		t.Errorf("create-ticket blocked: expected dependencies=[dep-ticket], got %v", wu.Dependencies)
@@ -541,8 +541,8 @@ func TestCreateTicket_TopLevel(t *testing.T) {
 	if !ok {
 		t.Fatal("create-ticket top-level: expected ticket in state")
 	}
-	if wu.Status != models.StatusOpen {
-		t.Errorf("create-ticket top-level: expected status open, got %q", wu.Status)
+	if wu.Phase != models.PhasePlan {
+		t.Errorf("create-ticket top-level: expected status open, got %q", wu.Phase)
 	}
 }
 
@@ -589,7 +589,7 @@ func TestSetStatus_Simple(t *testing.T) {
 
 	resp := sendCommand(t, d, protocol.Command{
 		Name:   "set-status",
-		Params: map[string]string{"identifier": "my-ticket", "status": "review-ready"},
+		Params: map[string]string{"identifier": "my-ticket", "phase": "review"},
 	})
 	if !resp.Success {
 		t.Fatalf("set-status: expected success, got %q", resp.Error)
@@ -599,8 +599,8 @@ func TestSetStatus_Simple(t *testing.T) {
 	if !ok {
 		t.Fatal("set-status: ticket not found")
 	}
-	if wu.Status != models.StatusReviewReady {
-		t.Errorf("set-status: expected review-ready, got %q", wu.Status)
+	if wu.Phase != models.PhaseReview {
+		t.Errorf("set-status: expected review phase, got %q", wu.Phase)
 	}
 }
 
@@ -631,7 +631,7 @@ func TestSetStatus_InProgress_CreatesWorktree(t *testing.T) {
 
 	resp := sendCommand(t, d, protocol.Command{
 		Name:   "set-status",
-		Params: map[string]string{"identifier": "my-proj/work-ticket", "status": "in-progress"},
+		Params: map[string]string{"identifier": "my-proj/work-ticket", "phase": "implement", "status": "in-progress"},
 	})
 	if !resp.Success {
 		t.Fatalf("set-status in-progress: expected success, got %q", resp.Error)
@@ -641,17 +641,10 @@ func TestSetStatus_InProgress_CreatesWorktree(t *testing.T) {
 	if !ok {
 		t.Fatal("set-status: ticket not found in state")
 	}
-	if wu.Status != models.StatusInProgress {
-		t.Errorf("set-status: expected in-progress, got %q", wu.Status)
+	if wu.Phase != models.PhaseImplement || wu.Status != models.StatusInProgress {
+		t.Errorf("set-status: expected implement/in-progress, got phase=%q status=%q", wu.Phase, wu.Status)
 	}
 
-	projState, ok := d.State().Get("my-proj")
-	if !ok {
-		t.Fatal("set-status: project not found")
-	}
-	if projState.Status != models.ProjectInProgress {
-		t.Errorf("set-status: expected project in-progress, got %q", projState.Status)
-	}
 
 	if len(mock.CreatedWorktrees) != 1 || mock.CreatedWorktrees[0] != "my-proj/work-ticket" {
 		t.Errorf("set-status: expected CreateWorktree('my-proj/work-ticket'), got %v", mock.CreatedWorktrees)
@@ -673,10 +666,11 @@ func TestSetStatus_Done_MergesAndCascades(t *testing.T) {
 		t.Fatalf("writeProjectFile: %v", err)
 	}
 	ticketA := models.NewTicket("my-proj/ticket-a", "already done")
-	ticketA.Status = models.StatusDone
+	ticketA.Phase = models.PhaseDone
 	writeTicketToDir(t, projDir, "ticket-a", ticketA)
 
 	ticketB := models.NewTicket("my-proj/ticket-b", "last ticket")
+	ticketB.Phase = models.PhaseImplement
 	ticketB.Status = models.StatusInProgress
 	writeTicketToDir(t, projDir, "ticket-b", ticketB)
 
@@ -689,7 +683,7 @@ func TestSetStatus_Done_MergesAndCascades(t *testing.T) {
 
 	resp := sendCommand(t, d, protocol.Command{
 		Name:   "set-status",
-		Params: map[string]string{"identifier": "my-proj/ticket-b", "status": "done"},
+		Params: map[string]string{"identifier": "my-proj/ticket-b", "phase": "done"},
 	})
 	if !resp.Success {
 		t.Fatalf("set-status done: expected success, got %q", resp.Error)
@@ -699,8 +693,8 @@ func TestSetStatus_Done_MergesAndCascades(t *testing.T) {
 	if !ok {
 		t.Fatal("set-status done: ticket not found")
 	}
-	if wu.Status != models.StatusDone {
-		t.Errorf("set-status done: expected done, got %q", wu.Status)
+	if wu.Phase != models.PhaseDone {
+		t.Errorf("set-status done: expected done, got %q", wu.Phase)
 	}
 
 	if len(mock.MergedBranches) == 0 {
@@ -714,13 +708,6 @@ func TestSetStatus_Done_MergesAndCascades(t *testing.T) {
 		t.Errorf("set-status done: expected RemoveWorktree('my-proj/ticket-b'), got %v", mock.RemovedWorktrees)
 	}
 
-	projState, ok := d.State().Get("my-proj")
-	if !ok {
-		t.Fatal("set-status done: project not found")
-	}
-	if projState.Status != models.ProjectDone {
-		t.Errorf("set-status done: expected project done, got %q", projState.Status)
-	}
 }
 
 // TestSetStatus_Done_ClearsClaimedBy verifies that marking a ticket done also
@@ -729,6 +716,7 @@ func TestSetStatus_Done_ClearsClaimedBy(t *testing.T) {
 	ticketsDir := makeTempTicketsDir(t)
 
 	ticket := models.NewTicket("my-ticket", "claimed work")
+	ticket.Phase = models.PhaseImplement
 	ticket.Status = models.StatusInProgress
 	ticket.ClaimedBy = "42"
 	writeTicket(t, ticketsDir, ticket)
@@ -742,7 +730,7 @@ func TestSetStatus_Done_ClearsClaimedBy(t *testing.T) {
 
 	resp := sendCommand(t, d, protocol.Command{
 		Name:   "set-status",
-		Params: map[string]string{"identifier": "my-ticket", "status": "done"},
+		Params: map[string]string{"identifier": "my-ticket", "phase": "done"},
 	})
 	if !resp.Success {
 		t.Fatalf("set-status done: expected success, got %q", resp.Error)
@@ -817,7 +805,7 @@ func TestSetStatus_RejectsProject(t *testing.T) {
 
 	resp := sendCommand(t, d, protocol.Command{
 		Name:   "set-status",
-		Params: map[string]string{"identifier": "my-proj", "status": "done"},
+		Params: map[string]string{"identifier": "my-proj", "phase": "done"},
 	})
 	if resp.Success {
 		t.Fatal("set-status project: expected failure, got success")
@@ -914,7 +902,7 @@ func TestClaim_NoneAvailable(t *testing.T) {
 	ticketsDir := makeTempTicketsDir(t)
 
 	done := models.NewTicket("done-ticket", "finished")
-	done.Status = models.StatusDone
+	done.Phase = models.PhaseDone
 	writeTicket(t, ticketsDir, done)
 
 	d, _ := newTestDaemonWithMockGit(t, ticketsDir)

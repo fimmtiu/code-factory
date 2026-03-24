@@ -152,16 +152,20 @@ func makeCreateTicketHandler(d *Daemon) HandlerFunc {
 	}
 }
 
-// makeSetStatusHandler returns a handler that sets a ticket's status to the
-// requested value. When the new status is "done" it additionally merges the
-// ticket's branch, removes its worktree, and cascades done to ancestor
-// projects when all siblings are complete. When the new status is
-// "in-progress" it creates a git worktree for the ticket (if one does not
-// already exist) and cascades in-progress to ancestor projects.
+// makeSetStatusHandler returns a handler that sets a ticket's phase and status.
+// The "phase" param is required; the "status" param is optional and defaults to
+// "idle". When the new phase is "done" it additionally merges the ticket's
+// branch, removes its worktree, and cascades done to ancestor projects when all
+// siblings are complete. When phase is "implement" and status is "in-progress"
+// it creates a git worktree for the ticket (if one does not already exist).
 func makeSetStatusHandler(d *Daemon) HandlerFunc {
 	return func(cmd protocol.Command) protocol.Response {
 		identifier := cmd.Params["identifier"]
+		newPhase := cmd.Params["phase"]
 		newStatus := cmd.Params["status"]
+		if newStatus == "" {
+			newStatus = models.StatusIdle
+		}
 
 		wu, ok := d.state.Get(identifier)
 		if !ok {
@@ -171,18 +175,22 @@ func makeSetStatusHandler(d *Daemon) HandlerFunc {
 			return protocol.Response{Success: false, Error: fmt.Sprintf("%q is a project, not a ticket", identifier)}
 		}
 
+		if !models.IsValidTicketPhase(newPhase) {
+			return protocol.Response{Success: false, Error: fmt.Sprintf("invalid ticket phase %q", newPhase)}
+		}
 		if !models.IsValidTicketStatus(newStatus) {
 			return protocol.Response{Success: false, Error: fmt.Sprintf("invalid ticket status %q", newStatus)}
 		}
 
 		repoRoot := d.RepoRoot()
 
-		if newStatus == models.StatusDone {
+		if newPhase == models.PhaseDone {
 			intoBranch := wu.MergeTargetBranch()
 			if err := d.gitClient.MergeBranch(repoRoot, wu.Identifier, intoBranch); err != nil {
 				return protocol.Response{Success: false, Error: "merge failed: " + err.Error()}
 			}
-			wu.Status = models.StatusDone
+			wu.Phase = models.PhaseDone
+			wu.Status = models.StatusIdle
 			wu.ClaimedBy = ""
 			if err := d.state.Update(wu); err != nil {
 				return protocol.Response{Success: false, Error: "failed to update ticket: " + err.Error()}
@@ -199,7 +207,7 @@ func makeSetStatusHandler(d *Daemon) HandlerFunc {
 			return protocol.Response{Success: true}
 		}
 
-		if newStatus == models.StatusInProgress {
+		if newPhase == models.PhaseImplement && newStatus == models.StatusInProgress {
 			ticketDir := storage.TicketDirPath(d.ticketsDir, wu.Identifier)
 			worktreePath := storage.TicketWorktreePath(ticketDir)
 			// Create the worktree only if it doesn't already exist.
@@ -208,14 +216,9 @@ func makeSetStatusHandler(d *Daemon) HandlerFunc {
 					return protocol.Response{Success: false, Error: "failed to create worktree: " + err.Error()}
 				}
 			}
-			wu.Status = models.StatusInProgress
-			if err := d.state.Update(wu); err != nil {
-				return protocol.Response{Success: false, Error: "failed to update ticket: " + err.Error()}
-			}
-			d.state.MarkAncestorsInProgress(wu)
-			return protocol.Response{Success: true}
 		}
 
+		wu.Phase = newPhase
 		wu.Status = newStatus
 		if err := d.state.Update(wu); err != nil {
 			return protocol.Response{Success: false, Error: "failed to update ticket: " + err.Error()}
@@ -373,8 +376,8 @@ func makeCloseThreadHandler(d *Daemon) HandlerFunc {
 }
 
 // cascadeDone checks whether the parent of wu has all children done. If so,
-// marks the parent done, merges its branch into its own parent (or main),
-// removes its worktree, and recurses upward.
+// merges its branch into its own parent (or main), removes its worktree, and
+// recurses upward.
 func (d *Daemon) cascadeDone(repoRoot string, wu *models.WorkUnit) error {
 	parent, hasParent := d.state.Parent(wu)
 	if !hasParent {
@@ -384,7 +387,6 @@ func (d *Daemon) cascadeDone(repoRoot string, wu *models.WorkUnit) error {
 		return nil
 	}
 
-	parent.Status = models.ProjectDone
 	if err := d.state.Update(parent); err != nil {
 		return err
 	}

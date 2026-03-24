@@ -104,6 +104,7 @@ func TestStateFindClaimable_InProgress(t *testing.T) {
 	ticketsDir := makeTempTicketsDir(t)
 
 	a := models.NewTicket("ticket-a", "in-progress ticket")
+	a.Phase = models.PhaseImplement
 	a.Status = models.StatusInProgress
 	writeTicket(t, ticketsDir, a)
 
@@ -124,7 +125,7 @@ func TestStateFindClaimable_SkipsBlocked(t *testing.T) {
 	ticketsDir := makeTempTicketsDir(t)
 
 	a := models.NewTicket("ticket-a", "blocked")
-	a.Status = models.StatusBlocked
+	a.Phase = models.PhaseBlocked
 	writeTicket(t, ticketsDir, a)
 
 	s := daemon.NewState(ticketsDir)
@@ -142,7 +143,7 @@ func TestStateFindClaimable_SkipsDone(t *testing.T) {
 	ticketsDir := makeTempTicketsDir(t)
 
 	a := models.NewTicket("ticket-a", "done")
-	a.Status = models.StatusDone
+	a.Phase = models.PhaseDone
 	writeTicket(t, ticketsDir, a)
 
 	s := daemon.NewState(ticketsDir)
@@ -188,7 +189,7 @@ func TestStateUpdate(t *testing.T) {
 	}
 
 	got, _ := s.Get("upd-ticket")
-	got.Status = models.StatusInProgress
+	got.Phase = models.PhaseImplement
 	if err := s.Update(got); err != nil {
 		t.Fatalf("Update: %v", err)
 	}
@@ -198,8 +199,8 @@ func TestStateUpdate(t *testing.T) {
 	if !ok {
 		t.Fatal("expected unit to still exist after Update")
 	}
-	if got2.Status != models.StatusInProgress {
-		t.Errorf("expected in-progress, got %q", got2.Status)
+	if got2.Phase != models.PhaseImplement {
+		t.Errorf("expected implement phase, got %q", got2.Phase)
 	}
 
 	// Disk check: reload from storage.
@@ -211,8 +212,8 @@ func TestStateUpdate(t *testing.T) {
 	if !ok {
 		t.Fatal("expected unit to exist after reload")
 	}
-	if got3.Status != models.StatusInProgress {
-		t.Errorf("expected in-progress on disk, got %q", got3.Status)
+	if got3.Phase != models.PhaseImplement {
+		t.Errorf("expected implement phase on disk, got %q", got3.Phase)
 	}
 }
 
@@ -254,11 +255,11 @@ func TestStateUnsatisfiedDeps(t *testing.T) {
 	ticketsDir := makeTempTicketsDir(t)
 
 	done := models.NewTicket("done-dep", "done")
-	done.Status = models.StatusDone
+	done.Phase = models.PhaseDone
 	writeTicket(t, ticketsDir, done)
 
 	open := models.NewTicket("open-dep", "open")
-	open.Status = models.StatusOpen
+	open.Phase = models.PhasePlan
 	writeTicket(t, ticketsDir, open)
 
 	wu := models.NewTicket("my-ticket", "has deps")
@@ -340,7 +341,7 @@ func TestStateAllDone(t *testing.T) {
 		t.Fatalf("MkdirAll done-child: %v", err)
 	}
 	doneChild := models.NewTicket("proj/done-child", "done")
-	doneChild.Status = models.StatusDone
+	doneChild.Phase = models.PhaseDone
 	if err := storage.WriteWorkUnit(filepath.Join(doneChildDir, "ticket.json"), doneChild); err != nil {
 		t.Fatalf("WriteWorkUnit: %v", err)
 	}
@@ -365,7 +366,7 @@ func TestStateAllDone(t *testing.T) {
 
 	// Mark the open child as done.
 	child, _ := s.Get("proj/open-child")
-	child.Status = models.StatusDone
+	child.Phase = models.PhaseDone
 	if err := s.Update(child); err != nil {
 		t.Fatalf("Update: %v", err)
 	}
@@ -437,7 +438,7 @@ func TestStateUpdateTimestamp(t *testing.T) {
 
 	got, _ := s.Get("ts-ticket")
 	oldTime := got.LastUpdated
-	got.Status = models.StatusInProgress
+	got.Phase = models.PhaseImplement
 	if err := s.Update(got); err != nil {
 		t.Fatalf("Update: %v", err)
 	}

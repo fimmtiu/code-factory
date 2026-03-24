@@ -2,22 +2,45 @@ package models
 
 import "testing"
 
-func TestIsValidTicketStatus(t *testing.T) {
+func TestIsValidTicketPhase(t *testing.T) {
 	tests := []struct {
 		input string
 		want  bool
 	}{
 		{"blocked", true},
-		{"open", true},
-		{"in-progress", true},
-		{"review-ready", true},
-		{"in-review", true},
+		{"plan", true},
+		{"implement", true},
+		{"review", true},
+		{"respond", true},
+		{"refactor", true},
 		{"done", true},
 		{"", false},
-		{"pending", false},
-		{"OPEN", false},
-		{"In-Progress", false},
+		{"open", false},
+		{"in-progress", false},
+		{"PLAN", false},
 		{"closed", false},
+	}
+
+	for _, tc := range tests {
+		got := IsValidTicketPhase(tc.input)
+		if got != tc.want {
+			t.Errorf("IsValidTicketPhase(%q) = %v, want %v", tc.input, got, tc.want)
+		}
+	}
+}
+
+func TestIsValidTicketStatus(t *testing.T) {
+	tests := []struct {
+		input string
+		want  bool
+	}{
+		{"idle", true},
+		{"needs-attention", true},
+		{"in-progress", true},
+		{"", false},
+		{"open", false},
+		{"done", false},
+		{"IDLE", false},
 	}
 
 	for _, tc := range tests {
@@ -28,63 +51,38 @@ func TestIsValidTicketStatus(t *testing.T) {
 	}
 }
 
-func TestIsValidProjectStatus(t *testing.T) {
-	tests := []struct {
-		input string
-		want  bool
-	}{
-		{"blocked", true},
-		{"open", true},
-		{"in-progress", true},
-		{"done", true},
-		{"review-ready", false},
-		{"in-review", false},
-		{"", false},
-		{"pending", false},
-		{"OPEN", false},
-		{"closed", false},
+func TestTicketPhaseConstants(t *testing.T) {
+	if PhaseBlocked != "blocked" {
+		t.Errorf("PhaseBlocked = %q, want %q", PhaseBlocked, "blocked")
 	}
-
-	for _, tc := range tests {
-		got := IsValidProjectStatus(tc.input)
-		if got != tc.want {
-			t.Errorf("IsValidProjectStatus(%q) = %v, want %v", tc.input, got, tc.want)
-		}
+	if PhasePlan != "plan" {
+		t.Errorf("PhasePlan = %q, want %q", PhasePlan, "plan")
+	}
+	if PhaseImplement != "implement" {
+		t.Errorf("PhaseImplement = %q, want %q", PhaseImplement, "implement")
+	}
+	if PhaseReview != "review" {
+		t.Errorf("PhaseReview = %q, want %q", PhaseReview, "review")
+	}
+	if PhaseRespond != "respond" {
+		t.Errorf("PhaseRespond = %q, want %q", PhaseRespond, "respond")
+	}
+	if PhaseRefactor != "refactor" {
+		t.Errorf("PhaseRefactor = %q, want %q", PhaseRefactor, "refactor")
+	}
+	if PhaseDone != "done" {
+		t.Errorf("PhaseDone = %q, want %q", PhaseDone, "done")
 	}
 }
 
 func TestTicketStatusConstants(t *testing.T) {
-	if StatusBlocked != "blocked" {
-		t.Errorf("StatusBlocked = %q, want %q", StatusBlocked, "blocked")
+	if StatusIdle != "idle" {
+		t.Errorf("StatusIdle = %q, want %q", StatusIdle, "idle")
 	}
-	if StatusOpen != "open" {
-		t.Errorf("StatusOpen = %q, want %q", StatusOpen, "open")
+	if StatusNeedsAttention != "needs-attention" {
+		t.Errorf("StatusNeedsAttention = %q, want %q", StatusNeedsAttention, "needs-attention")
 	}
 	if StatusInProgress != "in-progress" {
 		t.Errorf("StatusInProgress = %q, want %q", StatusInProgress, "in-progress")
-	}
-	if StatusReviewReady != "review-ready" {
-		t.Errorf("StatusReviewReady = %q, want %q", StatusReviewReady, "review-ready")
-	}
-	if StatusInReview != "in-review" {
-		t.Errorf("StatusInReview = %q, want %q", StatusInReview, "in-review")
-	}
-	if StatusDone != "done" {
-		t.Errorf("StatusDone = %q, want %q", StatusDone, "done")
-	}
-}
-
-func TestProjectStatusConstants(t *testing.T) {
-	if ProjectBlocked != "blocked" {
-		t.Errorf("ProjectBlocked = %q, want %q", ProjectBlocked, "blocked")
-	}
-	if ProjectOpen != "open" {
-		t.Errorf("ProjectOpen = %q, want %q", ProjectOpen, "open")
-	}
-	if ProjectInProgress != "in-progress" {
-		t.Errorf("ProjectInProgress = %q, want %q", ProjectInProgress, "in-progress")
-	}
-	if ProjectDone != "done" {
-		t.Errorf("ProjectDone = %q, want %q", ProjectDone, "done")
 	}
 }

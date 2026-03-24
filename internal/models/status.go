@@ -1,36 +1,36 @@
 package models
 
+type TicketPhase = string
+
+const (
+	PhaseBlocked   TicketPhase = "blocked"
+	PhasePlan      TicketPhase = "plan"
+	PhaseImplement TicketPhase = "implement"
+	PhaseReview    TicketPhase = "review"
+	PhaseRespond   TicketPhase = "respond"
+	PhaseRefactor  TicketPhase = "refactor"
+	PhaseDone      TicketPhase = "done"
+)
+
 type TicketStatus = string
 
 const (
-	StatusBlocked     TicketStatus = "blocked"
-	StatusOpen        TicketStatus = "open"
-	StatusInProgress  TicketStatus = "in-progress"
-	StatusReviewReady TicketStatus = "review-ready"
-	StatusInReview    TicketStatus = "in-review"
-	StatusDone        TicketStatus = "done"
+	StatusIdle           TicketStatus = "idle"
+	StatusNeedsAttention TicketStatus = "needs-attention"
+	StatusInProgress     TicketStatus = "in-progress"
 )
 
-type ProjectStatus = string
-
-const (
-	ProjectBlocked    ProjectStatus = "blocked"
-	ProjectOpen       ProjectStatus = "open"
-	ProjectInProgress ProjectStatus = "in-progress"
-	ProjectDone       ProjectStatus = "done"
-)
-
-func IsValidTicketStatus(s string) bool {
+func IsValidTicketPhase(s string) bool {
 	switch s {
-	case StatusBlocked, StatusOpen, StatusInProgress, StatusReviewReady, StatusInReview, StatusDone:
+	case PhaseBlocked, PhasePlan, PhaseImplement, PhaseReview, PhaseRespond, PhaseRefactor, PhaseDone:
 		return true
 	}
 	return false
 }
 
-func IsValidProjectStatus(s string) bool {
+func IsValidTicketStatus(s string) bool {
 	switch s {
-	case ProjectBlocked, ProjectOpen, ProjectInProgress, ProjectDone:
+	case StatusIdle, StatusNeedsAttention, StatusInProgress:
 		return true
 	}
 	return false

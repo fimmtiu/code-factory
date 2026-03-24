@@ -14,8 +14,11 @@ func TestNewTicket(t *testing.T) {
 	if wu.Description != "Fix the rounding bug" {
 		t.Errorf("Description = %q, want %q", wu.Description, "Fix the rounding bug")
 	}
-	if wu.Status != StatusOpen {
-		t.Errorf("Status = %q, want %q", wu.Status, StatusOpen)
+	if wu.Phase != PhasePlan {
+		t.Errorf("Phase = %q, want %q", wu.Phase, PhasePlan)
+	}
+	if wu.Status != StatusIdle {
+		t.Errorf("Status = %q, want %q", wu.Status, StatusIdle)
 	}
 	if wu.IsProject {
 		t.Error("IsProject should be false for ticket")
@@ -39,8 +42,11 @@ func TestNewProject(t *testing.T) {
 	if wu.Description != "My Project description" {
 		t.Errorf("Description = %q, want %q", wu.Description, "My Project description")
 	}
-	if wu.Status != ProjectOpen {
-		t.Errorf("Status = %q, want %q", wu.Status, ProjectOpen)
+	if wu.Phase != "" {
+		t.Errorf("Phase = %q, want empty (projects have no phase)", wu.Phase)
+	}
+	if wu.Status != "" {
+		t.Errorf("Status = %q, want empty (projects have no status)", wu.Status)
 	}
 	if !wu.IsProject {
 		t.Error("IsProject should be true for project")
@@ -61,6 +67,7 @@ func TestWorkUnitJSONRoundTrip(t *testing.T) {
 	original := &WorkUnit{
 		Identifier:   "my-project/fix-bug",
 		Description:  "Fix the bug in the widget",
+		Phase:        PhaseImplement,
 		Status:       StatusInProgress,
 		Dependencies: []string{"my-project/setup-env"},
 		LastUpdated:  now,
@@ -84,6 +91,9 @@ func TestWorkUnitJSONRoundTrip(t *testing.T) {
 	if decoded.Description != original.Description {
 		t.Errorf("Description: got %q, want %q", decoded.Description, original.Description)
 	}
+	if decoded.Phase != original.Phase {
+		t.Errorf("Phase: got %q, want %q", decoded.Phase, original.Phase)
+	}
 	if decoded.Status != original.Status {
 		t.Errorf("Status: got %q, want %q", decoded.Status, original.Status)
 	}
@@ -104,7 +114,8 @@ func TestWorkUnitJSONFieldNames(t *testing.T) {
 	wu := &WorkUnit{
 		Identifier:   "fix-bug",
 		Description:  "desc",
-		Status:       StatusOpen,
+		Phase:        PhasePlan,
+		Status:       StatusIdle,
 		Dependencies: []string{},
 		LastUpdated:  time.Now().UTC(),
 	}
@@ -119,7 +130,7 @@ func TestWorkUnitJSONFieldNames(t *testing.T) {
 		t.Fatalf("json.Unmarshal failed: %v", err)
 	}
 
-	expectedKeys := []string{"dependencies", "description", "identifier", "last_updated", "status"}
+	expectedKeys := []string{"dependencies", "description", "identifier", "last_updated", "phase", "status"}
 	for _, key := range expectedKeys {
 		if _, ok := raw[key]; !ok {
 			t.Errorf("expected JSON key %q not found in output", key)
@@ -146,6 +157,27 @@ func TestProjectJSONIncludesIsProject(t *testing.T) {
 	}
 	if val != true {
 		t.Errorf("is_project = %v, want true", val)
+	}
+}
+
+func TestProjectJSONOmitsPhaseAndStatus(t *testing.T) {
+	wu := NewProject("my-project", "desc")
+
+	data, err := json.Marshal(wu)
+	if err != nil {
+		t.Fatalf("json.Marshal failed: %v", err)
+	}
+
+	var raw map[string]interface{}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("json.Unmarshal failed: %v", err)
+	}
+
+	if _, ok := raw["phase"]; ok {
+		t.Error("project JSON should not contain \"phase\", but it does")
+	}
+	if _, ok := raw["status"]; ok {
+		t.Error("project JSON should not contain \"status\", but it does")
 	}
 }
 

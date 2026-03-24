@@ -179,7 +179,8 @@ func CreateTicketDir(ticketsDir, identifier string) error {
 	}
 	wu := &models.WorkUnit{
 		Identifier:   identifier,
-		Status:       models.StatusOpen,
+		Phase:        models.PhasePlan,
+		Status:       models.StatusIdle,
 		Dependencies: []string{},
 		LastUpdated:  time.Now().UTC(),
 		IsProject:    false,
@@ -201,7 +202,6 @@ func CreateProjectDir(ticketsDir, identifier string) error {
 	wu := &models.WorkUnit{
 		Identifier:   identifier,
 		Description:  "",
-		Status:       models.ProjectOpen,
 		Dependencies: []string{},
 		LastUpdated:  time.Now().UTC(),
 		IsProject:    true,

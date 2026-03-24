@@ -12,7 +12,8 @@ func TestDetailPaneSetUnit(t *testing.T) {
 	unit := &models.WorkUnit{
 		Identifier:  "proj/ticket-1",
 		Description: "A test ticket",
-		Status:      models.StatusOpen,
+		Phase:       models.PhasePlan,
+		Status:      models.StatusIdle,
 	}
 	dp.SetUnit(unit)
 
@@ -30,7 +31,8 @@ func TestDetailPaneScrollDown(t *testing.T) {
 	unit := &models.WorkUnit{
 		Identifier:  "proj/ticket-1",
 		Description: "Line1\nLine2\nLine3\nLine4\nLine5\nLine6\nLine7\nLine8\nLine9\nLine10",
-		Status:      models.StatusOpen,
+		Phase:       models.PhasePlan,
+		Status:      models.StatusIdle,
 	}
 	dp.SetUnit(unit)
 
@@ -46,7 +48,8 @@ func TestDetailPaneScrollUp(t *testing.T) {
 	unit := &models.WorkUnit{
 		Identifier:  "proj/ticket-1",
 		Description: "Line1\nLine2\nLine3\nLine4\nLine5\nLine6",
-		Status:      models.StatusOpen,
+		Phase:       models.PhasePlan,
+		Status:      models.StatusIdle,
 	}
 	dp.SetUnit(unit)
 
@@ -62,7 +65,8 @@ func TestDetailPaneScrollUpAtTop(t *testing.T) {
 	unit := &models.WorkUnit{
 		Identifier:  "proj/ticket-1",
 		Description: "Some description",
-		Status:      models.StatusOpen,
+		Phase:       models.PhasePlan,
+		Status:      models.StatusIdle,
 	}
 	dp.SetUnit(unit)
 
@@ -78,14 +82,15 @@ func TestDetailPaneViewShowsStatus(t *testing.T) {
 	unit := &models.WorkUnit{
 		Identifier:   "proj/ticket-1",
 		Description:  "A test ticket description",
+		Phase:        models.PhaseImplement,
 		Status:       models.StatusInProgress,
 		Dependencies: []string{},
 	}
 	dp.SetUnit(unit)
 
 	view := dp.View(80, 20, false)
-	if !strings.Contains(view, "in-progress") {
-		t.Errorf("expected view to contain status 'in-progress', got: %q", view)
+	if !strings.Contains(view, "implement") {
+		t.Errorf("expected view to contain phase 'implement', got: %q", view)
 	}
 }
 
@@ -94,7 +99,8 @@ func TestDetailPaneViewShowsDependencies(t *testing.T) {
 	unit := &models.WorkUnit{
 		Identifier:   "proj/ticket-1",
 		Description:  "A test ticket description",
-		Status:       models.StatusBlocked,
+		Phase:        models.PhaseBlocked,
+		Status:       models.StatusIdle,
 		Dependencies: []string{"proj/ticket-0", "proj/ticket-x"},
 	}
 	dp.SetUnit(unit)
@@ -110,7 +116,8 @@ func TestDetailPaneViewShowsDescription(t *testing.T) {
 	unit := &models.WorkUnit{
 		Identifier:  "proj/ticket-1",
 		Description: "This is the unique description text",
-		Status:      models.StatusOpen,
+		Phase:       models.PhasePlan,
+		Status:      models.StatusIdle,
 	}
 	dp.SetUnit(unit)
 
@@ -141,7 +148,8 @@ func TestDetailPaneViewHeightMatchesRequested(t *testing.T) {
 		unit := &models.WorkUnit{
 			Identifier:  "proj/ticket-1",
 			Description: "some description",
-			Status:      models.StatusOpen,
+			Phase:       models.PhasePlan,
+		Status:      models.StatusIdle,
 		}
 		dp.SetUnit(unit)
 
@@ -168,7 +176,8 @@ func TestDetailPanePageDown(t *testing.T) {
 	dp.SetUnit(&models.WorkUnit{
 		Identifier:  "proj/t",
 		Description: strings.Repeat("line\n", 30),
-		Status:      models.StatusOpen,
+		Phase:       models.PhasePlan,
+		Status:      models.StatusIdle,
 	})
 
 	dp.PageDown(5)
@@ -182,7 +191,8 @@ func TestDetailPanePageDownClampsAtEnd(t *testing.T) {
 	dp.SetUnit(&models.WorkUnit{
 		Identifier:  "proj/t",
 		Description: "short",
-		Status:      models.StatusOpen,
+		Phase:       models.PhasePlan,
+		Status:      models.StatusIdle,
 	})
 
 	dp.PageDown(1000)
@@ -198,7 +208,8 @@ func TestDetailPanePageUp(t *testing.T) {
 	dp.SetUnit(&models.WorkUnit{
 		Identifier:  "proj/t",
 		Description: strings.Repeat("line\n", 30),
-		Status:      models.StatusOpen,
+		Phase:       models.PhasePlan,
+		Status:      models.StatusIdle,
 	})
 	dp.scrollY = 20
 
@@ -213,7 +224,8 @@ func TestDetailPanePageUpClampsAtZero(t *testing.T) {
 	dp.SetUnit(&models.WorkUnit{
 		Identifier:  "proj/t",
 		Description: strings.Repeat("line\n", 30),
-		Status:      models.StatusOpen,
+		Phase:       models.PhasePlan,
+		Status:      models.StatusIdle,
 	})
 	dp.scrollY = 3
 
@@ -229,7 +241,8 @@ func TestDetailPaneScrollDoesNotGoBeyondContent(t *testing.T) {
 	unit := &models.WorkUnit{
 		Identifier:  "proj/ticket-1",
 		Description: "Short description",
-		Status:      models.StatusOpen,
+		Phase:       models.PhasePlan,
+		Status:      models.StatusIdle,
 	}
 	dp.SetUnit(unit)
 

@@ -197,7 +197,8 @@ func buildTicketsDir(t *testing.T, ticketsDir string) {
 	writeWU(filepath.Join(ticketsDir, "fix-bug", "ticket.json"), &models.WorkUnit{
 		Identifier:   "fix-bug",
 		Description:  "Fix the bug",
-		Status:       models.StatusOpen,
+		Phase:        models.PhasePlan,
+		Status:       models.StatusIdle,
 		Dependencies: []string{},
 		LastUpdated:  now,
 		IsProject:    false,
@@ -208,7 +209,7 @@ func buildTicketsDir(t *testing.T, ticketsDir string) {
 	writeWU(filepath.Join(projDir, "project.json"), &models.WorkUnit{
 		Identifier:   "my-feature",
 		Description:  "My feature project",
-		Status:       models.ProjectOpen,
+		// No Phase/Status for projects,
 		Dependencies: []string{},
 		LastUpdated:  now,
 		IsProject:    true,
@@ -218,7 +219,8 @@ func buildTicketsDir(t *testing.T, ticketsDir string) {
 	writeWU(filepath.Join(projDir, "implement", "ticket.json"), &models.WorkUnit{
 		Identifier:   "my-feature/implement",
 		Description:  "Implement the feature",
-		Status:       models.StatusOpen,
+		Phase:        models.PhasePlan,
+		Status:       models.StatusIdle,
 		Dependencies: []string{},
 		LastUpdated:  now,
 		IsProject:    false,
@@ -229,7 +231,7 @@ func buildTicketsDir(t *testing.T, ticketsDir string) {
 	writeWU(filepath.Join(subDir, "project.json"), &models.WorkUnit{
 		Identifier:   "my-feature/sub-task",
 		Description:  "Sub-task project",
-		Status:       models.ProjectOpen,
+		// No Phase/Status for projects,
 		Dependencies: []string{},
 		LastUpdated:  now,
 		IsProject:    true,
@@ -239,7 +241,8 @@ func buildTicketsDir(t *testing.T, ticketsDir string) {
 	writeWU(filepath.Join(subDir, "do-thing", "ticket.json"), &models.WorkUnit{
 		Identifier:   "my-feature/sub-task/do-thing",
 		Description:  "Do the thing",
-		Status:       models.StatusOpen,
+		Phase:        models.PhasePlan,
+		Status:       models.StatusIdle,
 		Dependencies: []string{},
 		LastUpdated:  now,
 		IsProject:    false,
@@ -357,7 +360,8 @@ func TestReadWriteWorkUnit_RoundTrip(t *testing.T) {
 	original := &models.WorkUnit{
 		Identifier:   "my-ticket",
 		Description:  "A test ticket",
-		Status:       models.StatusOpen,
+		Phase:        models.PhasePlan,
+		Status:       models.StatusIdle,
 		Dependencies: []string{"other-ticket"},
 		LastUpdated:  time.Date(2024, 1, 15, 10, 30, 0, 0, time.UTC),
 		IsProject:    false,
@@ -396,7 +400,8 @@ func TestWriteWorkUnit_Atomic(t *testing.T) {
 	wu := &models.WorkUnit{
 		Identifier:  "atomic-test",
 		Description: "Testing atomic write",
-		Status:      models.StatusOpen,
+		Phase:       models.PhasePlan,
+		Status:      models.StatusIdle,
 		LastUpdated: time.Now().UTC(),
 	}
 

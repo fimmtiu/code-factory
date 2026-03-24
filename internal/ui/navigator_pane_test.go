@@ -21,8 +21,8 @@ func TestNavigatorSetUnits(t *testing.T) {
 func TestNavigatorBuildTreeRoots(t *testing.T) {
 	np := NavigatorPane{}
 	units := []*models.WorkUnit{
-		{Identifier: "proj-a", IsProject: true, Status: models.ProjectOpen},
-		{Identifier: "proj-b", IsProject: true, Status: models.ProjectOpen},
+		{Identifier: "proj-a", IsProject: true},
+		{Identifier: "proj-b", IsProject: true},
 	}
 	np.SetUnits(units)
 
@@ -34,9 +34,9 @@ func TestNavigatorBuildTreeRoots(t *testing.T) {
 func TestNavigatorBuildTreeChildren(t *testing.T) {
 	np := NavigatorPane{}
 	units := []*models.WorkUnit{
-		{Identifier: "proj-a", IsProject: true, Status: models.ProjectOpen},
-		{Identifier: "proj-a/ticket-1", IsProject: false, Status: models.StatusOpen, Parent: "proj-a"},
-		{Identifier: "proj-a/ticket-2", IsProject: false, Status: models.StatusOpen, Parent: "proj-a"},
+		{Identifier: "proj-a", IsProject: true},
+		{Identifier: "proj-a/ticket-1", IsProject: false, Phase: models.PhasePlan, Status: models.StatusIdle, Parent: "proj-a"},
+		{Identifier: "proj-a/ticket-2", IsProject: false, Phase: models.PhasePlan, Status: models.StatusIdle, Parent: "proj-a"},
 	}
 	np.SetUnits(units)
 
@@ -64,7 +64,7 @@ func TestNavigatorMoveDown(t *testing.T) {
 func TestNavigatorMoveDownAtEnd(t *testing.T) {
 	np := NavigatorPane{}
 	units := []*models.WorkUnit{
-		{Identifier: "proj-a", IsProject: true, Status: models.ProjectOpen},
+		{Identifier: "proj-a", IsProject: true},
 	}
 	np.SetUnits(units)
 
@@ -115,8 +115,8 @@ func TestNavigatorSelected(t *testing.T) {
 func TestNavigatorToggleExpand(t *testing.T) {
 	np := NavigatorPane{}
 	units := []*models.WorkUnit{
-		{Identifier: "proj-a", IsProject: true, Status: models.ProjectOpen},
-		{Identifier: "proj-a/ticket-1", IsProject: false, Status: models.StatusOpen, Parent: "proj-a"},
+		{Identifier: "proj-a", IsProject: true},
+		{Identifier: "proj-a/ticket-1", IsProject: false, Phase: models.PhasePlan, Status: models.StatusIdle, Parent: "proj-a"},
 	}
 	np.SetUnits(units)
 
@@ -142,7 +142,7 @@ func TestNavigatorView(t *testing.T) {
 func TestNavigatorViewShowsIdentifiers(t *testing.T) {
 	np := NavigatorPane{}
 	units := []*models.WorkUnit{
-		{Identifier: "my-project", IsProject: true, Status: models.ProjectOpen},
+		{Identifier: "my-project", IsProject: true},
 	}
 	np.SetUnits(units)
 
@@ -155,9 +155,9 @@ func TestNavigatorViewShowsIdentifiers(t *testing.T) {
 func TestNavigatorViewShowsShortName(t *testing.T) {
 	np := NavigatorPane{}
 	units := []*models.WorkUnit{
-		{Identifier: "proj-a", IsProject: true, Status: models.ProjectOpen},
-		{Identifier: "proj-a/sub", IsProject: true, Status: models.ProjectOpen, Parent: "proj-a"},
-		{Identifier: "proj-a/sub/fix-bug", IsProject: false, Status: models.StatusOpen, Parent: "proj-a/sub"},
+		{Identifier: "proj-a", IsProject: true},
+		{Identifier: "proj-a/sub", IsProject: true, Parent: "proj-a"},
+		{Identifier: "proj-a/sub/fix-bug", IsProject: false, Phase: models.PhasePlan, Status: models.StatusIdle, Parent: "proj-a/sub"},
 	}
 	np.SetUnits(units)
 
@@ -182,8 +182,8 @@ func TestNavigatorViewShowsShortName(t *testing.T) {
 func TestNavigatorViewCollapsedHidesChildren(t *testing.T) {
 	np := NavigatorPane{}
 	units := []*models.WorkUnit{
-		{Identifier: "proj-a", IsProject: true, Status: models.ProjectOpen},
-		{Identifier: "proj-a/ticket-1", IsProject: false, Status: models.StatusOpen, Parent: "proj-a"},
+		{Identifier: "proj-a", IsProject: true},
+		{Identifier: "proj-a/ticket-1", IsProject: false, Phase: models.PhasePlan, Status: models.StatusIdle, Parent: "proj-a"},
 	}
 	np.SetUnits(units)
 
@@ -205,7 +205,8 @@ func makeTickets(n int) []*models.WorkUnit {
 		units[i] = &models.WorkUnit{
 			Identifier: fmt.Sprintf("ticket-%d", i),
 			IsProject:  false,
-			Status:     models.StatusOpen,
+			Phase:      models.PhasePlan,
+			Status:     models.StatusIdle,
 		}
 	}
 	return units
@@ -305,9 +306,9 @@ func TestNavigatorViewScrollsBackUpWhenCursorRises(t *testing.T) {
 func TestNavigatorDepth(t *testing.T) {
 	np := NavigatorPane{}
 	units := []*models.WorkUnit{
-		{Identifier: "proj-a", IsProject: true, Status: models.ProjectOpen},
-		{Identifier: "proj-a/sub", IsProject: true, Status: models.ProjectOpen, Parent: "proj-a"},
-		{Identifier: "proj-a/sub/ticket-1", IsProject: false, Status: models.StatusOpen, Parent: "proj-a/sub"},
+		{Identifier: "proj-a", IsProject: true},
+		{Identifier: "proj-a/sub", IsProject: true, Parent: "proj-a"},
+		{Identifier: "proj-a/sub/ticket-1", IsProject: false, Phase: models.PhasePlan, Status: models.StatusIdle, Parent: "proj-a/sub"},
 	}
 	np.SetUnits(units)
 

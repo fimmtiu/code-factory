@@ -45,7 +45,8 @@ func NewCommentThreadID() (string, error) {
 type WorkUnit struct {
 	Identifier     string          `json:"identifier"`
 	Description    string          `json:"description"`
-	Status         string          `json:"status"`
+	Phase          TicketPhase     `json:"phase,omitempty"`
+	Status         TicketStatus    `json:"status,omitempty"`
 	Dependencies   []string        `json:"dependencies"`
 	LastUpdated    time.Time       `json:"last_updated"`
 	IsProject      bool            `json:"is_project,omitempty"`
@@ -58,7 +59,8 @@ func NewTicket(identifier, description string) *WorkUnit {
 	return &WorkUnit{
 		Identifier:   identifier,
 		Description:  description,
-		Status:       StatusOpen,
+		Phase:        PhasePlan,
+		Status:       StatusIdle,
 		Dependencies: []string{},
 		LastUpdated:  time.Now().UTC(),
 		IsProject:    false,
@@ -69,7 +71,6 @@ func NewProject(identifier, description string) *WorkUnit {
 	return &WorkUnit{
 		Identifier:   identifier,
 		Description:  description,
-		Status:       ProjectOpen,
 		Dependencies: []string{},
 		LastUpdated:  time.Now().UTC(),
 		IsProject:    true,
@@ -87,14 +88,15 @@ func (wu *WorkUnit) MergeTargetBranch() string {
 }
 
 // SetDependencies sets the dependencies of the ticket and adjusts the initial
-// status: blocked when there are unresolved deps, open otherwise.
+// phase: blocked when there are unresolved deps, plan otherwise.
 func (wu *WorkUnit) SetDependencies(deps []string) {
 	wu.Dependencies = deps
 	if len(deps) > 0 {
-		wu.Status = StatusBlocked
+		wu.Phase = PhaseBlocked
 	} else {
-		wu.Status = StatusOpen
+		wu.Phase = PhasePlan
 	}
+	wu.Status = StatusIdle
 }
 
 func ValidateIdentifier(s string) error {
