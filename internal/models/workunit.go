@@ -87,6 +87,15 @@ func (wu *WorkUnit) MergeTargetBranch() string {
 	return "main"
 }
 
+// IsClaimable reports whether a ticket can be handed out by the claim command:
+// not a project, not blocked or done, status is idle, and not already claimed.
+func (wu *WorkUnit) IsClaimable() bool {
+	return !wu.IsProject &&
+		wu.Phase != PhaseBlocked && wu.Phase != PhaseDone &&
+		wu.Status == StatusIdle &&
+		wu.ClaimedBy == ""
+}
+
 // SetDependencies sets the dependencies of the ticket and adjusts the initial
 // phase: blocked when there are unresolved deps, plan otherwise.
 func (wu *WorkUnit) SetDependencies(deps []string) {

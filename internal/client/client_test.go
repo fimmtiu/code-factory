@@ -268,8 +268,8 @@ func TestSendCommand_ClosesConnectionAfterResponse(t *testing.T) {
 			return
 		}
 		if err := protocol.WriteResponse(conn, protocol.Response{Success: true}); err != nil {
-		panic(err)
-	}
+			panic(err)
+		}
 
 		// Try to read one more byte — should get EOF because client closed.
 		buf := make([]byte, 1)

@@ -207,8 +207,8 @@ func buildTicketsDir(t *testing.T, ticketsDir string) {
 	// Top-level project: my-feature/
 	projDir := filepath.Join(ticketsDir, "my-feature")
 	writeWU(filepath.Join(projDir, "project.json"), &models.WorkUnit{
-		Identifier:   "my-feature",
-		Description:  "My feature project",
+		Identifier:  "my-feature",
+		Description: "My feature project",
 		// No Phase/Status for projects,
 		Dependencies: []string{},
 		LastUpdated:  now,
@@ -229,8 +229,8 @@ func buildTicketsDir(t *testing.T, ticketsDir string) {
 	// Nested project: my-feature/sub-task/
 	subDir := filepath.Join(projDir, "sub-task")
 	writeWU(filepath.Join(subDir, "project.json"), &models.WorkUnit{
-		Identifier:   "my-feature/sub-task",
-		Description:  "Sub-task project",
+		Identifier:  "my-feature/sub-task",
+		Description: "Sub-task project",
 		// No Phase/Status for projects,
 		Dependencies: []string{},
 		LastUpdated:  now,

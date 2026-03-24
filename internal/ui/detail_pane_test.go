@@ -149,7 +149,7 @@ func TestDetailPaneViewHeightMatchesRequested(t *testing.T) {
 			Identifier:  "proj/ticket-1",
 			Description: "some description",
 			Phase:       models.PhasePlan,
-		Status:      models.StatusIdle,
+			Status:      models.StatusIdle,
 		}
 		dp.SetUnit(unit)
 

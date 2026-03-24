@@ -645,7 +645,6 @@ func TestSetStatus_InProgress_CreatesWorktree(t *testing.T) {
 		t.Errorf("set-status: expected implement/in-progress, got phase=%q status=%q", wu.Phase, wu.Status)
 	}
 
-
 	if len(mock.CreatedWorktrees) != 1 || mock.CreatedWorktrees[0] != "my-proj/work-ticket" {
 		t.Errorf("set-status: expected CreateWorktree('my-proj/work-ticket'), got %v", mock.CreatedWorktrees)
 	}

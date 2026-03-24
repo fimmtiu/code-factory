@@ -69,26 +69,14 @@ func (s *State) All() []*models.WorkUnit {
 	return out
 }
 
-// FindClaimable returns the first unclaimed non-project ticket whose phase is
-// neither "blocked" nor "done" and whose status is "idle". Returns nil if none
-// is available.
+// FindClaimable returns the first claimable ticket, or nil if none is available.
 func (s *State) FindClaimable() *models.WorkUnit {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	for _, wu := range s.units {
-		if wu.IsProject {
-			continue
+		if wu.IsClaimable() {
+			return wu
 		}
-		if wu.Phase == models.PhaseBlocked || wu.Phase == models.PhaseDone {
-			continue
-		}
-		if wu.Status != models.StatusIdle {
-			continue
-		}
-		if wu.ClaimedBy != "" {
-			continue
-		}
-		return wu
 	}
 	return nil
 }
@@ -153,19 +141,6 @@ func (s *State) AllDone(parentID string) bool {
 		}
 	}
 	return true
-}
-
-// unsatisfiedDepsLocked counts unsatisfied dependencies without acquiring the
-// lock. Must be called with s.mu held (at least read-locked).
-func (s *State) unsatisfiedDepsLocked(wu *models.WorkUnit) int {
-	count := 0
-	for _, dep := range wu.Dependencies {
-		depUnit, ok := s.units[dep]
-		if !ok || depUnit.Phase != models.PhaseDone {
-			count++
-		}
-	}
-	return count
 }
 
 // writeToDisk serialises wu and writes it to the appropriate path under
