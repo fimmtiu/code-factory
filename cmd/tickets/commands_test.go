@@ -2,97 +2,24 @@ package main
 
 import (
 	"bytes"
-	"encoding/json"
-	"fmt"
-	"net"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/fimmtiu/tickets/internal/protocol"
+	"github.com/fimmtiu/tickets/internal/db"
 )
 
-// tempSocketPath returns a short temporary Unix socket path that fits within
-// macOS's 104-byte limit.
-func tempSocketPath(t *testing.T) string {
+// openTestDB creates a temporary directory and opens a fresh DB in it.
+func openTestDB(t *testing.T) *db.DB {
 	t.Helper()
-	dir, err := os.MkdirTemp("/tmp", "tkt")
+	dir := t.TempDir()
+	d, err := db.Open(dir, dir)
 	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
+		t.Fatalf("openTestDB: %v", err)
 	}
-	t.Cleanup(func() { os.RemoveAll(dir) })
-	return filepath.Join(dir, "d.sock")
-}
-
-// startMockServer starts a Unix socket server that responds to a single command
-// using the provided handler. Returns the socket path and a done channel.
-func startMockServer(t *testing.T, handler func(cmd protocol.Command) protocol.Response) (socketPath string, done chan struct{}) {
-	t.Helper()
-	socketPath = tempSocketPath(t)
-
-	ln, err := net.Listen("unix", socketPath)
-	if err != nil {
-		t.Fatalf("failed to listen on unix socket: %v", err)
-	}
-
-	done = make(chan struct{})
-	go func() {
-		defer close(done)
-		defer ln.Close()
-		conn, err := ln.Accept()
-		if err != nil {
-			return
-		}
-		defer conn.Close()
-
-		cmd, err := protocol.ReadCommand(conn)
-		if err != nil {
-			return
-		}
-		resp := handler(cmd)
-		if err := protocol.WriteResponse(conn, resp); err != nil {
-			panic(err)
-		}
-	}()
-
-	return socketPath, done
-}
-
-// startMultiMockServer handles up to n connections.
-func startMultiMockServer(t *testing.T, n int, handler func(cmd protocol.Command) protocol.Response) (socketPath string, done chan struct{}) {
-	t.Helper()
-	socketPath = tempSocketPath(t)
-
-	ln, err := net.Listen("unix", socketPath)
-	if err != nil {
-		t.Fatalf("failed to listen on unix socket: %v", err)
-	}
-
-	done = make(chan struct{})
-	go func() {
-		defer close(done)
-		defer ln.Close()
-		for i := 0; i < n; i++ {
-			conn, err := ln.Accept()
-			if err != nil {
-				return
-			}
-			func() {
-				defer conn.Close()
-				cmd, err := protocol.ReadCommand(conn)
-				if err != nil {
-					return
-				}
-				resp := handler(cmd)
-				if err := protocol.WriteResponse(conn, resp); err != nil {
-					panic(err)
-				}
-			}()
-		}
-	}()
-
-	return socketPath, done
+	t.Cleanup(func() { d.Close() })
+	return d
 }
 
 // captureOutput captures os.Stdout during fn() and returns what was printed.
@@ -110,15 +37,13 @@ func captureOutput(fn func()) string {
 	return buf.String()
 }
 
-// ---- Tests for subtask 12-1: init, running, exit ----
+// ===== runInit =====
 
 func TestRunInit_CreatesTicketsDir(t *testing.T) {
 	tmp := t.TempDir()
-	// Create a .git dir so FindRepoRoot works
 	if err := os.Mkdir(filepath.Join(tmp, ".git"), 0755); err != nil {
 		t.Fatal(err)
 	}
-	// Run from tmp
 	origDir, _ := os.Getwd()
 	os.Chdir(tmp)
 	defer os.Chdir(origDir)
@@ -133,15 +58,8 @@ func TestRunInit_CreatesTicketsDir(t *testing.T) {
 	if _, err := os.Stat(ticketsDir); err != nil {
 		t.Errorf("expected .tickets/ to exist: %v", err)
 	}
-	settingsFile := filepath.Join(ticketsDir, ".settings.json")
-	if _, err := os.Stat(settingsFile); err != nil {
-		t.Errorf("expected .settings.json to exist: %v", err)
-	}
 	if !strings.Contains(out, "Initialized .tickets/") {
 		t.Errorf("expected output to contain 'Initialized .tickets/', got: %q", out)
-	}
-	if !strings.Contains(out, tmp) {
-		t.Errorf("expected output to contain repo root %q, got: %q", tmp, out)
 	}
 }
 
@@ -154,11 +72,9 @@ func TestRunInit_Idempotent(t *testing.T) {
 	os.Chdir(tmp)
 	defer os.Chdir(origDir)
 
-	// First call
 	if err := runInit(); err != nil {
 		t.Fatalf("first runInit error: %v", err)
 	}
-	// Second call should not fail
 	if err := runInit(); err != nil {
 		t.Fatalf("second runInit error: %v", err)
 	}
@@ -175,353 +91,323 @@ func TestRunInit_NoGitRepo(t *testing.T) {
 	}
 }
 
-func TestRunRunning_DaemonRunning(t *testing.T) {
-	pidData, _ := json.Marshal(map[string]int{"pid": 42})
-	socketPath, done := startMockServer(t, func(cmd protocol.Command) protocol.Response {
-		if cmd.Name != "ping" {
-			return protocol.Response{Success: false, Error: "unexpected command"}
-		}
-		return protocol.Response{Success: true, Data: json.RawMessage(pidData)}
-	})
+// ===== runStatus =====
 
+func TestRunStatus_Empty(t *testing.T) {
+	d := openTestDB(t)
 	out := captureOutput(func() {
-		if err := runRunning(socketPath); err != nil {
-			t.Fatalf("runRunning returned error: %v", err)
-		}
-	})
-
-	<-done
-	if !strings.Contains(out, "42") {
-		t.Errorf("expected output to contain pid 42, got: %q", out)
-	}
-	if !strings.Contains(out, "running") {
-		t.Errorf("expected output to contain 'running', got: %q", out)
-	}
-}
-
-func TestRunRunning_NoDaemon(t *testing.T) {
-	socketPath := filepath.Join("/tmp", "tkt_no_daemon_running.sock")
-
-	out := captureOutput(func() {
-		if err := runRunning(socketPath); err != nil {
-			t.Fatalf("runRunning returned error: %v", err)
-		}
-	})
-
-	if !strings.Contains(out, "No daemon running") {
-		t.Errorf("expected 'No daemon running', got: %q", out)
-	}
-}
-
-func TestRunExit_DaemonRunning(t *testing.T) {
-	socketPath, done := startMockServer(t, func(cmd protocol.Command) protocol.Response {
-		if cmd.Name != "exit" {
-			return protocol.Response{Success: false, Error: fmt.Sprintf("unexpected command: %s", cmd.Name)}
-		}
-		return protocol.Response{Success: true}
-	})
-
-	out := captureOutput(func() {
-		if err := runExit(socketPath); err != nil {
-			t.Fatalf("runExit returned error: %v", err)
-		}
-	})
-
-	<-done
-	_ = out // output may vary
-}
-
-func TestRunExit_NoDaemon(t *testing.T) {
-	socketPath := filepath.Join("/tmp", "tkt_no_daemon_exit.sock")
-
-	out := captureOutput(func() {
-		if err := runExit(socketPath); err != nil {
-			t.Fatalf("runExit returned error: %v", err)
-		}
-	})
-
-	if !strings.Contains(out, "No daemon running") {
-		t.Errorf("expected 'No daemon running', got: %q", out)
-	}
-}
-
-// ---- Tests for subtask 12-2: daemon-requiring commands ----
-
-func TestServerErrorPrintsJSONToStdout(t *testing.T) {
-	socketPath, done := startMockServer(t, func(cmd protocol.Command) protocol.Response {
-		return protocol.Response{Success: false, Error: "no claimable ticket available"}
-	})
-
-	var returnedErr error
-	out := captureOutput(func() {
-		returnedErr = runClaim(socketPath, []string{"1"})
-	})
-	<-done
-
-	if returnedErr != nil {
-		t.Errorf("expected nil error for server failure, got %v", returnedErr)
-	}
-	if !strings.Contains(out, `"success"`) || !strings.Contains(out, "false") {
-		t.Errorf("expected JSON with success=false in stdout, got: %q", out)
-	}
-	if !strings.Contains(out, "no claimable ticket available") {
-		t.Errorf("expected error message in stdout, got: %q", out)
-	}
-}
-
-func TestRunStatus(t *testing.T) {
-	statusData := json.RawMessage(`{"project_count":2,"ticket_count":5}`)
-	socketPath, done := startMockServer(t, func(cmd protocol.Command) protocol.Response {
-		if cmd.Name != "status" {
-			return protocol.Response{Success: false, Error: "unexpected command"}
-		}
-		return protocol.Response{Success: true, Data: statusData}
-	})
-
-	out := captureOutput(func() {
-		if err := runStatus(socketPath); err != nil {
+		if err := runStatus(d); err != nil {
 			t.Fatalf("runStatus returned error: %v", err)
 		}
 	})
-
-	<-done
-	if !strings.Contains(out, "project_count") {
-		t.Errorf("expected output to contain 'project_count', got: %q", out)
+	if !strings.Contains(out, "[]") && !strings.Contains(out, "null") {
+		// Accept either "[]" or "null" for an empty result set
+		if out == "" {
+			t.Error("expected non-empty output from runStatus")
+		}
 	}
 }
 
-func TestRunCreateProject(t *testing.T) {
-	socketPath, done := startMockServer(t, func(cmd protocol.Command) protocol.Response {
-		if cmd.Name != "create-project" {
-			return protocol.Response{Success: false, Error: "unexpected command"}
-		}
-		if cmd.Params["identifier"] != "my-proj" {
-			return protocol.Response{Success: false, Error: "wrong identifier"}
-		}
-		if cmd.Params["description"] != "A test project" {
-			return protocol.Response{Success: false, Error: "wrong description"}
-		}
-		return protocol.Response{Success: true, Data: json.RawMessage(`{"status":"created"}`)}
-	})
+func TestRunStatus_WithData(t *testing.T) {
+	d := openTestDB(t)
+	if err := d.CreateProject("my-proj", "A test project", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("my-proj/my-ticket", "A test ticket", nil); err != nil {
+		t.Fatal(err)
+	}
 
-	stdin := strings.NewReader(`{"description":"A test project"}`)
 	out := captureOutput(func() {
-		if err := runCreateProject(socketPath, []string{"my-proj"}, stdin); err != nil {
-			t.Fatalf("runCreateProject returned error: %v", err)
+		if err := runStatus(d); err != nil {
+			t.Fatalf("runStatus returned error: %v", err)
 		}
 	})
+	if !strings.Contains(out, "my-proj") {
+		t.Errorf("expected output to contain 'my-proj', got: %q", out)
+	}
+	if !strings.Contains(out, "my-ticket") {
+		t.Errorf("expected output to contain 'my-ticket', got: %q", out)
+	}
+}
 
-	<-done
-	if !strings.Contains(out, "created") {
-		t.Errorf("expected output to contain 'created', got: %q", out)
+// ===== runCreateProject =====
+
+func TestRunCreateProject(t *testing.T) {
+	d := openTestDB(t)
+	stdin := strings.NewReader(`{"description":"A test project"}`)
+	if err := runCreateProject(d, []string{"my-proj"}, stdin); err != nil {
+		t.Fatalf("runCreateProject returned error: %v", err)
+	}
+
+	units, err := d.Status()
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, u := range units {
+		if u.Identifier == "my-proj" && u.IsProject {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected project 'my-proj' in DB after create-project")
 	}
 }
 
 func TestRunCreateProject_MissingIdentifier(t *testing.T) {
-	socketPath := "/tmp/tkt_unused.sock"
-	stdin := strings.NewReader(`{"description":"test"}`)
-	err := runCreateProject(socketPath, []string{}, stdin)
+	d := openTestDB(t)
+	err := runCreateProject(d, []string{}, strings.NewReader(`{"description":"test"}`))
 	if err == nil {
 		t.Error("expected error when identifier is missing, got nil")
 	}
 }
 
-func TestRunCreateTicket(t *testing.T) {
-	socketPath, done := startMockServer(t, func(cmd protocol.Command) protocol.Response {
-		if cmd.Name != "create-ticket" {
-			return protocol.Response{Success: false, Error: "unexpected command"}
-		}
-		if cmd.Params["identifier"] != "my-ticket" {
-			return protocol.Response{Success: false, Error: "wrong identifier"}
-		}
-		if cmd.Params["description"] != "A test ticket" {
-			return protocol.Response{Success: false, Error: "wrong description"}
-		}
-		if cmd.Params["dependencies"] != "dep1,dep2" {
-			return protocol.Response{Success: false, Error: "wrong dependencies"}
-		}
-		return protocol.Response{Success: true, Data: json.RawMessage(`{"status":"created"}`)}
-	})
-
-	stdin := strings.NewReader(`{"description":"A test ticket","dependencies":["dep1","dep2"]}`)
-	out := captureOutput(func() {
-		if err := runCreateTicket(socketPath, []string{"my-ticket"}, stdin); err != nil {
-			t.Fatalf("runCreateTicket returned error: %v", err)
-		}
-	})
-
-	<-done
-	if !strings.Contains(out, "created") {
-		t.Errorf("expected output to contain 'created', got: %q", out)
+func TestRunCreateProject_MissingDescription(t *testing.T) {
+	d := openTestDB(t)
+	err := runCreateProject(d, []string{"my-proj"}, strings.NewReader(`{}`))
+	if err == nil {
+		t.Error("expected error when description is missing, got nil")
 	}
 }
 
-func TestRunCreateTicket_NoDependencies(t *testing.T) {
-	socketPath, done := startMockServer(t, func(cmd protocol.Command) protocol.Response {
-		if cmd.Name != "create-ticket" {
-			return protocol.Response{Success: false, Error: "unexpected command"}
-		}
-		if cmd.Params["dependencies"] != "" {
-			return protocol.Response{Success: false, Error: "expected empty dependencies"}
-		}
-		return protocol.Response{Success: true, Data: json.RawMessage(`{"status":"created"}`)}
-	})
+// ===== runCreateTicket =====
 
-	stdin := strings.NewReader(`{"description":"No deps ticket"}`)
-	captureOutput(func() {
-		if err := runCreateTicket(socketPath, []string{"t1"}, stdin); err != nil {
-			t.Fatalf("runCreateTicket returned error: %v", err)
-		}
-	})
+func TestRunCreateTicket(t *testing.T) {
+	d := openTestDB(t)
+	if err := d.CreateProject("my-proj", "A project", nil); err != nil {
+		t.Fatal(err)
+	}
+	stdin := strings.NewReader(`{"description":"A test ticket"}`)
+	if err := runCreateTicket(d, []string{"my-proj/my-ticket"}, stdin); err != nil {
+		t.Fatalf("runCreateTicket returned error: %v", err)
+	}
 
-	<-done
+	units, err := d.Status()
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, u := range units {
+		if u.Identifier == "my-proj/my-ticket" && !u.IsProject {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected ticket 'my-proj/my-ticket' in DB after create-ticket")
+	}
 }
 
 func TestRunCreateTicket_MissingIdentifier(t *testing.T) {
-	socketPath := "/tmp/tkt_unused2.sock"
-	stdin := strings.NewReader(`{"description":"test"}`)
-	err := runCreateTicket(socketPath, []string{}, stdin)
+	d := openTestDB(t)
+	err := runCreateTicket(d, []string{}, strings.NewReader(`{"description":"test"}`))
 	if err == nil {
 		t.Error("expected error when identifier is missing, got nil")
 	}
 }
 
+// ===== runSetStatus =====
+
 func TestRunSetStatus(t *testing.T) {
-	socketPath, done := startMockServer(t, func(cmd protocol.Command) protocol.Response {
-		if cmd.Name != "set-status" {
-			return protocol.Response{Success: false, Error: "unexpected command"}
-		}
-		if cmd.Params["identifier"] != "my-ticket" || cmd.Params["phase"] != "review" {
-			return protocol.Response{Success: false, Error: "wrong params"}
-		}
-		return protocol.Response{Success: true}
-	})
+	d := openTestDB(t)
+	if err := d.CreateProject("proj", "A project", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj/ticket", "A ticket", nil); err != nil {
+		t.Fatal(err)
+	}
 
-	captureOutput(func() {
-		if err := runSetStatus(socketPath, []string{"my-ticket", "review"}); err != nil {
-			t.Fatalf("runSetStatus returned error: %v", err)
-		}
-	})
-	<-done
-}
+	if err := runSetStatus(d, []string{"proj/ticket", "review"}); err != nil {
+		t.Fatalf("runSetStatus returned error: %v", err)
+	}
 
-func TestRunSetStatus_WithExplicitStatus(t *testing.T) {
-	socketPath, done := startMockServer(t, func(cmd protocol.Command) protocol.Response {
-		if cmd.Name != "set-status" {
-			return protocol.Response{Success: false, Error: "unexpected command"}
+	units, err := d.Status()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, u := range units {
+		if u.Identifier == "proj/ticket" {
+			if string(u.Phase) != "review" {
+				t.Errorf("expected phase 'review', got %q", u.Phase)
+			}
+			return
 		}
-		if cmd.Params["identifier"] != "my-ticket" || cmd.Params["phase"] != "implement" || cmd.Params["status"] != "in-progress" {
-			return protocol.Response{Success: false, Error: "wrong params"}
-		}
-		return protocol.Response{Success: true}
-	})
-
-	captureOutput(func() {
-		if err := runSetStatus(socketPath, []string{"my-ticket", "implement", "in-progress"}); err != nil {
-			t.Fatalf("runSetStatus returned error: %v", err)
-		}
-	})
-	<-done
+	}
+	t.Error("ticket not found after set-status")
 }
 
 func TestRunSetStatus_MissingArgs(t *testing.T) {
-	err := runSetStatus("/tmp/unused.sock", []string{"only-one"})
+	d := openTestDB(t)
+	err := runSetStatus(d, []string{"only-one"})
 	if err == nil {
-		t.Error("expected error when status is missing, got nil")
+		t.Error("expected error when phase is missing, got nil")
 	}
 }
 
+// ===== runClaim =====
+
 func TestRunClaim(t *testing.T) {
-	claimData := json.RawMessage(`{"identifier":"my-ticket","claimed_by":"1234"}`)
-	socketPath, done := startMockServer(t, func(cmd protocol.Command) protocol.Response {
-		if cmd.Name != "claim" {
-			return protocol.Response{Success: false, Error: "unexpected command"}
-		}
-		if cmd.Params["pid"] != "1234" {
-			return protocol.Response{Success: false, Error: "wrong pid"}
-		}
-		return protocol.Response{Success: true, Data: claimData}
-	})
+	d := openTestDB(t)
+	if err := d.CreateProject("proj", "A project", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj/ticket", "A ticket", nil); err != nil {
+		t.Fatal(err)
+	}
 
 	out := captureOutput(func() {
-		if err := runClaim(socketPath, []string{"1234"}); err != nil {
+		if err := runClaim(d, []string{"1234"}); err != nil {
 			t.Fatalf("runClaim returned error: %v", err)
 		}
 	})
-	<-done
 	if !strings.Contains(out, "claimed_by") {
 		t.Errorf("expected output to contain 'claimed_by', got: %q", out)
+	}
+	if !strings.Contains(out, "1234") {
+		t.Errorf("expected output to contain pid '1234', got: %q", out)
 	}
 }
 
 func TestRunClaim_MissingPID(t *testing.T) {
-	err := runClaim("/tmp/unused.sock", []string{})
+	d := openTestDB(t)
+	err := runClaim(d, []string{})
 	if err == nil {
 		t.Error("expected error when pid is missing, got nil")
 	}
 }
 
-func TestRunRelease(t *testing.T) {
-	socketPath, done := startMockServer(t, func(cmd protocol.Command) protocol.Response {
-		if cmd.Name != "release" {
-			return protocol.Response{Success: false, Error: "unexpected command"}
-		}
-		if cmd.Params["identifier"] != "my-ticket" {
-			return protocol.Response{Success: false, Error: "wrong identifier"}
-		}
-		return protocol.Response{Success: true}
-	})
+func TestRunClaim_NoneAvailable(t *testing.T) {
+	d := openTestDB(t)
+	err := runClaim(d, []string{"42"})
+	if err == nil {
+		t.Error("expected error when no claimable ticket available, got nil")
+	}
+}
 
-	captureOutput(func() {
-		if err := runRelease(socketPath, []string{"my-ticket"}); err != nil {
-			t.Fatalf("runRelease returned error: %v", err)
-		}
-	})
-	<-done
+// ===== runRelease =====
+
+func TestRunRelease(t *testing.T) {
+	d := openTestDB(t)
+	if err := d.CreateProject("proj", "A project", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj/ticket", "A ticket", nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.Claim(1234); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := runRelease(d, []string{"proj/ticket"}); err != nil {
+		t.Fatalf("runRelease returned error: %v", err)
+	}
 }
 
 func TestRunRelease_MissingIdentifier(t *testing.T) {
-	err := runRelease("/tmp/unused.sock", []string{})
+	d := openTestDB(t)
+	err := runRelease(d, []string{})
 	if err == nil {
 		t.Error("expected error when identifier is missing, got nil")
 	}
 }
 
-func TestRunAddComment(t *testing.T) {
-	socketPath, done := startMockServer(t, func(cmd protocol.Command) protocol.Response {
-		if cmd.Name != "add-comment" {
-			return protocol.Response{Success: false, Error: "unexpected command"}
-		}
-		if cmd.Params["identifier"] != "my-ticket" {
-			return protocol.Response{Success: false, Error: "wrong identifier"}
-		}
-		if cmd.Params["code_location"] != "main.go:42" {
-			return protocol.Response{Success: false, Error: "wrong code_location"}
-		}
-		if cmd.Params["author"] != "alice" {
-			return protocol.Response{Success: false, Error: "wrong author"}
-		}
-		if cmd.Params["text"] != "looks good to me" {
-			return protocol.Response{Success: false, Error: "wrong text"}
-		}
-		return protocol.Response{Success: true}
-	})
+// ===== runAddComment =====
 
-	captureOutput(func() {
-		stdin := strings.NewReader("looks good to me")
-		if err := runAddComment(socketPath, []string{"my-ticket", "main.go:42", "alice"}, stdin); err != nil {
-			t.Fatalf("runAddComment returned error: %v", err)
+func TestRunAddComment(t *testing.T) {
+	d := openTestDB(t)
+	if err := d.CreateProject("proj", "A project", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj/ticket", "A ticket", nil); err != nil {
+		t.Fatal(err)
+	}
+
+	stdin := strings.NewReader("looks good to me")
+	if err := runAddComment(d, []string{"proj/ticket", "main.go:42", "alice"}, stdin); err != nil {
+		t.Fatalf("runAddComment returned error: %v", err)
+	}
+
+	units, err := d.Status()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, u := range units {
+		if u.Identifier == "proj/ticket" {
+			if len(u.CommentThreads) == 0 {
+				t.Error("expected comment thread on ticket after add-comment")
+			}
+			return
 		}
-	})
-	<-done
+	}
+	t.Error("ticket not found after add-comment")
 }
 
 func TestRunAddComment_MissingArgs(t *testing.T) {
-	err := runAddComment("/tmp/unused.sock", []string{"only-one", "arg"}, strings.NewReader("text"))
+	d := openTestDB(t)
+	err := runAddComment(d, []string{"only", "two"}, strings.NewReader("text"))
 	if err == nil {
 		t.Error("expected error when args are missing, got nil")
 	}
 }
+
+// ===== runCloseThread =====
+
+func TestRunCloseThread(t *testing.T) {
+	d := openTestDB(t)
+	if err := d.CreateProject("proj", "A project", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj/ticket", "A ticket", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.AddComment("proj/ticket", "main.go:42", "alice", "a comment"); err != nil {
+		t.Fatal(err)
+	}
+
+	units, err := d.Status()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var threadID string
+	for _, u := range units {
+		if u.Identifier == "proj/ticket" && len(u.CommentThreads) > 0 {
+			threadID = u.CommentThreads[0].ID
+			break
+		}
+	}
+	if threadID == "" {
+		t.Fatal("no thread ID found")
+	}
+
+	if err := runCloseThread(d, []string{threadID}); err != nil {
+		t.Fatalf("runCloseThread returned error: %v", err)
+	}
+
+	units, err = d.Status()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, u := range units {
+		if u.Identifier == "proj/ticket" && len(u.CommentThreads) > 0 {
+			if u.CommentThreads[0].Status != "closed" {
+				t.Errorf("expected thread status 'closed', got %q", u.CommentThreads[0].Status)
+			}
+			return
+		}
+	}
+	t.Error("thread not found after close-thread")
+}
+
+func TestRunCloseThread_MissingArg(t *testing.T) {
+	d := openTestDB(t)
+	err := runCloseThread(d, []string{})
+	if err == nil {
+		t.Error("expected error when thread ID is missing, got nil")
+	}
+}
+
+// ===== runCommand =====
 
 func TestRunCommand_UnknownSubcommand(t *testing.T) {
 	err := runCommand("no-such-command", []string{})

@@ -23,18 +23,14 @@ func main() {
 func printUsage() {
 	fmt.Fprintln(os.Stderr, `Usage: tickets <subcommand> [args]
 
-Subcommands (no daemon required):
-  init                  Initialize .tickets/ directory in the current repo
-  running               Check if the daemon is running
-  exit                  Stop the daemon if running
-
-Subcommands (auto-start daemon if needed):
-  status                          Show daemon status
-  create-project <id>             Create a project (reads JSON description from stdin)
-  create-ticket <id>              Create a ticket (reads JSON description from stdin)
-  set-status <id> <status>        Set a ticket's status (use "done" to merge and cascade)
-  claim <pid>                     Claim the next available ticket for the given process ID
-  release <id>                    Release the claim on a ticket
-  add-comment <id> <loc> <author>  Add a comment to a work unit (text read from stdin)
-  close-thread <thread-id>        Close a comment thread`)
+Subcommands:
+  init                              Initialize .tickets/ directory in the current repo
+  status                            Show all tickets and projects
+  create-project <id>               Create a project (reads JSON description from stdin)
+  create-ticket <id>                Create a ticket (reads JSON description from stdin)
+  set-status <id> <phase> [status]  Set a ticket's phase and status
+  claim <pid>                       Claim the next available ticket for the given process ID
+  release <id>                      Release the claim on a ticket
+  add-comment <id> <loc> <author>   Add a comment to a ticket (text read from stdin)
+  close-thread <thread-id>          Close a comment thread`)
 }

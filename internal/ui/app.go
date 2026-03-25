@@ -3,17 +3,14 @@
 package ui
 
 import (
-	"encoding/json"
 	"fmt"
-	"path/filepath"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/fimmtiu/tickets/internal/client"
+	"github.com/fimmtiu/tickets/internal/db"
 	"github.com/fimmtiu/tickets/internal/models"
-	"github.com/fimmtiu/tickets/internal/protocol"
 )
 
 // FocusedPane identifies which pane currently has keyboard focus.
@@ -47,20 +44,17 @@ type Model struct {
 	height     int
 	focused    FocusedPane
 	units      []*models.WorkUnit
-	client     *client.Client
+	db         *db.DB
 	navigator  NavigatorPane
 	detail     DetailPane
 	statusPane StatusPane
 	err        error
 }
 
-// NewModel creates a new Model configured to connect to the daemon at socketPath.
-// socketPath is expected to be <repoRoot>/.tickets/.daemon.sock; the repo name
-// is derived from the directory two levels up.
-func NewModel(socketPath string) Model {
-	repoName := filepath.Base(filepath.Dir(filepath.Dir(socketPath)))
+// NewModel creates a new Model configured to use the given database.
+func NewModel(d *db.DB, repoName string) Model {
 	return Model{
-		client:     client.NewClient(socketPath),
+		db:         d,
 		focused:    NavigatorFocused,
 		statusPane: StatusPane{repoName: repoName},
 	}
@@ -69,7 +63,7 @@ func NewModel(socketPath string) Model {
 // Init starts the auto-refresh ticker and fetches the initial status.
 func (m Model) Init() tea.Cmd {
 	return tea.Batch(
-		fetchStatus(m.client),
+		fetchStatus(m.db),
 		startTicker(),
 	)
 }
@@ -85,7 +79,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case statusMsg:
 		m.units = msg.units
 		m.navigator.SetUnits(m.units)
-		// Update detail pane if there is a selected unit
 		if sel := m.navigator.Selected(); sel != nil {
 			m.detail.SetUnit(sel)
 		}
@@ -97,7 +90,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tickMsg:
-		return m, tea.Batch(fetchStatus(m.client), startTicker())
+		return m, tea.Batch(fetchStatus(m.db), startTicker())
 
 	case tea.KeyMsg:
 		return m.handleKey(msg)
@@ -108,12 +101,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // handleKey routes keyboard input based on which pane is focused.
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	// Global keys handled regardless of focus
 	switch msg.Type {
 	case tea.KeyCtrlC:
 		return m, tea.Quit
 	case tea.KeyCtrlR:
-		return m, fetchStatus(m.client)
+		return m, fetchStatus(m.db)
 	}
 
 	if msg.Type == tea.KeyRunes {
@@ -123,7 +115,6 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	// Pane-specific keys
 	switch m.focused {
 	case NavigatorFocused:
 		return m.handleNavigatorKey(msg)
@@ -136,7 +127,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // handleNavigatorKey handles key presses when the navigator pane is focused.
 func (m Model) handleNavigatorKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	navContentHeight := m.height/2 - 2 // pane height minus top+bottom borders
+	navContentHeight := m.height/2 - 2
 	switch msg.Type {
 	case tea.KeyUp:
 		m.navigator.MoveUp()
@@ -168,7 +159,6 @@ func (m Model) handleNavigatorKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // handleDetailKey handles key presses when the detail pane is focused.
 func (m Model) handleDetailKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	// Visible content rows in the detail pane (total height minus top+bottom borders).
 	detailContentHeight := (m.height - m.height/2) - 2
 	switch msg.Type {
 	case tea.KeyUp:
@@ -191,11 +181,9 @@ func (m Model) View() string {
 		return "Initializing..."
 	}
 
-	// Divide height: top half for status+navigator, bottom half for detail
 	topHeight := m.height / 2
 	bottomHeight := m.height - topHeight
 
-	// Divide width: left third for status, right two-thirds for navigator
 	topLeftWidth := m.width / 3
 	topRightWidth := m.width - topLeftWidth
 
@@ -216,23 +204,16 @@ func (m Model) View() string {
 	return lipgloss.JoinVertical(lipgloss.Left, topSection, bottom)
 }
 
-// fetchStatus returns a tea.Cmd that sends a "status" command to the daemon
-// and returns either a statusMsg or an errMsg.
-func fetchStatus(c *client.Client) tea.Cmd {
+// fetchStatus returns a tea.Cmd that fetches status from the database.
+func fetchStatus(d *db.DB) tea.Cmd {
 	return func() tea.Msg {
-		resp, err := c.SendCommand(protocol.Command{Name: "status"})
+		if d == nil {
+			return errMsg{err: fmt.Errorf("database not available")}
+		}
+		units, err := d.Status()
 		if err != nil {
 			return errMsg{err: err}
 		}
-		if !resp.Success {
-			return errMsg{err: fmt.Errorf("status command failed: %s", resp.Error)}
-		}
-
-		var units []*models.WorkUnit
-		if err := json.Unmarshal(resp.Data, &units); err != nil {
-			return errMsg{err: fmt.Errorf("parse status response: %w", err)}
-		}
-
 		return statusMsg{units: units}
 	}
 }

@@ -5,38 +5,19 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
-	"strings"
+	"strconv"
 
-	"github.com/fimmtiu/tickets/internal/client"
-	"github.com/fimmtiu/tickets/internal/protocol"
+	"github.com/fimmtiu/tickets/internal/db"
 	"github.com/fimmtiu/tickets/internal/storage"
 )
 
-// socketPathForRepo locates the daemon socket path and repo root from the
-// current working directory.
-func socketPathForRepo() (string, string, error) {
+// openDB finds the repo root and opens the SQLite database.
+func openDB() (*db.DB, error) {
 	repoRoot, err := storage.FindRepoRoot(".")
 	if err != nil {
-		return "", "", err
+		return nil, err
 	}
-	ticketsDir := storage.TicketsDirPath(repoRoot)
-	sockPath := filepath.Join(ticketsDir, ".daemon.sock")
-	return sockPath, repoRoot, nil
-}
-
-// ensureDaemon finds the daemon socket for the current repo and auto-starts
-// the daemon if it is not already running. It returns the socket path on
-// success.
-func ensureDaemon() (string, error) {
-	sockPath, repoRoot, err := socketPathForRepo()
-	if err != nil {
-		return "", err
-	}
-	if err := client.EnsureRunning(sockPath, repoRoot); err != nil {
-		return "", err
-	}
-	return sockPath, nil
+	return db.Open(storage.TicketsDirPath(repoRoot), repoRoot)
 }
 
 // runCommand dispatches to the appropriate subcommand handler.
@@ -44,69 +25,38 @@ func runCommand(subcommand string, args []string) error {
 	switch subcommand {
 	case "init":
 		return runInit()
-	case "running":
-		sockPath, _, err := socketPathForRepo()
+	case "status", "create-project", "create-ticket", "set-status",
+		"claim", "release", "add-comment", "close-thread":
+		d, err := openDB()
 		if err != nil {
-			// If we can't find the repo, there is definitely no daemon running.
-			fmt.Println("No daemon running")
-			return nil
+			return err
 		}
-		return runRunning(sockPath)
-	case "exit":
-		sockPath, _, err := socketPathForRepo()
-		if err != nil {
-			fmt.Println("No daemon running")
-			return nil
-		}
-		return runExit(sockPath)
+		defer d.Close()
+		return runCommandWithDB(subcommand, args, d)
+	default:
+		return fmt.Errorf("unknown subcommand %q; run 'tickets' for usage", subcommand)
+	}
+}
+
+// runCommandWithDB handles subcommands that require an open database.
+func runCommandWithDB(subcommand string, args []string, d *db.DB) error {
+	switch subcommand {
 	case "status":
-		sockPath, err := ensureDaemon()
-		if err != nil {
-			return err
-		}
-		return runStatus(sockPath)
+		return runStatus(d)
 	case "create-project":
-		sockPath, err := ensureDaemon()
-		if err != nil {
-			return err
-		}
-		return runCreateProject(sockPath, args, os.Stdin)
+		return runCreateProject(d, args, os.Stdin)
 	case "create-ticket":
-		sockPath, err := ensureDaemon()
-		if err != nil {
-			return err
-		}
-		return runCreateTicket(sockPath, args, os.Stdin)
+		return runCreateTicket(d, args, os.Stdin)
 	case "set-status":
-		sockPath, err := ensureDaemon()
-		if err != nil {
-			return err
-		}
-		return runSetStatus(sockPath, args)
+		return runSetStatus(d, args)
 	case "claim":
-		sockPath, err := ensureDaemon()
-		if err != nil {
-			return err
-		}
-		return runClaim(sockPath, args)
+		return runClaim(d, args)
 	case "release":
-		sockPath, err := ensureDaemon()
-		if err != nil {
-			return err
-		}
-		return runRelease(sockPath, args)
+		return runRelease(d, args)
 	case "add-comment":
-		sockPath, err := ensureDaemon()
-		if err != nil {
-			return err
-		}
-		return runAddComment(sockPath, args, os.Stdin)
+		return runAddComment(d, args, os.Stdin)
 	case "close-thread":
-		sockPath, err := ensureDaemon()
-		if err != nil {
-			return err
-		}
-		return runCloseThread(sockPath, args)
+		return runCloseThread(d, args)
 	default:
 		return fmt.Errorf("unknown subcommand %q; run 'tickets' for usage", subcommand)
 	}
@@ -125,74 +75,18 @@ func runInit() error {
 	return nil
 }
 
-// runRunning checks whether the daemon is reachable and prints its PID or a
-// "No daemon running" message.
-func runRunning(socketPath string) error {
-	c := client.NewClient(socketPath)
-	pid, err := c.Ping()
-	if err != nil {
-		fmt.Println("No daemon running")
-		return nil
-	}
-	fmt.Printf("Daemon is running (pid %d)\n", pid)
-	return nil
-}
-
-// runExit sends an "exit" command to the daemon if it is running, otherwise
-// prints "No daemon running".
-func runExit(socketPath string) error {
-	if !client.IsRunning(socketPath) {
-		fmt.Println("No daemon running")
-		return nil
-	}
-	c := client.NewClient(socketPath)
-	resp, err := c.SendCommand(protocol.Command{Name: "exit"})
-	if err != nil {
-		return fmt.Errorf("exit: %w", err)
-	}
-	if !resp.Success {
-		return fmt.Errorf("exit: daemon returned error: %s", resp.Error)
-	}
-	fmt.Println("Daemon exiting")
-	return nil
-}
-
-// printResponseData handles a daemon response: on failure it prints the
-// response as JSON to stdout and returns nil; on success it pretty-prints the
-// Data payload (if any) and returns nil. Client-side errors (connection
-// failures, bad arguments) are returned as errors and never reach this function.
-func printResponseData(resp protocol.Response) error {
-	if !resp.Success {
-		out, _ := json.Marshal(resp)
-		fmt.Println(string(out))
-		return nil
-	}
-	if resp.Data == nil {
-		return nil
-	}
-	var pretty interface{}
-	if err := json.Unmarshal(resp.Data, &pretty); err != nil {
-		// Not valid JSON — just print raw
-		fmt.Println(string(resp.Data))
-		return nil
-	}
-	out, err := json.MarshalIndent(pretty, "", "  ")
-	if err != nil {
-		fmt.Println(string(resp.Data))
-		return nil
-	}
-	fmt.Println(string(out))
-	return nil
-}
-
-// runStatus sends "status" and pretty-prints the response.
-func runStatus(socketPath string) error {
-	c := client.NewClient(socketPath)
-	resp, err := c.SendCommand(protocol.Command{Name: "status"})
+// runStatus prints all work units as pretty-printed JSON.
+func runStatus(d *db.DB) error {
+	units, err := d.Status()
 	if err != nil {
 		return err
 	}
-	return printResponseData(resp)
+	out, err := json.MarshalIndent(units, "", "  ")
+	if err != nil {
+		return err
+	}
+	fmt.Println(string(out))
+	return nil
 }
 
 // stdinInput holds the parsed fields from the stdin JSON for create-project/create-ticket.
@@ -201,8 +95,7 @@ type stdinInput struct {
 	Dependencies []string `json:"dependencies"`
 }
 
-// parseStdinInput reads and parses a stdinInput from r, returning an error if
-// the JSON is malformed or the description field is absent.
+// parseStdinInput reads and parses a stdinInput from r.
 func parseStdinInput(cmdName string, r io.Reader) (stdinInput, error) {
 	data, err := io.ReadAll(r)
 	if err != nil {
@@ -218,123 +111,74 @@ func parseStdinInput(cmdName string, r io.Reader) (stdinInput, error) {
 	return input, nil
 }
 
-// runCreateProject sends "create-project" with identifier and description from stdin.
-func runCreateProject(socketPath string, args []string, stdin io.Reader) error {
+// runCreateProject creates a new project with identifier and description from stdin.
+func runCreateProject(d *db.DB, args []string, stdin io.Reader) error {
 	if len(args) < 1 {
 		return fmt.Errorf("usage: tickets create-project <identifier>")
 	}
-	identifier := args[0]
-
 	input, err := parseStdinInput("create-project", stdin)
 	if err != nil {
 		return err
 	}
-
-	c := client.NewClient(socketPath)
-	resp, err := c.SendCommand(protocol.Command{
-		Name: "create-project",
-		Params: map[string]string{
-			"identifier":  identifier,
-			"description": input.Description,
-		},
-	})
-	if err != nil {
-		return err
-	}
-	return printResponseData(resp)
+	return d.CreateProject(args[0], input.Description, input.Dependencies)
 }
 
-// runCreateTicket sends "create-ticket" with identifier, description, and
+// runCreateTicket creates a new ticket with identifier, description, and
 // optional dependencies from stdin.
-func runCreateTicket(socketPath string, args []string, stdin io.Reader) error {
+func runCreateTicket(d *db.DB, args []string, stdin io.Reader) error {
 	if len(args) < 1 {
 		return fmt.Errorf("usage: tickets create-ticket <identifier>")
 	}
-	identifier := args[0]
-
 	input, err := parseStdinInput("create-ticket", stdin)
 	if err != nil {
 		return err
 	}
-
-	params := map[string]string{
-		"identifier":  identifier,
-		"description": input.Description,
-	}
-	if len(input.Dependencies) > 0 {
-		params["dependencies"] = strings.Join(input.Dependencies, ",")
-	}
-
-	c := client.NewClient(socketPath)
-	resp, err := c.SendCommand(protocol.Command{
-		Name:   "create-ticket",
-		Params: params,
-	})
-	if err != nil {
-		return err
-	}
-	return printResponseData(resp)
+	return d.CreateTicket(args[0], input.Description, input.Dependencies)
 }
 
-// runSetStatus sends "set-status" with the given identifier, phase, and
-// optional status (defaults to "idle" when omitted).
-func runSetStatus(socketPath string, args []string) error {
+// runSetStatus updates a ticket's phase and optional status.
+func runSetStatus(d *db.DB, args []string) error {
 	if len(args) < 2 {
 		return fmt.Errorf("usage: tickets set-status <identifier> <phase> [<status>]")
 	}
-	params := map[string]string{
-		"identifier": args[0],
-		"phase":      args[1],
-	}
+	status := "idle"
 	if len(args) >= 3 {
-		params["status"] = args[2]
+		status = args[2]
 	}
-	c := client.NewClient(socketPath)
-	resp, err := c.SendCommand(protocol.Command{
-		Name:   "set-status",
-		Params: params,
-	})
-	if err != nil {
-		return err
-	}
-	return printResponseData(resp)
+	return d.SetStatus(args[0], args[1], status)
 }
 
-// runClaim sends "claim" with the given PID and pretty-prints the response.
-func runClaim(socketPath string, args []string) error {
+// runClaim claims the next available ticket for the given PID and prints it.
+func runClaim(d *db.DB, args []string) error {
 	if len(args) < 1 {
 		return fmt.Errorf("usage: tickets claim <pid>")
 	}
-	c := client.NewClient(socketPath)
-	resp, err := c.SendCommand(protocol.Command{
-		Name:   "claim",
-		Params: map[string]string{"pid": args[0]},
-	})
+	pid, err := strconv.Atoi(args[0])
+	if err != nil {
+		return fmt.Errorf("claim: invalid pid %q: %w", args[0], err)
+	}
+	wu, err := d.Claim(pid)
 	if err != nil {
 		return err
 	}
-	return printResponseData(resp)
+	out, err := json.MarshalIndent(wu, "", "  ")
+	if err != nil {
+		return err
+	}
+	fmt.Println(string(out))
+	return nil
 }
 
-// runRelease sends "release" with the given identifier.
-func runRelease(socketPath string, args []string) error {
+// runRelease releases the claim on a ticket.
+func runRelease(d *db.DB, args []string) error {
 	if len(args) < 1 {
 		return fmt.Errorf("usage: tickets release <identifier>")
 	}
-	c := client.NewClient(socketPath)
-	resp, err := c.SendCommand(protocol.Command{
-		Name:   "release",
-		Params: map[string]string{"identifier": args[0]},
-	})
-	if err != nil {
-		return err
-	}
-	return printResponseData(resp)
+	return d.Release(args[0])
 }
 
-// runAddComment sends "add-comment" with identifier, code location, author,
-// and text read from stdin.
-func runAddComment(socketPath string, args []string, stdin io.Reader) error {
+// runAddComment adds a comment to a ticket.
+func runAddComment(d *db.DB, args []string, stdin io.Reader) error {
 	if len(args) < 3 {
 		return fmt.Errorf("usage: tickets add-comment <identifier> <code-location> <author>")
 	}
@@ -342,34 +186,13 @@ func runAddComment(socketPath string, args []string, stdin io.Reader) error {
 	if err != nil {
 		return fmt.Errorf("add-comment: read stdin: %w", err)
 	}
-	c := client.NewClient(socketPath)
-	resp, err := c.SendCommand(protocol.Command{
-		Name: "add-comment",
-		Params: map[string]string{
-			"identifier":    args[0],
-			"code_location": args[1],
-			"author":        args[2],
-			"text":          string(text),
-		},
-	})
-	if err != nil {
-		return err
-	}
-	return printResponseData(resp)
+	return d.AddComment(args[0], args[1], args[2], string(text))
 }
 
-// runCloseThread sends "close-thread" with the given thread ID.
-func runCloseThread(socketPath string, args []string) error {
+// runCloseThread closes the comment thread with the given thread ID.
+func runCloseThread(d *db.DB, args []string) error {
 	if len(args) < 1 {
 		return fmt.Errorf("usage: tickets close-thread <thread-id>")
 	}
-	c := client.NewClient(socketPath)
-	resp, err := c.SendCommand(protocol.Command{
-		Name:   "close-thread",
-		Params: map[string]string{"thread_id": args[0]},
-	})
-	if err != nil {
-		return err
-	}
-	return printResponseData(resp)
+	return d.CloseThread(args[0])
 }

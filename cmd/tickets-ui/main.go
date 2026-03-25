@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/fimmtiu/tickets/internal/client"
+	"github.com/fimmtiu/tickets/internal/db"
 	"github.com/fimmtiu/tickets/internal/storage"
 	"github.com/fimmtiu/tickets/internal/ui"
 )
@@ -19,14 +19,15 @@ func main() {
 	}
 
 	ticketsDir := storage.TicketsDirPath(repoRoot)
-	socketPath := filepath.Join(ticketsDir, ".daemon.sock")
-
-	if err := client.EnsureRunning(socketPath, repoRoot); err != nil {
-		fmt.Fprintln(os.Stderr, "error: could not start daemon:", err)
+	d, err := db.Open(ticketsDir, repoRoot)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "error: could not open database:", err)
 		os.Exit(1)
 	}
+	defer d.Close()
 
-	model := ui.NewModel(socketPath)
+	repoName := filepath.Base(repoRoot)
+	model := ui.NewModel(d, repoName)
 	p := tea.NewProgram(model, tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintln(os.Stderr, "error running UI:", err)

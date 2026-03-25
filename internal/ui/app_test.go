@@ -7,17 +7,14 @@ import (
 )
 
 func TestNewModel(t *testing.T) {
-	m := NewModel("/tmp/test.sock")
+	m := NewModel(nil, "test-repo")
 	if m.focused != NavigatorFocused {
 		t.Errorf("expected NavigatorFocused initial focus, got %v", m.focused)
-	}
-	if m.client == nil {
-		t.Error("expected client to be initialized")
 	}
 }
 
 func TestAppQuitCtrlC(t *testing.T) {
-	m := NewModel("/tmp/test.sock")
+	m := NewModel(nil, "test-repo")
 	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
 	if cmd == nil {
 		t.Fatal("expected a quit command, got nil")
@@ -30,7 +27,7 @@ func TestAppQuitCtrlC(t *testing.T) {
 }
 
 func TestAppQuitQ(t *testing.T) {
-	m := NewModel("/tmp/test.sock")
+	m := NewModel(nil, "test-repo")
 	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
 	if cmd == nil {
 		t.Fatal("expected a quit command for 'q', got nil")
@@ -42,7 +39,7 @@ func TestAppQuitQ(t *testing.T) {
 }
 
 func TestAppWindowResize(t *testing.T) {
-	m := NewModel("/tmp/test.sock")
+	m := NewModel(nil, "test-repo")
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	um := updated.(Model)
 	if um.width != 120 {
@@ -54,7 +51,7 @@ func TestAppWindowResize(t *testing.T) {
 }
 
 func TestAppStatusMsg(t *testing.T) {
-	m := NewModel("/tmp/test.sock")
+	m := NewModel(nil, "test-repo")
 	units := sampleUnits()
 	updated, _ := m.Update(statusMsg{units: units})
 	um := updated.(Model)
@@ -64,7 +61,7 @@ func TestAppStatusMsg(t *testing.T) {
 }
 
 func TestAppErrMsg(t *testing.T) {
-	m := NewModel("/tmp/test.sock")
+	m := NewModel(nil, "test-repo")
 	testErr := errMsg{err: errTestError}
 	updated, _ := m.Update(testErr)
 	um := updated.(Model)
@@ -74,7 +71,7 @@ func TestAppErrMsg(t *testing.T) {
 }
 
 func TestAppNavigatorFocusSwitchToDetail(t *testing.T) {
-	m := NewModel("/tmp/test.sock")
+	m := NewModel(nil, "test-repo")
 	m.focused = NavigatorFocused
 
 	// Tab should switch focus to detail pane
@@ -86,7 +83,7 @@ func TestAppNavigatorFocusSwitchToDetail(t *testing.T) {
 }
 
 func TestAppDetailFocusSwitchToNavigator(t *testing.T) {
-	m := NewModel("/tmp/test.sock")
+	m := NewModel(nil, "test-repo")
 	m.focused = DetailFocused
 
 	// Tab should switch focus back to navigator
@@ -98,7 +95,7 @@ func TestAppDetailFocusSwitchToNavigator(t *testing.T) {
 }
 
 func TestAppSpaceSwitchesFocus(t *testing.T) {
-	m := NewModel("/tmp/test.sock")
+	m := NewModel(nil, "test-repo")
 	m.focused = NavigatorFocused
 
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeySpace})
@@ -109,7 +106,7 @@ func TestAppSpaceSwitchesFocus(t *testing.T) {
 }
 
 func TestAppNavigatorMovement(t *testing.T) {
-	m := NewModel("/tmp/test.sock")
+	m := NewModel(nil, "test-repo")
 	m.focused = NavigatorFocused
 	m.units = sampleUnits()
 	m.navigator.SetUnits(m.units)
@@ -124,7 +121,7 @@ func TestAppNavigatorMovement(t *testing.T) {
 }
 
 func TestAppDetailScrolling(t *testing.T) {
-	m := NewModel("/tmp/test.sock")
+	m := NewModel(nil, "test-repo")
 	m.focused = DetailFocused
 	units := sampleUnits()
 	m.units = units
@@ -141,7 +138,7 @@ func TestAppDetailScrolling(t *testing.T) {
 }
 
 func TestAppNavigatorPageDown(t *testing.T) {
-	m := NewModel("/tmp/test.sock")
+	m := NewModel(nil, "test-repo")
 	m.height = 24
 	m.focused = NavigatorFocused
 	m.units = sampleUnits()
@@ -158,7 +155,7 @@ func TestAppNavigatorPageDown(t *testing.T) {
 }
 
 func TestAppNavigatorPageUp(t *testing.T) {
-	m := NewModel("/tmp/test.sock")
+	m := NewModel(nil, "test-repo")
 	m.height = 24
 	m.focused = NavigatorFocused
 	m.units = sampleUnits()
@@ -175,7 +172,7 @@ func TestAppNavigatorPageUp(t *testing.T) {
 }
 
 func TestAppDetailPageDown(t *testing.T) {
-	m := NewModel("/tmp/test.sock")
+	m := NewModel(nil, "test-repo")
 	m.height = 24
 	m.focused = DetailFocused
 	units := sampleUnits()
@@ -192,7 +189,7 @@ func TestAppDetailPageDown(t *testing.T) {
 }
 
 func TestAppDetailPageUp(t *testing.T) {
-	m := NewModel("/tmp/test.sock")
+	m := NewModel(nil, "test-repo")
 	m.height = 24
 	m.focused = DetailFocused
 	units := sampleUnits()
@@ -210,7 +207,7 @@ func TestAppDetailPageUp(t *testing.T) {
 }
 
 func TestAppCtrlRRefresh(t *testing.T) {
-	m := NewModel("/tmp/test.sock")
+	m := NewModel(nil, "test-repo")
 	// Ctrl-R should trigger a refresh (non-nil command)
 	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlR})
 	// We can't test the exact behavior of the socket command in unit tests,
@@ -219,14 +216,14 @@ func TestAppCtrlRRefresh(t *testing.T) {
 }
 
 func TestAppTickMsgTriggersFetch(t *testing.T) {
-	m := NewModel("/tmp/test.sock")
+	m := NewModel(nil, "test-repo")
 	_, cmd := m.Update(tickMsg{})
 	// tickMsg should produce a new command (fetch + new tick)
 	_ = cmd
 }
 
 func TestAppViewDoesNotPanic(t *testing.T) {
-	m := NewModel("/tmp/test.sock")
+	m := NewModel(nil, "test-repo")
 	m.width = 80
 	m.height = 24
 	defer func() {

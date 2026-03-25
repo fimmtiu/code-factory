@@ -15,10 +15,9 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
-	"path"
-	"path/filepath"
 	"time"
 
+	"github.com/fimmtiu/tickets/internal/db"
 	"github.com/fimmtiu/tickets/internal/models"
 	"github.com/fimmtiu/tickets/internal/storage"
 )
@@ -193,13 +192,13 @@ func (p *projectNode) depIdentifier(spec ticketSpec) string {
 }
 
 type generator struct {
-	rng        *rand.Rand
-	ticketsDir string
-	used       map[string]bool // prevent identifier collisions
+	rng  *rand.Rand
+	db   *db.DB
+	used map[string]bool // prevent identifier collisions
 }
 
-func newGenerator(rng *rand.Rand, ticketsDir string) *generator {
-	return &generator{rng: rng, ticketsDir: ticketsDir, used: map[string]bool{}}
+func newGenerator(rng *rand.Rand, d *db.DB) *generator {
+	return &generator{rng: rng, db: d, used: map[string]bool{}}
 }
 
 func (g *generator) slug() string {
@@ -340,7 +339,7 @@ func (g *generator) assignTickets(p *projectNode, n int) {
 	}
 }
 
-// write persists the generated tree into the .tickets/ directory.
+// write persists the generated tree into the SQLite database.
 func (g *generator) write(roots []*projectNode) error {
 	for _, root := range roots {
 		if err := g.writeProject(root); err != nil {
@@ -351,15 +350,10 @@ func (g *generator) write(roots []*projectNode) error {
 }
 
 func (g *generator) writeProject(p *projectNode) error {
-	projDir := filepath.Join(g.ticketsDir, filepath.FromSlash(p.identifier))
-	if err := os.MkdirAll(projDir, 0755); err != nil {
-		return err
+	if err := g.db.CreateProject(p.identifier, p.description, nil); err != nil {
+		return fmt.Errorf("project %s: %w", p.identifier, err)
 	}
-	wu := models.NewProject(p.identifier, p.description)
-	if err := storage.WriteWorkUnit(filepath.Join(projDir, "project.json"), wu); err != nil {
-		return err
-	}
-	if err := g.writeTickets(p, projDir); err != nil {
+	if err := g.writeTickets(p); err != nil {
 		return err
 	}
 	for _, child := range p.children {
@@ -370,19 +364,21 @@ func (g *generator) writeProject(p *projectNode) error {
 	return nil
 }
 
-func (g *generator) writeTickets(p *projectNode, projDir string) error {
+func (g *generator) writeTickets(p *projectNode) error {
 	for i, spec := range p.tickets {
-		t := models.NewTicket(spec.identifier, spec.description)
+		var deps []string
 		if dep := p.depIdentifier(spec); dep != "" {
-			t.SetDependencies([]string{dep})
+			deps = []string{dep}
 		}
-		t.CommentThreads = g.generateCommentThreads()
-		ticketDir := filepath.Join(projDir, ticketSlug(spec.identifier))
-		if err := os.MkdirAll(ticketDir, 0755); err != nil {
+		if err := g.db.CreateTicket(spec.identifier, spec.description, deps); err != nil {
 			return fmt.Errorf("ticket %d (%s): %w", i, spec.identifier, err)
 		}
-		if err := storage.WriteWorkUnit(storage.TicketMetaPath(ticketDir), t); err != nil {
-			return fmt.Errorf("ticket %d (%s): %w", i, spec.identifier, err)
+		for _, thread := range g.generateCommentThreads() {
+			for _, comment := range thread.Comments {
+				if err := g.db.AddComment(spec.identifier, thread.CodeLocation, comment.Author, comment.Text); err != nil {
+					return fmt.Errorf("comment for ticket %s: %w", spec.identifier, err)
+				}
+			}
 		}
 	}
 	return nil
@@ -474,10 +470,6 @@ func (g *generator) generateCommentThreads() []models.CommentThread {
 	return threads
 }
 
-// ticketSlug returns the final path component of a slash-separated identifier.
-func ticketSlug(identifier string) string {
-	return path.Base(identifier)
-}
 
 // ---------------------------------------------------------------------------
 // Summary printing
@@ -544,7 +536,13 @@ func run(seed int64, target string, reset bool) error {
 		return fmt.Errorf("initialising .tickets/: %w", err)
 	}
 
-	gen := newGenerator(rand.New(rand.NewSource(seed)), ticketsDir)
+	d, err := db.Open(ticketsDir, repoRoot)
+	if err != nil {
+		return fmt.Errorf("opening database: %w", err)
+	}
+	defer d.Close()
+
+	gen := newGenerator(rand.New(rand.NewSource(seed)), d)
 	roots := gen.buildTree()
 
 	if err := gen.write(roots); err != nil {
