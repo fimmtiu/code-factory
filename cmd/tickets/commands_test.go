@@ -407,6 +407,62 @@ func TestRunCloseChangeRequest_MissingArg(t *testing.T) {
 	}
 }
 
+// ===== runDismissChangeRequest =====
+
+func TestRunDismissChangeRequest(t *testing.T) {
+	d := openTestDB(t)
+	if err := d.CreateProject("proj", "A project", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj/ticket", "A ticket", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.AddChangeRequest("proj/ticket", "main.go:42", "alice", "please fix"); err != nil {
+		t.Fatal(err)
+	}
+
+	units, err := d.Status()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var crID string
+	for _, u := range units {
+		if u.Identifier == "proj/ticket" && len(u.ChangeRequests) > 0 {
+			crID = u.ChangeRequests[0].ID
+			break
+		}
+	}
+	if crID == "" {
+		t.Fatal("no change request ID found")
+	}
+
+	if err := runDismissChangeRequest(d, []string{crID}); err != nil {
+		t.Fatalf("runDismissChangeRequest returned error: %v", err)
+	}
+
+	units, err = d.Status()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, u := range units {
+		if u.Identifier == "proj/ticket" && len(u.ChangeRequests) > 0 {
+			if u.ChangeRequests[0].Status != "dismissed" {
+				t.Errorf("expected status 'dismissed', got %q", u.ChangeRequests[0].Status)
+			}
+			return
+		}
+	}
+	t.Error("change request not found after dismiss-change-request")
+}
+
+func TestRunDismissChangeRequest_MissingArg(t *testing.T) {
+	d := openTestDB(t)
+	err := runDismissChangeRequest(d, []string{})
+	if err == nil {
+		t.Error("expected error when ID is missing, got nil")
+	}
+}
+
 // ===== runCommand =====
 
 func TestRunCommand_UnknownSubcommand(t *testing.T) {

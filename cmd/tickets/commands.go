@@ -26,7 +26,7 @@ func runCommand(subcommand string, args []string) error {
 	case "init":
 		return runInit()
 	case "status", "create-project", "create-ticket", "set-status",
-		"claim", "release", "add-change-request", "close-change-request":
+		"claim", "release", "add-change-request", "close-change-request", "dismiss-change-request":
 		d, err := openDB()
 		if err != nil {
 			return err
@@ -57,6 +57,8 @@ func runCommandWithDB(subcommand string, args []string, d *db.DB) error {
 		return runAddChangeRequest(d, args, os.Stdin)
 	case "close-change-request":
 		return runCloseChangeRequest(d, args)
+	case "dismiss-change-request":
+		return runDismissChangeRequest(d, args)
 	}
 	return nil
 }
@@ -198,4 +200,16 @@ func runCloseChangeRequest(d *db.DB, args []string) error {
 		return fmt.Errorf("close-change-request: invalid id %q: %w", args[0], err)
 	}
 	return d.CloseChangeRequest(id)
+}
+
+// runDismissChangeRequest dismisses the change request with the given ID.
+func runDismissChangeRequest(d *db.DB, args []string) error {
+	if len(args) < 1 {
+		return fmt.Errorf("usage: tickets dismiss-change-request <id>")
+	}
+	id, err := strconv.ParseInt(args[0], 10, 64)
+	if err != nil {
+		return fmt.Errorf("dismiss-change-request: invalid id %q: %w", args[0], err)
+	}
+	return d.DismissChangeRequest(id)
 }

@@ -32,5 +32,6 @@ Subcommands:
   claim <pid>                       Claim the next available ticket for the given process ID
   release <id>                      Release the claim on a ticket
   add-change-request <id> <loc> <author>   Add a change request to a ticket (description read from stdin)
-  close-change-request <id>                Close a change request`)
+  close-change-request <id>                Close a change request
+  dismiss-change-request <id>              Dismiss a change request`)
 }

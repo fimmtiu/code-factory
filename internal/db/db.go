@@ -683,11 +683,11 @@ func (d *DB) AddChangeRequest(identifier, codeLocation, author, description stri
 	})
 }
 
-// CloseChangeRequest sets the status of the change request with the given id to "closed".
-func (d *DB) CloseChangeRequest(id int64) error {
+// setChangeRequestStatus updates the status of a single change request by id.
+func (d *DB) setChangeRequestStatus(id int64, status string) error {
 	return d.withTx(func(tx *sql.Tx) error {
 		res, err := tx.Exec(
-			`UPDATE change_requests SET status = 'closed' WHERE id = ?`, id,
+			`UPDATE change_requests SET status = ? WHERE id = ?`, status, id,
 		)
 		if err != nil {
 			return err
@@ -701,4 +701,14 @@ func (d *DB) CloseChangeRequest(id int64) error {
 		}
 		return nil
 	})
+}
+
+// CloseChangeRequest sets the status of the change request with the given id to "closed".
+func (d *DB) CloseChangeRequest(id int64) error {
+	return d.setChangeRequestStatus(id, models.ChangeRequestClosed)
+}
+
+// DismissChangeRequest sets the status of the change request with the given id to "dismissed".
+func (d *DB) DismissChangeRequest(id int64) error {
+	return d.setChangeRequestStatus(id, models.ChangeRequestDismissed)
 }
