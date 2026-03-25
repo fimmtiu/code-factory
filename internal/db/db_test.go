@@ -6,19 +6,40 @@ import (
 	"testing"
 
 	"github.com/fimmtiu/tickets/internal/db"
+	"github.com/fimmtiu/tickets/internal/gitutil"
 )
 
-// openTestDB creates a temporary directory and opens a fresh DB in it.
-// It returns both the DB handle and the ticketsDir path.
-func openTestDB(t *testing.T) (*db.DB, string) {
+// fakeGitClient implements gitutil.GitClient without invoking real git.
+// It records the worktree paths passed to CreateWorktree.
+type fakeGitClient struct {
+	worktreesCreated []string
+}
+
+func (f *fakeGitClient) CreateWorktree(_, worktreePath, _ string) error {
+	f.worktreesCreated = append(f.worktreesCreated, worktreePath)
+	return nil
+}
+func (f *fakeGitClient) MergeBranch(_, _, _ string) error        { return nil }
+func (f *fakeGitClient) RemoveWorktree(_, _, _ string) error     { return nil }
+func (f *fakeGitClient) GetRepoRoot(path string) (string, error) { return path, nil }
+func (f *fakeGitClient) GetHeadCommit(_ string) (string, error)  { return "", nil }
+
+var _ gitutil.GitClient = (*fakeGitClient)(nil) // compile-time interface check
+
+// openTestDB creates a temporary directory, opens a fresh DB in it, and
+// injects a fake git client so tests don't require a real git repository.
+// It returns the DB handle, the ticketsDir path, and the fake client.
+func openTestDB(t *testing.T) (*db.DB, string, *fakeGitClient) {
 	t.Helper()
 	dir := t.TempDir()
 	d, err := db.Open(dir, dir)
 	if err != nil {
 		t.Fatalf("db.Open: %v", err)
 	}
+	git := &fakeGitClient{}
+	d.SetGitClient(git)
 	t.Cleanup(func() { d.Close() })
-	return d, dir
+	return d, dir, git
 }
 
 // dirExists reports whether path is an existing directory.
@@ -27,10 +48,47 @@ func dirExists(path string) bool {
 	return err == nil && info.IsDir()
 }
 
-// ===== CreateProject directory creation =====
+// ===== CreateProject directory and worktree creation =====
+
+func TestCreateProject_CreatesWorktree(t *testing.T) {
+	d, ticketsDir, git := openTestDB(t)
+	if err := d.CreateProject("my-proj", "A project", nil); err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+
+	if len(git.worktreesCreated) != 1 {
+		t.Fatalf("expected 1 worktree created, got %d", len(git.worktreesCreated))
+	}
+	want := filepath.Join(ticketsDir, "my-proj", "worktree")
+	if git.worktreesCreated[0] != want {
+		t.Errorf("worktree path: got %q, want %q", git.worktreesCreated[0], want)
+	}
+}
+
+func TestCreateProject_EachSubprojectGetsOwnWorktree(t *testing.T) {
+	d, ticketsDir, git := openTestDB(t)
+	for _, id := range []string{"proj", "proj/sub"} {
+		if err := d.CreateProject(id, "A project", nil); err != nil {
+			t.Fatalf("CreateProject %q: %v", id, err)
+		}
+	}
+
+	if len(git.worktreesCreated) != 2 {
+		t.Fatalf("expected 2 worktrees created, got %d", len(git.worktreesCreated))
+	}
+	wantPaths := []string{
+		filepath.Join(ticketsDir, "proj", "worktree"),
+		filepath.Join(ticketsDir, "proj", "sub", "worktree"),
+	}
+	for i, want := range wantPaths {
+		if git.worktreesCreated[i] != want {
+			t.Errorf("worktree[%d]: got %q, want %q", i, git.worktreesCreated[i], want)
+		}
+	}
+}
 
 func TestCreateProject_CreatesDirectory(t *testing.T) {
-	d, ticketsDir := openTestDB(t)
+	d, ticketsDir, _ := openTestDB(t)
 	if err := d.CreateProject("my-proj", "A project", nil); err != nil {
 		t.Fatalf("CreateProject: %v", err)
 	}
@@ -40,7 +98,7 @@ func TestCreateProject_CreatesDirectory(t *testing.T) {
 }
 
 func TestCreateProject_CreatesNestedDirectory(t *testing.T) {
-	d, ticketsDir := openTestDB(t)
+	d, ticketsDir, _ := openTestDB(t)
 	if err := d.CreateProject("my-proj", "A project", nil); err != nil {
 		t.Fatalf("CreateProject parent: %v", err)
 	}
@@ -55,7 +113,7 @@ func TestCreateProject_CreatesNestedDirectory(t *testing.T) {
 // ===== CreateProject parent FK =====
 
 func TestCreateProject_SubprojectRecordsParent(t *testing.T) {
-	d, _ := openTestDB(t)
+	d, _, _ := openTestDB(t)
 	if err := d.CreateProject("parent", "A parent project", nil); err != nil {
 		t.Fatalf("CreateProject parent: %v", err)
 	}
@@ -79,7 +137,7 @@ func TestCreateProject_SubprojectRecordsParent(t *testing.T) {
 }
 
 func TestCreateProject_DeeplyNestedParents(t *testing.T) {
-	d, _ := openTestDB(t)
+	d, _, _ := openTestDB(t)
 	for _, id := range []string{"foo", "foo/bar", "foo/bar/baz"} {
 		if err := d.CreateProject(id, "A project", nil); err != nil {
 			t.Fatalf("CreateProject %q: %v", id, err)
@@ -108,7 +166,7 @@ func TestCreateProject_DeeplyNestedParents(t *testing.T) {
 }
 
 func TestCreateProject_MissingParentFails(t *testing.T) {
-	d, _ := openTestDB(t)
+	d, _, _ := openTestDB(t)
 	err := d.CreateProject("nonexistent/child", "A child project", nil)
 	if err == nil {
 		t.Error("expected error when parent project does not exist, got nil")
@@ -118,7 +176,7 @@ func TestCreateProject_MissingParentFails(t *testing.T) {
 // ===== CreateTicket directory creation =====
 
 func TestCreateTicket_CreatesDirectory(t *testing.T) {
-	d, ticketsDir := openTestDB(t)
+	d, ticketsDir, _ := openTestDB(t)
 	if err := d.CreateProject("my-proj", "A project", nil); err != nil {
 		t.Fatalf("CreateProject: %v", err)
 	}
@@ -131,7 +189,7 @@ func TestCreateTicket_CreatesDirectory(t *testing.T) {
 }
 
 func TestCreateTicket_CreatesDirectoryDeeplyNested(t *testing.T) {
-	d, ticketsDir := openTestDB(t)
+	d, ticketsDir, _ := openTestDB(t)
 	if err := d.CreateProject("proj", "A project", nil); err != nil {
 		t.Fatalf("CreateProject: %v", err)
 	}
@@ -147,7 +205,7 @@ func TestCreateTicket_CreatesDirectoryDeeplyNested(t *testing.T) {
 }
 
 func TestCreateTicket_NoDirectoryOnFailure(t *testing.T) {
-	d, ticketsDir := openTestDB(t)
+	d, ticketsDir, _ := openTestDB(t)
 	// Attempt to create a ticket whose parent project doesn't exist — should fail.
 	err := d.CreateTicket("nonexistent-proj/ticket", "A ticket", nil)
 	if err == nil {

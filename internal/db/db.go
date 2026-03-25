@@ -54,6 +54,12 @@ func Open(ticketsDir, repoRoot string) (*DB, error) {
 	return d, nil
 }
 
+// SetGitClient replaces the git client used for worktree operations.
+// Intended for testing.
+func (d *DB) SetGitClient(gc gitutil.GitClient) {
+	d.git = gc
+}
+
 // Close closes the underlying database connection.
 func (d *DB) Close() error {
 	return d.db.Close()
@@ -434,7 +440,10 @@ func (d *DB) CreateProject(identifier, description string, deps []string) error 
 	}); err != nil {
 		return err
 	}
-	return os.MkdirAll(storage.TicketDirPath(d.ticketsDir, identifier), 0755)
+	if err := os.MkdirAll(storage.TicketDirPath(d.ticketsDir, identifier), 0755); err != nil {
+		return err
+	}
+	return d.git.CreateWorktree(d.repoRoot, d.worktreePath(identifier), identifier)
 }
 
 // CreateTicket inserts a new ticket (and its dependencies) in a single
