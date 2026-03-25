@@ -119,6 +119,13 @@ var schemaStatements = []string{
 		"description" text NOT NULL,
 		FOREIGN KEY ("ticket_id") REFERENCES "tickets"("id") ON DELETE CASCADE
 	)`,
+	`CREATE TRIGGER IF NOT EXISTS "update_ticket_last_updated"
+	AFTER UPDATE OF "phase", "status" ON "tickets"
+	FOR EACH ROW
+	WHEN NEW.phase != OLD.phase OR NEW.status != OLD.status
+	BEGIN
+		UPDATE "tickets" SET "last_updated" = unixepoch() WHERE id = NEW.id;
+	END`,
 	`CREATE INDEX IF NOT EXISTS "idx_projects_project_id" ON "projects"("project_id")`,
 	`CREATE INDEX IF NOT EXISTS "idx_tickets_project_id" ON "tickets"("project_id")`,
 	`CREATE INDEX IF NOT EXISTS "idx_tickets_status" ON "tickets"("status")`,
@@ -530,8 +537,8 @@ func (d *DB) SetStatus(identifier, phase, status string) error {
 
 	return d.withTx(func(tx *sql.Tx) error {
 		_, err := tx.Exec(
-			`UPDATE tickets SET phase = ?, status = ?, last_updated = ? WHERE id = ?`,
-			phase, status, time.Now().Unix(), ticketID,
+			`UPDATE tickets SET phase = ?, status = ? WHERE id = ?`,
+			phase, status, ticketID,
 		)
 		return err
 	})
@@ -554,8 +561,8 @@ func (d *DB) markTicketDone(ticketID int64, identifier string, projectID sql.Nul
 
 	if err := d.withTx(func(tx *sql.Tx) error {
 		_, err := tx.Exec(
-			`UPDATE tickets SET phase = ?, status = ?, claimed_by = NULL, last_updated = ? WHERE id = ?`,
-			string(models.PhaseDone), string(models.StatusIdle), time.Now().Unix(), ticketID,
+			`UPDATE tickets SET phase = ?, status = ?, claimed_by = NULL WHERE id = ?`,
+			string(models.PhaseDone), string(models.StatusIdle), ticketID,
 		)
 		return err
 	}); err != nil {

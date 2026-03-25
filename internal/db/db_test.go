@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/fimmtiu/tickets/internal/db"
 	"github.com/fimmtiu/tickets/internal/gitutil"
@@ -46,6 +47,42 @@ func openTestDB(t *testing.T) (*db.DB, string, *fakeGitClient) {
 func dirExists(path string) bool {
 	info, err := os.Stat(path)
 	return err == nil && info.IsDir()
+}
+
+// ===== SetStatus last_updated trigger =====
+
+func TestSetStatus_UpdatesLastUpdated(t *testing.T) {
+	d, _, _ := openTestDB(t)
+	if err := d.CreateProject("proj", "A project", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj/ticket", "A ticket", nil); err != nil {
+		t.Fatal(err)
+	}
+
+	// Sleep so the status-change timestamp is distinguishable from the
+	// creation timestamp, which has one-second resolution.
+	time.Sleep(time.Second)
+	before := time.Now().Unix()
+
+	if err := d.SetStatus("proj/ticket", "review", "idle"); err != nil {
+		t.Fatalf("SetStatus: %v", err)
+	}
+
+	units, err := d.Status()
+	if err != nil {
+		t.Fatalf("Status: %v", err)
+	}
+	for _, u := range units {
+		if u.Identifier == "proj/ticket" {
+			if u.LastUpdated.Unix() < before {
+				t.Errorf("expected last_updated >= %d after SetStatus, got %d",
+					before, u.LastUpdated.Unix())
+			}
+			return
+		}
+	}
+	t.Error("ticket not found")
 }
 
 // ===== CreateProject directory and worktree creation =====
