@@ -312,9 +312,9 @@ func TestRunRelease_MissingIdentifier(t *testing.T) {
 	}
 }
 
-// ===== runAddComment =====
+// ===== runAddChangeRequest =====
 
-func TestRunAddComment(t *testing.T) {
+func TestRunAddChangeRequest(t *testing.T) {
 	d := openTestDB(t)
 	if err := d.CreateProject("proj", "A project", nil); err != nil {
 		t.Fatal(err)
@@ -323,9 +323,9 @@ func TestRunAddComment(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	stdin := strings.NewReader("looks good to me")
-	if err := runAddComment(d, []string{"proj/ticket", "main.go:42", "alice"}, stdin); err != nil {
-		t.Fatalf("runAddComment returned error: %v", err)
+	stdin := strings.NewReader("this method ignores context cancellation")
+	if err := runAddChangeRequest(d, []string{"proj/ticket", "main.go:42", "alice"}, stdin); err != nil {
+		t.Fatalf("runAddChangeRequest returned error: %v", err)
 	}
 
 	units, err := d.Status()
@@ -334,26 +334,26 @@ func TestRunAddComment(t *testing.T) {
 	}
 	for _, u := range units {
 		if u.Identifier == "proj/ticket" {
-			if len(u.CommentThreads) == 0 {
-				t.Error("expected comment thread on ticket after add-comment")
+			if len(u.ChangeRequests) == 0 {
+				t.Error("expected change request on ticket after add-change-request")
 			}
 			return
 		}
 	}
-	t.Error("ticket not found after add-comment")
+	t.Error("ticket not found after add-change-request")
 }
 
-func TestRunAddComment_MissingArgs(t *testing.T) {
+func TestRunAddChangeRequest_MissingArgs(t *testing.T) {
 	d := openTestDB(t)
-	err := runAddComment(d, []string{"only", "two"}, strings.NewReader("text"))
+	err := runAddChangeRequest(d, []string{"only", "two"}, strings.NewReader("text"))
 	if err == nil {
 		t.Error("expected error when args are missing, got nil")
 	}
 }
 
-// ===== runCloseThread =====
+// ===== runCloseChangeRequest =====
 
-func TestRunCloseThread(t *testing.T) {
+func TestRunCloseChangeRequest(t *testing.T) {
 	d := openTestDB(t)
 	if err := d.CreateProject("proj", "A project", nil); err != nil {
 		t.Fatal(err)
@@ -361,7 +361,7 @@ func TestRunCloseThread(t *testing.T) {
 	if err := d.CreateTicket("proj/ticket", "A ticket", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.AddComment("proj/ticket", "main.go:42", "alice", "a comment"); err != nil {
+	if err := d.AddChangeRequest("proj/ticket", "main.go:42", "alice", "please fix"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -369,19 +369,19 @@ func TestRunCloseThread(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var threadID string
+	var crID string
 	for _, u := range units {
-		if u.Identifier == "proj/ticket" && len(u.CommentThreads) > 0 {
-			threadID = u.CommentThreads[0].ID
+		if u.Identifier == "proj/ticket" && len(u.ChangeRequests) > 0 {
+			crID = u.ChangeRequests[0].ID
 			break
 		}
 	}
-	if threadID == "" {
-		t.Fatal("no thread ID found")
+	if crID == "" {
+		t.Fatal("no change request ID found")
 	}
 
-	if err := runCloseThread(d, []string{threadID}); err != nil {
-		t.Fatalf("runCloseThread returned error: %v", err)
+	if err := runCloseChangeRequest(d, []string{crID}); err != nil {
+		t.Fatalf("runCloseChangeRequest returned error: %v", err)
 	}
 
 	units, err = d.Status()
@@ -389,21 +389,21 @@ func TestRunCloseThread(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, u := range units {
-		if u.Identifier == "proj/ticket" && len(u.CommentThreads) > 0 {
-			if u.CommentThreads[0].Status != "closed" {
-				t.Errorf("expected thread status 'closed', got %q", u.CommentThreads[0].Status)
+		if u.Identifier == "proj/ticket" && len(u.ChangeRequests) > 0 {
+			if u.ChangeRequests[0].Status != "closed" {
+				t.Errorf("expected status 'closed', got %q", u.ChangeRequests[0].Status)
 			}
 			return
 		}
 	}
-	t.Error("thread not found after close-thread")
+	t.Error("change request not found after close-change-request")
 }
 
-func TestRunCloseThread_MissingArg(t *testing.T) {
+func TestRunCloseChangeRequest_MissingArg(t *testing.T) {
 	d := openTestDB(t)
-	err := runCloseThread(d, []string{})
+	err := runCloseChangeRequest(d, []string{})
 	if err == nil {
-		t.Error("expected error when thread ID is missing, got nil")
+		t.Error("expected error when ID is missing, got nil")
 	}
 }
 

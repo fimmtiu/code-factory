@@ -135,15 +135,14 @@ func (dp DetailPane) buildLines() []string {
 		lines = append(lines, descLines...)
 	}
 
-	// Comment threads
-	if len(dp.unit.CommentThreads) > 0 {
+	// Change requests
+	if len(dp.unit.ChangeRequests) > 0 {
 		lines = append(lines, "")
-		lines = append(lines, labelStyle.Render("Comments:"))
-		for _, thread := range dp.unit.CommentThreads {
-			status := thread.Status
-			header := thread.CodeLocation + " [" + status + "] (id: " + thread.ID + ")"
+		lines = append(lines, labelStyle.Render("Change requests:"))
+		for _, cr := range dp.unit.ChangeRequests {
+			header := cr.CodeLocation + " [" + cr.Status + "] (id: " + cr.ID + ")"
 			lines = append(lines, "  "+labelStyle.Render(header))
-			for _, c := range thread.Comments {
+			for _, c := range cr.Comments {
 				dateFmt := c.Date.Format("2006-01-02 15:04:05")
 				lines = append(lines, "    "+labelStyle.Render(c.Author)+" ("+dateFmt+")")
 				for _, textLine := range strings.Split(c.Text, "\n") {

@@ -1,8 +1,6 @@
 package models
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"fmt"
 	"regexp"
 	"strings"
@@ -12,35 +10,26 @@ import (
 var identifierSegmentRe = regexp.MustCompile(`^[a-z][a-z0-9-]*[a-z0-9]$|^[a-z]$`)
 
 const (
-	ThreadOpen   = "open"
-	ThreadClosed = "closed"
+	ChangeRequestOpen   = "open"
+	ChangeRequestClosed = "closed"
 )
 
-// Comment is a single message within a CommentThread.
+// Comment is a single note within a ChangeRequest.
 type Comment struct {
 	Date   time.Time `json:"date"`
 	Author string    `json:"author"`
 	Text   string    `json:"text"`
 }
 
-// CommentThread groups comments about a specific code location.
-type CommentThread struct {
+// ChangeRequest records a requested code change at a specific location.
+type ChangeRequest struct {
 	ID           string    `json:"id"`
 	CommitHash   string    `json:"commit_hash"`
 	CodeLocation string    `json:"code_location"`
-	Status       string    `json:"status"` // ThreadOpen or ThreadClosed
+	Status       string    `json:"status"` // ChangeRequestOpen or ChangeRequestClosed
 	Comments     []Comment `json:"comments"`
 }
 
-// NewCommentThreadID returns a random 16-character hex string for use as a
-// comment thread ID.
-func NewCommentThreadID() (string, error) {
-	b := make([]byte, 8)
-	if _, err := rand.Read(b); err != nil {
-		return "", fmt.Errorf("NewCommentThreadID: %w", err)
-	}
-	return hex.EncodeToString(b), nil
-}
 
 type WorkUnit struct {
 	Identifier     string          `json:"identifier"`
@@ -52,7 +41,7 @@ type WorkUnit struct {
 	IsProject      bool            `json:"is_project,omitempty"`
 	Parent         string          `json:"parent,omitempty"`
 	ClaimedBy      string          `json:"claimed_by,omitempty"`
-	CommentThreads []CommentThread `json:"comment_threads,omitempty"`
+	ChangeRequests []ChangeRequest `json:"change_requests,omitempty"`
 }
 
 func NewTicket(identifier, description string) *WorkUnit {

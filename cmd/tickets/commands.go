@@ -26,7 +26,7 @@ func runCommand(subcommand string, args []string) error {
 	case "init":
 		return runInit()
 	case "status", "create-project", "create-ticket", "set-status",
-		"claim", "release", "add-comment", "close-thread":
+		"claim", "release", "add-change-request", "close-change-request":
 		d, err := openDB()
 		if err != nil {
 			return err
@@ -53,10 +53,10 @@ func runCommandWithDB(subcommand string, args []string, d *db.DB) error {
 		return runClaim(d, args)
 	case "release":
 		return runRelease(d, args)
-	case "add-comment":
-		return runAddComment(d, args, os.Stdin)
-	case "close-thread":
-		return runCloseThread(d, args)
+	case "add-change-request":
+		return runAddChangeRequest(d, args, os.Stdin)
+	case "close-change-request":
+		return runCloseChangeRequest(d, args)
 	}
 	return nil
 }
@@ -176,22 +176,26 @@ func runRelease(d *db.DB, args []string) error {
 	return d.Release(args[0])
 }
 
-// runAddComment adds a comment to a ticket.
-func runAddComment(d *db.DB, args []string, stdin io.Reader) error {
+// runAddChangeRequest adds a change request to a ticket.
+func runAddChangeRequest(d *db.DB, args []string, stdin io.Reader) error {
 	if len(args) < 3 {
-		return fmt.Errorf("usage: tickets add-comment <identifier> <code-location> <author>")
+		return fmt.Errorf("usage: tickets add-change-request <identifier> <code-location> <author>")
 	}
 	text, err := io.ReadAll(stdin)
 	if err != nil {
-		return fmt.Errorf("add-comment: read stdin: %w", err)
+		return fmt.Errorf("add-change-request: read stdin: %w", err)
 	}
-	return d.AddComment(args[0], args[1], args[2], string(text))
+	return d.AddChangeRequest(args[0], args[1], args[2], string(text))
 }
 
-// runCloseThread closes the comment thread with the given thread ID.
-func runCloseThread(d *db.DB, args []string) error {
+// runCloseChangeRequest closes the change request with the given ID.
+func runCloseChangeRequest(d *db.DB, args []string) error {
 	if len(args) < 1 {
-		return fmt.Errorf("usage: tickets close-thread <thread-id>")
+		return fmt.Errorf("usage: tickets close-change-request <id>")
 	}
-	return d.CloseThread(args[0])
+	id, err := strconv.ParseInt(args[0], 10, 64)
+	if err != nil {
+		return fmt.Errorf("close-change-request: invalid id %q: %w", args[0], err)
+	}
+	return d.CloseChangeRequest(id)
 }

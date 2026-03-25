@@ -373,24 +373,15 @@ func (g *generator) writeTickets(p *projectNode) error {
 		if err := g.db.CreateTicket(spec.identifier, spec.description, deps); err != nil {
 			return fmt.Errorf("ticket %d (%s): %w", i, spec.identifier, err)
 		}
-		for _, thread := range g.generateCommentThreads() {
-			for _, comment := range thread.Comments {
-				if err := g.db.AddComment(spec.identifier, thread.CodeLocation, comment.Author, comment.Text); err != nil {
-					return fmt.Errorf("comment for ticket %s: %w", spec.identifier, err)
+		for _, cr := range g.generateChangeRequests() {
+			for _, comment := range cr.Comments {
+				if err := g.db.AddChangeRequest(spec.identifier, cr.CodeLocation, comment.Author, comment.Text); err != nil {
+					return fmt.Errorf("change request for ticket %s: %w", spec.identifier, err)
 				}
 			}
 		}
 	}
 	return nil
-}
-
-// threadID returns a random 16-character hex string using the generator's rng.
-func (g *generator) threadID() string {
-	b := make([]byte, 8)
-	for i := range b {
-		b[i] = byte(g.rng.Intn(256))
-	}
-	return fmt.Sprintf("%x", b)
 }
 
 // fakeCommitHash returns a short fake commit hash using the generator's rng.
@@ -431,18 +422,17 @@ func (g *generator) generateComments(n int, newest time.Time) []models.Comment {
 	return comments
 }
 
-// generateCommentThreads returns a random set of comment threads for a ticket,
-// or nil (~60% probability) when the ticket should have no comments.
-func (g *generator) generateCommentThreads() []models.CommentThread {
+// generateChangeRequests returns a random set of change requests for a ticket,
+// or nil (~60% probability) when the ticket should have none.
+func (g *generator) generateChangeRequests() []models.ChangeRequest {
 	if g.rng.Float32() >= 0.4 {
 		return nil
 	}
-	numThreads := 1 + g.rng.Intn(3) // 1–3 threads
+	num := 1 + g.rng.Intn(3) // 1–3 change requests
 	now := time.Now().UTC()
-	threads := make([]models.CommentThread, numThreads)
+	crs := make([]models.ChangeRequest, num)
 	usedLocations := map[string]bool{}
-	for i := range threads {
-		// Pick a code location not already used by an open thread.
+	for i := range crs {
 		var loc string
 		for {
 			loc = g.codeLocation()
@@ -451,23 +441,22 @@ func (g *generator) generateCommentThreads() []models.CommentThread {
 			}
 		}
 
-		status := models.ThreadOpen
+		status := models.ChangeRequestOpen
 		if g.rng.Float32() < 0.35 {
-			status = models.ThreadClosed
+			status = models.ChangeRequestClosed
 		}
-		if status == models.ThreadOpen {
+		if status == models.ChangeRequestOpen {
 			usedLocations[loc] = true
 		}
 
-		threads[i] = models.CommentThread{
-			ID:           g.threadID(),
+		crs[i] = models.ChangeRequest{
 			CommitHash:   g.fakeCommitHash(),
 			CodeLocation: loc,
 			Status:       status,
 			Comments:     g.generateComments(1+g.rng.Intn(4), now),
 		}
 	}
-	return threads
+	return crs
 }
 
 // ---------------------------------------------------------------------------

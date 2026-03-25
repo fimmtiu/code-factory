@@ -98,23 +98,22 @@ var schemaStatements = []string{
 		"dependency_type" integer NOT NULL,
 		"dependency_id" integer NOT NULL
 	)`,
-	`CREATE TABLE IF NOT EXISTS "comments" (
+	`CREATE TABLE IF NOT EXISTS "change_requests" (
 		"id" integer PRIMARY KEY,
 		"ticket_id" integer NOT NULL,
-		"thread_id" text NOT NULL UNIQUE,
 		"filename" text NOT NULL,
 		"line_number" integer NOT NULL,
 		"commit_hash" text NOT NULL DEFAULT '',
 		"status" text NOT NULL DEFAULT 'open',
 		"date" integer NOT NULL,
 		"author" text NOT NULL,
-		"comment" text NOT NULL,
+		"description" text NOT NULL,
 		FOREIGN KEY ("ticket_id") REFERENCES "tickets"("id") ON DELETE CASCADE
 	)`,
 	`CREATE INDEX IF NOT EXISTS "idx_tickets_project_id" ON "tickets"("project_id")`,
 	`CREATE INDEX IF NOT EXISTS "idx_tickets_status" ON "tickets"("status")`,
 	`CREATE INDEX IF NOT EXISTS "idx_deps_work_unit" ON "dependencies"("work_unit_type", "work_unit_id")`,
-	`CREATE INDEX IF NOT EXISTS "idx_comments_ticket_id" ON "comments"("ticket_id")`,
+	`CREATE INDEX IF NOT EXISTS "idx_change_requests_ticket_id" ON "change_requests"("ticket_id")`,
 }
 
 func (d *DB) createSchema() error {
@@ -222,7 +221,7 @@ func (d *DB) Status() ([]*models.WorkUnit, error) {
 		return nil, err
 	}
 
-	if err := d.loadComments(ticketByID); err != nil {
+	if err := d.loadChangeRequests(ticketByID); err != nil {
 		return nil, err
 	}
 
@@ -363,42 +362,42 @@ func (d *DB) loadDependencies(projectByID, ticketByID map[int64]*models.WorkUnit
 	return nil
 }
 
-func (d *DB) loadComments(ticketByID map[int64]*models.WorkUnit) error {
+func (d *DB) loadChangeRequests(ticketByID map[int64]*models.WorkUnit) error {
 	rows, err := d.db.Query(
-		`SELECT ticket_id, thread_id, filename, line_number, commit_hash, status, date, author, comment
-		 FROM comments ORDER BY date ASC`,
+		`SELECT id, ticket_id, filename, line_number, commit_hash, status, date, author, description
+		 FROM change_requests ORDER BY date ASC`,
 	)
 	if err != nil {
-		return fmt.Errorf("load comments: %w", err)
+		return fmt.Errorf("load change requests: %w", err)
 	}
 	for rows.Next() {
-		var ticketID int64
-		var threadID, filename, commitHash, cstatus, author, text string
+		var id, ticketID int64
+		var filename, commitHash, cstatus, author, description string
 		var lineNumber int
 		var date int64
-		if err := rows.Scan(&ticketID, &threadID, &filename, &lineNumber, &commitHash, &cstatus, &date, &author, &text); err != nil {
+		if err := rows.Scan(&id, &ticketID, &filename, &lineNumber, &commitHash, &cstatus, &date, &author, &description); err != nil {
 			rows.Close()
-			return fmt.Errorf("scan comment: %w", err)
+			return fmt.Errorf("scan change request: %w", err)
 		}
 		wu, ok := ticketByID[ticketID]
 		if !ok {
 			continue
 		}
-		wu.CommentThreads = append(wu.CommentThreads, models.CommentThread{
-			ID:           threadID,
+		wu.ChangeRequests = append(wu.ChangeRequests, models.ChangeRequest{
+			ID:           strconv.FormatInt(id, 10),
 			CommitHash:   commitHash,
 			CodeLocation: fmt.Sprintf("%s:%d", filename, lineNumber),
 			Status:       cstatus,
 			Comments: []models.Comment{{
 				Date:   time.Unix(date, 0).UTC(),
 				Author: author,
-				Text:   text,
+				Text:   description,
 			}},
 		})
 	}
 	if err := rows.Err(); err != nil {
 		rows.Close()
-		return fmt.Errorf("scan comments: %w", err)
+		return fmt.Errorf("scan change requests: %w", err)
 	}
 	rows.Close()
 	return nil
@@ -658,9 +657,9 @@ func (d *DB) Release(identifier string) error {
 	})
 }
 
-// AddComment adds a new comment for the given ticket at the specified code
-// location. Each call creates an independent comment row with a fresh thread ID.
-func (d *DB) AddComment(identifier, codeLocation, author, text string) error {
+// AddChangeRequest adds a new change request for the given ticket at the
+// specified code location.
+func (d *DB) AddChangeRequest(identifier, codeLocation, author, description string) error {
 	filename, lineNumber, err := parseCodeLocation(codeLocation)
 	if err != nil {
 		return err
@@ -676,26 +675,21 @@ func (d *DB) AddComment(identifier, codeLocation, author, text string) error {
 
 		commitHash, _ := d.git.GetHeadCommit(d.worktreePath(identifier))
 
-		threadID, err := models.NewCommentThreadID()
-		if err != nil {
-			return fmt.Errorf("generate thread ID: %w", err)
-		}
-
 		_, err = tx.Exec(
-			`INSERT INTO comments (ticket_id, thread_id, filename, line_number, commit_hash, status, date, author, comment)
-			 VALUES (?, ?, ?, ?, ?, 'open', ?, ?, ?)`,
-			ticketID, threadID, filename, lineNumber, commitHash,
-			time.Now().Unix(), author, text,
+			`INSERT INTO change_requests (ticket_id, filename, line_number, commit_hash, status, date, author, description)
+			 VALUES (?, ?, ?, ?, 'open', ?, ?, ?)`,
+			ticketID, filename, lineNumber, commitHash,
+			time.Now().Unix(), author, description,
 		)
 		return err
 	})
 }
 
-// CloseThread sets the status of the comment with the given thread_id to "closed".
-func (d *DB) CloseThread(threadID string) error {
+// CloseChangeRequest sets the status of the change request with the given id to "closed".
+func (d *DB) CloseChangeRequest(id int64) error {
 	return d.withTx(func(tx *sql.Tx) error {
 		res, err := tx.Exec(
-			`UPDATE comments SET status = 'closed' WHERE thread_id = ?`, threadID,
+			`UPDATE change_requests SET status = 'closed' WHERE id = ?`, id,
 		)
 		if err != nil {
 			return err
@@ -705,7 +699,7 @@ func (d *DB) CloseThread(threadID string) error {
 			return err
 		}
 		if n == 0 {
-			return fmt.Errorf("comment thread %q not found", threadID)
+			return fmt.Errorf("change request %d not found", id)
 		}
 		return nil
 	})
