@@ -4,6 +4,7 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -403,12 +404,13 @@ func (d *DB) loadComments(ticketByID map[int64]*models.WorkUnit) error {
 	return nil
 }
 
-// CreateProject inserts a new project (and its dependencies) in a single transaction.
+// CreateProject inserts a new project (and its dependencies) in a single
+// transaction and creates its directory under .tickets/.
 func (d *DB) CreateProject(identifier, description string, deps []string) error {
 	if err := models.ValidateIdentifier(identifier); err != nil {
 		return err
 	}
-	return d.withTx(func(tx *sql.Tx) error {
+	if err := d.withTx(func(tx *sql.Tx) error {
 		if parent, hasParent := parentIdentifierOf(identifier); hasParent {
 			if _, err := lookupProjectID(tx, parent); err != nil {
 				return fmt.Errorf("parent project %q not found", parent)
@@ -426,15 +428,19 @@ func (d *DB) CreateProject(identifier, description string, deps []string) error 
 			return err
 		}
 		return insertDependencies(tx, workUnitTypeProject, projectID, deps)
-	})
+	}); err != nil {
+		return err
+	}
+	return os.MkdirAll(storage.TicketDirPath(d.ticketsDir, identifier), 0755)
 }
 
-// CreateTicket inserts a new ticket (and its dependencies) in a single transaction.
+// CreateTicket inserts a new ticket (and its dependencies) in a single
+// transaction and creates its directory under .tickets/.
 func (d *DB) CreateTicket(identifier, description string, deps []string) error {
 	if err := models.ValidateIdentifier(identifier); err != nil {
 		return err
 	}
-	return d.withTx(func(tx *sql.Tx) error {
+	if err := d.withTx(func(tx *sql.Tx) error {
 		phase := models.PhaseImplement
 		if len(deps) > 0 {
 			phase = models.PhaseBlocked
@@ -461,7 +467,10 @@ func (d *DB) CreateTicket(identifier, description string, deps []string) error {
 			return err
 		}
 		return insertDependencies(tx, workUnitTypeTicket, ticketID, deps)
-	})
+	}); err != nil {
+		return err
+	}
+	return os.MkdirAll(storage.TicketDirPath(d.ticketsDir, identifier), 0755)
 }
 
 // SetStatus updates the phase (and optionally status) of a ticket. When phase
