@@ -374,10 +374,8 @@ func (g *generator) writeTickets(p *projectNode) error {
 			return fmt.Errorf("ticket %d (%s): %w", i, spec.identifier, err)
 		}
 		for _, cr := range g.generateChangeRequests() {
-			for _, comment := range cr.Comments {
-				if err := g.db.AddChangeRequest(spec.identifier, cr.CodeLocation, comment.Author, comment.Text); err != nil {
-					return fmt.Errorf("change request for ticket %s: %w", spec.identifier, err)
-				}
+			if err := g.db.AddChangeRequest(spec.identifier, cr.CodeLocation, cr.Author, cr.Description); err != nil {
+				return fmt.Errorf("change request for ticket %s: %w", spec.identifier, err)
 			}
 		}
 	}
@@ -400,28 +398,6 @@ func (g *generator) codeLocation() string {
 	return fmt.Sprintf("%s:%d", file, line)
 }
 
-// generateComments returns n comments with dates spread over the past 60 days,
-// sorted oldest-first.
-func (g *generator) generateComments(n int, newest time.Time) []models.Comment {
-	comments := make([]models.Comment, n)
-	for i := range comments {
-		// Each subsequent comment is newer than the previous (spread over 60 days).
-		offsetHours := g.rng.Intn(60 * 24)
-		comments[i] = models.Comment{
-			Date:   newest.Add(-time.Duration(offsetHours) * time.Hour),
-			Author: fakeAuthors[g.rng.Intn(len(fakeAuthors))],
-			Text:   commentTexts[g.rng.Intn(len(commentTexts))],
-		}
-	}
-	// Sort ascending by date so the thread reads chronologically.
-	for i := 1; i < len(comments); i++ {
-		for j := i; j > 0 && comments[j].Date.Before(comments[j-1].Date); j-- {
-			comments[j], comments[j-1] = comments[j-1], comments[j]
-		}
-	}
-	return comments
-}
-
 // generateChangeRequests returns a random set of change requests for a ticket,
 // or nil (~60% probability) when the ticket should have none.
 func (g *generator) generateChangeRequests() []models.ChangeRequest {
@@ -429,7 +405,6 @@ func (g *generator) generateChangeRequests() []models.ChangeRequest {
 		return nil
 	}
 	num := 1 + g.rng.Intn(3) // 1–3 change requests
-	now := time.Now().UTC()
 	crs := make([]models.ChangeRequest, num)
 	usedLocations := map[string]bool{}
 	for i := range crs {
@@ -453,7 +428,8 @@ func (g *generator) generateChangeRequests() []models.ChangeRequest {
 			CommitHash:   g.fakeCommitHash(),
 			CodeLocation: loc,
 			Status:       status,
-			Comments:     g.generateComments(1+g.rng.Intn(4), now),
+			Author:       fakeAuthors[g.rng.Intn(len(fakeAuthors))],
+			Description:  commentTexts[g.rng.Intn(len(commentTexts))],
 		}
 	}
 	return crs

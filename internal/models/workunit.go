@@ -14,20 +14,15 @@ const (
 	ChangeRequestClosed = "closed"
 )
 
-// Comment is a single note within a ChangeRequest.
-type Comment struct {
-	Date   time.Time `json:"date"`
-	Author string    `json:"author"`
-	Text   string    `json:"text"`
-}
-
 // ChangeRequest records a requested code change at a specific location.
 type ChangeRequest struct {
 	ID           string    `json:"id"`
 	CommitHash   string    `json:"commit_hash"`
 	CodeLocation string    `json:"code_location"`
 	Status       string    `json:"status"` // ChangeRequestOpen or ChangeRequestClosed
-	Comments     []Comment `json:"comments"`
+	Date         time.Time `json:"date"`
+	Author       string    `json:"author"`
+	Description  string    `json:"description"`
 }
 
 

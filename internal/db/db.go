@@ -388,11 +388,9 @@ func (d *DB) loadChangeRequests(ticketByID map[int64]*models.WorkUnit) error {
 			CommitHash:   commitHash,
 			CodeLocation: fmt.Sprintf("%s:%d", filename, lineNumber),
 			Status:       cstatus,
-			Comments: []models.Comment{{
-				Date:   time.Unix(date, 0).UTC(),
-				Author: author,
-				Text:   description,
-			}},
+			Date:         time.Unix(date, 0).UTC(),
+			Author:       author,
+			Description:  description,
 		})
 	}
 	if err := rows.Err(); err != nil {

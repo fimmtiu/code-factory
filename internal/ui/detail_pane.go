@@ -142,12 +142,10 @@ func (dp DetailPane) buildLines() []string {
 		for _, cr := range dp.unit.ChangeRequests {
 			header := cr.CodeLocation + " [" + cr.Status + "] (id: " + cr.ID + ")"
 			lines = append(lines, "  "+labelStyle.Render(header))
-			for _, c := range cr.Comments {
-				dateFmt := c.Date.Format("2006-01-02 15:04:05")
-				lines = append(lines, "    "+labelStyle.Render(c.Author)+" ("+dateFmt+")")
-				for _, textLine := range strings.Split(c.Text, "\n") {
-					lines = append(lines, "      "+textLine)
-				}
+			dateFmt := cr.Date.Format("2006-01-02 15:04:05")
+			lines = append(lines, "    "+labelStyle.Render(cr.Author)+" ("+dateFmt+")")
+			for _, textLine := range strings.Split(cr.Description, "\n") {
+				lines = append(lines, "      "+textLine)
 			}
 		}
 	}
