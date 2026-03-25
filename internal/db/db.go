@@ -78,7 +78,9 @@ var schemaStatements = []string{
 		"id" integer PRIMARY KEY,
 		"identifier" text NOT NULL UNIQUE,
 		"description" text NOT NULL,
-		"last_updated" integer NOT NULL
+		"last_updated" integer NOT NULL,
+		"project_id" integer DEFAULT NULL,
+		FOREIGN KEY ("project_id") REFERENCES "projects"("id") ON DELETE CASCADE
 	)`,
 	`CREATE TABLE IF NOT EXISTS "tickets" (
 		"id" integer PRIMARY KEY,
@@ -110,6 +112,7 @@ var schemaStatements = []string{
 		"description" text NOT NULL,
 		FOREIGN KEY ("ticket_id") REFERENCES "tickets"("id") ON DELETE CASCADE
 	)`,
+	`CREATE INDEX IF NOT EXISTS "idx_projects_project_id" ON "projects"("project_id")`,
 	`CREATE INDEX IF NOT EXISTS "idx_tickets_project_id" ON "tickets"("project_id")`,
 	`CREATE INDEX IF NOT EXISTS "idx_tickets_status" ON "tickets"("status")`,
 	`CREATE INDEX IF NOT EXISTS "idx_deps_work_unit" ON "dependencies"("work_unit_type", "work_unit_id")`,
@@ -408,14 +411,17 @@ func (d *DB) CreateProject(identifier, description string, deps []string) error 
 		return err
 	}
 	if err := d.withTx(func(tx *sql.Tx) error {
+		var parentID sql.NullInt64
 		if parent, hasParent := parentIdentifierOf(identifier); hasParent {
-			if _, err := lookupProjectID(tx, parent); err != nil {
-				return fmt.Errorf("parent project %q not found", parent)
+			pid, err := lookupProjectID(tx, parent)
+			if err != nil {
+				return err
 			}
+			parentID = sql.NullInt64{Int64: pid, Valid: true}
 		}
 		res, err := tx.Exec(
-			`INSERT INTO projects (identifier, description, last_updated) VALUES (?, ?, ?)`,
-			identifier, description, time.Now().Unix(),
+			`INSERT INTO projects (identifier, description, last_updated, project_id) VALUES (?, ?, ?, ?)`,
+			identifier, description, time.Now().Unix(), parentID,
 		)
 		if err != nil {
 			return fmt.Errorf("insert project: %w", err)

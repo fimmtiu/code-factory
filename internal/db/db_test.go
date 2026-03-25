@@ -52,6 +52,69 @@ func TestCreateProject_CreatesNestedDirectory(t *testing.T) {
 	}
 }
 
+// ===== CreateProject parent FK =====
+
+func TestCreateProject_SubprojectRecordsParent(t *testing.T) {
+	d, _ := openTestDB(t)
+	if err := d.CreateProject("parent", "A parent project", nil); err != nil {
+		t.Fatalf("CreateProject parent: %v", err)
+	}
+	if err := d.CreateProject("parent/child", "A child project", nil); err != nil {
+		t.Fatalf("CreateProject child: %v", err)
+	}
+
+	units, err := d.Status()
+	if err != nil {
+		t.Fatalf("Status: %v", err)
+	}
+	for _, u := range units {
+		if u.Identifier == "parent/child" {
+			if u.Parent != "parent" {
+				t.Errorf("expected Parent = %q, got %q", "parent", u.Parent)
+			}
+			return
+		}
+	}
+	t.Error("child project not found in Status output")
+}
+
+func TestCreateProject_DeeplyNestedParents(t *testing.T) {
+	d, _ := openTestDB(t)
+	for _, id := range []string{"foo", "foo/bar", "foo/bar/baz"} {
+		if err := d.CreateProject(id, "A project", nil); err != nil {
+			t.Fatalf("CreateProject %q: %v", id, err)
+		}
+	}
+
+	units, err := d.Status()
+	if err != nil {
+		t.Fatalf("Status: %v", err)
+	}
+
+	parents := map[string]string{}
+	for _, u := range units {
+		parents[u.Identifier] = u.Parent
+	}
+
+	if parents["foo"] != "" {
+		t.Errorf("foo: expected no parent, got %q", parents["foo"])
+	}
+	if parents["foo/bar"] != "foo" {
+		t.Errorf("foo/bar: expected parent %q, got %q", "foo", parents["foo/bar"])
+	}
+	if parents["foo/bar/baz"] != "foo/bar" {
+		t.Errorf("foo/bar/baz: expected parent %q, got %q", "foo/bar", parents["foo/bar/baz"])
+	}
+}
+
+func TestCreateProject_MissingParentFails(t *testing.T) {
+	d, _ := openTestDB(t)
+	err := d.CreateProject("nonexistent/child", "A child project", nil)
+	if err == nil {
+		t.Error("expected error when parent project does not exist, got nil")
+	}
+}
+
 // ===== CreateTicket directory creation =====
 
 func TestCreateTicket_CreatesDirectory(t *testing.T) {
