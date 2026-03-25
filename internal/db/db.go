@@ -85,6 +85,7 @@ var schemaStatements = []string{
 		"identifier" text NOT NULL UNIQUE,
 		"description" text NOT NULL,
 		"last_updated" integer NOT NULL,
+		"phase" text NOT NULL DEFAULT 'open',
 		"project_id" integer DEFAULT NULL,
 		FOREIGN KEY ("project_id") REFERENCES "projects"("id") ON DELETE CASCADE
 	)`,
@@ -246,21 +247,22 @@ func (d *DB) Status() ([]*models.WorkUnit, error) {
 
 func (d *DB) loadProjects() (map[int64]*models.WorkUnit, error) {
 	projectByID := make(map[int64]*models.WorkUnit)
-	rows, err := d.db.Query(`SELECT id, identifier, description, last_updated FROM projects`)
+	rows, err := d.db.Query(`SELECT id, identifier, description, last_updated, phase FROM projects`)
 	if err != nil {
 		return nil, fmt.Errorf("load projects: %w", err)
 	}
 	for rows.Next() {
 		var id int64
-		var identifier, description string
+		var identifier, description, phase string
 		var lastUpdated int64
-		if err := rows.Scan(&id, &identifier, &description, &lastUpdated); err != nil {
+		if err := rows.Scan(&id, &identifier, &description, &lastUpdated, &phase); err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("scan project: %w", err)
 		}
 		projectByID[id] = &models.WorkUnit{
 			Identifier:   identifier,
 			Description:  description,
+			Phase:        phase,
 			IsProject:    true,
 			LastUpdated:  time.Unix(lastUpdated, 0).UTC(),
 			Dependencies: []string{},

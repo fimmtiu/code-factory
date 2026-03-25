@@ -28,6 +28,15 @@ func IsValidTicketPhase(s string) bool {
 	return false
 }
 
+const (
+	ProjectPhaseOpen = "open"
+	ProjectPhaseDone = "done"
+)
+
+func IsValidProjectPhase(s string) bool {
+	return s == ProjectPhaseOpen || s == ProjectPhaseDone
+}
+
 func IsValidTicketStatus(s string) bool {
 	switch s {
 	case StatusIdle, StatusNeedsAttention, StatusInProgress, StatusUserReview:

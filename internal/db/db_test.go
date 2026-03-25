@@ -110,6 +110,29 @@ func TestCreateProject_CreatesNestedDirectory(t *testing.T) {
 	}
 }
 
+// ===== CreateProject phase =====
+
+func TestCreateProject_DefaultPhaseIsOpen(t *testing.T) {
+	d, _, _ := openTestDB(t)
+	if err := d.CreateProject("my-proj", "A project", nil); err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+
+	units, err := d.Status()
+	if err != nil {
+		t.Fatalf("Status: %v", err)
+	}
+	for _, u := range units {
+		if u.Identifier == "my-proj" {
+			if u.Phase != "open" {
+				t.Errorf("expected phase %q, got %q", "open", u.Phase)
+			}
+			return
+		}
+	}
+	t.Error("project not found in Status output")
+}
+
 // ===== CreateProject parent FK =====
 
 func TestCreateProject_SubprojectRecordsParent(t *testing.T) {
