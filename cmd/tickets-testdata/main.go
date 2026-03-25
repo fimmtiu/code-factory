@@ -470,7 +470,6 @@ func (g *generator) generateCommentThreads() []models.CommentThread {
 	return threads
 }
 
-
 // ---------------------------------------------------------------------------
 // Summary printing
 // ---------------------------------------------------------------------------

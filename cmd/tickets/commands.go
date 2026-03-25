@@ -57,9 +57,8 @@ func runCommandWithDB(subcommand string, args []string, d *db.DB) error {
 		return runAddComment(d, args, os.Stdin)
 	case "close-thread":
 		return runCloseThread(d, args)
-	default:
-		return fmt.Errorf("unknown subcommand %q; run 'tickets' for usage", subcommand)
 	}
+	return nil
 }
 
 // runInit finds the repo root, initialises .tickets/, and prints a message.

@@ -129,6 +129,11 @@ func (d *DB) createSchema() error {
 
 // --- Helper functions ---
 
+// worktreePath returns the git worktree path for a ticket identifier.
+func (d *DB) worktreePath(identifier string) string {
+	return storage.TicketWorktreePath(storage.TicketDirPath(d.ticketsDir, identifier))
+}
+
 // parentIdentifierOf returns the parent portion of a slash-separated identifier
 // (e.g. "proj/ticket" → "proj", true) and whether one was found.
 func parentIdentifierOf(identifier string) (string, bool) {
@@ -202,12 +207,39 @@ func resolveDependencyID(tx *sql.Tx, identifier string) (int, int64, error) {
 // Status returns all work units (projects and tickets) with their dependencies
 // and comment threads populated.
 func (d *DB) Status() ([]*models.WorkUnit, error) {
-	// Step 1: load all projects.
-	projectByID := make(map[int64]*models.WorkUnit)
+	projectByID, err := d.loadProjects()
+	if err != nil {
+		return nil, err
+	}
 
+	ticketByID, err := d.loadTickets(projectByID)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := d.loadDependencies(projectByID, ticketByID); err != nil {
+		return nil, err
+	}
+
+	if err := d.loadComments(ticketByID); err != nil {
+		return nil, err
+	}
+
+	result := make([]*models.WorkUnit, 0, len(projectByID)+len(ticketByID))
+	for _, wu := range projectByID {
+		result = append(result, wu)
+	}
+	for _, wu := range ticketByID {
+		result = append(result, wu)
+	}
+	return result, nil
+}
+
+func (d *DB) loadProjects() (map[int64]*models.WorkUnit, error) {
+	projectByID := make(map[int64]*models.WorkUnit)
 	rows, err := d.db.Query(`SELECT id, identifier, description, last_updated FROM projects`)
 	if err != nil {
-		return nil, fmt.Errorf("status: load projects: %w", err)
+		return nil, fmt.Errorf("load projects: %w", err)
 	}
 	for rows.Next() {
 		var id int64
@@ -215,7 +247,7 @@ func (d *DB) Status() ([]*models.WorkUnit, error) {
 		var lastUpdated int64
 		if err := rows.Scan(&id, &identifier, &description, &lastUpdated); err != nil {
 			rows.Close()
-			return nil, fmt.Errorf("status: scan project: %w", err)
+			return nil, fmt.Errorf("scan project: %w", err)
 		}
 		projectByID[id] = &models.WorkUnit{
 			Identifier:   identifier,
@@ -227,25 +259,25 @@ func (d *DB) Status() ([]*models.WorkUnit, error) {
 	}
 	if err := rows.Err(); err != nil {
 		rows.Close()
-		return nil, fmt.Errorf("status: scan projects: %w", err)
+		return nil, fmt.Errorf("scan projects: %w", err)
 	}
 	rows.Close()
 
-	// Derive Parent for nested projects from identifier.
 	for _, wu := range projectByID {
 		if parent, ok := parentIdentifierOf(wu.Identifier); ok {
 			wu.Parent = parent
 		}
 	}
+	return projectByID, nil
+}
 
-	// Step 2: load all tickets.
+func (d *DB) loadTickets(projectByID map[int64]*models.WorkUnit) (map[int64]*models.WorkUnit, error) {
 	ticketByID := make(map[int64]*models.WorkUnit)
-
-	rows, err = d.db.Query(
+	rows, err := d.db.Query(
 		`SELECT id, identifier, description, phase, status, claimed_by, last_updated, project_id FROM tickets`,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("status: load tickets: %w", err)
+		return nil, fmt.Errorf("load tickets: %w", err)
 	}
 	for rows.Next() {
 		var id int64
@@ -255,7 +287,7 @@ func (d *DB) Status() ([]*models.WorkUnit, error) {
 		var projectID sql.NullInt64
 		if err := rows.Scan(&id, &identifier, &description, &phase, &status, &claimedBy, &lastUpdated, &projectID); err != nil {
 			rows.Close()
-			return nil, fmt.Errorf("status: scan ticket: %w", err)
+			return nil, fmt.Errorf("scan ticket: %w", err)
 		}
 		wu := &models.WorkUnit{
 			Identifier:   identifier,
@@ -278,22 +310,24 @@ func (d *DB) Status() ([]*models.WorkUnit, error) {
 	}
 	if err := rows.Err(); err != nil {
 		rows.Close()
-		return nil, fmt.Errorf("status: scan tickets: %w", err)
+		return nil, fmt.Errorf("scan tickets: %w", err)
 	}
 	rows.Close()
+	return ticketByID, nil
+}
 
-	// Step 3: load dependencies and attach to work units.
-	rows, err = d.db.Query(
+func (d *DB) loadDependencies(projectByID, ticketByID map[int64]*models.WorkUnit) error {
+	rows, err := d.db.Query(
 		`SELECT work_unit_type, work_unit_id, dependency_type, dependency_id FROM dependencies`,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("status: load dependencies: %w", err)
+		return fmt.Errorf("load dependencies: %w", err)
 	}
 	for rows.Next() {
 		var wuType, wuID, depType, depID int64
 		if err := rows.Scan(&wuType, &wuID, &depType, &depID); err != nil {
 			rows.Close()
-			return nil, fmt.Errorf("status: scan dependency: %w", err)
+			return fmt.Errorf("scan dependency: %w", err)
 		}
 		var depIdentifier string
 		switch depType {
@@ -322,17 +356,19 @@ func (d *DB) Status() ([]*models.WorkUnit, error) {
 	}
 	if err := rows.Err(); err != nil {
 		rows.Close()
-		return nil, fmt.Errorf("status: scan dependencies: %w", err)
+		return fmt.Errorf("scan dependencies: %w", err)
 	}
 	rows.Close()
+	return nil
+}
 
-	// Step 4: load comments and attach to tickets as single-comment threads.
-	rows, err = d.db.Query(
+func (d *DB) loadComments(ticketByID map[int64]*models.WorkUnit) error {
+	rows, err := d.db.Query(
 		`SELECT ticket_id, thread_id, filename, line_number, commit_hash, status, date, author, comment
 		 FROM comments ORDER BY date ASC`,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("status: load comments: %w", err)
+		return fmt.Errorf("load comments: %w", err)
 	}
 	for rows.Next() {
 		var ticketID int64
@@ -341,7 +377,7 @@ func (d *DB) Status() ([]*models.WorkUnit, error) {
 		var date int64
 		if err := rows.Scan(&ticketID, &threadID, &filename, &lineNumber, &commitHash, &cstatus, &date, &author, &text); err != nil {
 			rows.Close()
-			return nil, fmt.Errorf("status: scan comment: %w", err)
+			return fmt.Errorf("scan comment: %w", err)
 		}
 		wu, ok := ticketByID[ticketID]
 		if !ok {
@@ -361,18 +397,10 @@ func (d *DB) Status() ([]*models.WorkUnit, error) {
 	}
 	if err := rows.Err(); err != nil {
 		rows.Close()
-		return nil, fmt.Errorf("status: scan comments: %w", err)
+		return fmt.Errorf("scan comments: %w", err)
 	}
 	rows.Close()
-
-	result := make([]*models.WorkUnit, 0, len(projectByID)+len(ticketByID))
-	for _, wu := range projectByID {
-		result = append(result, wu)
-	}
-	for _, wu := range ticketByID {
-		result = append(result, wu)
-	}
-	return result, nil
+	return nil
 }
 
 // CreateProject inserts a new project (and its dependencies) in a single transaction.
@@ -469,10 +497,9 @@ func (d *DB) SetStatus(identifier, phase, status string) error {
 	}
 
 	if phase == string(models.PhaseImplement) && status == string(models.StatusInProgress) {
-		ticketDir := storage.TicketDirPath(d.ticketsDir, identifier)
-		worktreePath := storage.TicketWorktreePath(ticketDir)
-		if _, err := d.git.GetHeadCommit(worktreePath); err != nil {
-			if err := d.git.CreateWorktree(d.repoRoot, worktreePath, identifier); err != nil {
+		wtp := d.worktreePath(identifier)
+		if _, err := d.git.GetHeadCommit(wtp); err != nil {
+			if err := d.git.CreateWorktree(d.repoRoot, wtp, identifier); err != nil {
 				return fmt.Errorf("create worktree: %w", err)
 			}
 		}
@@ -512,8 +539,7 @@ func (d *DB) markTicketDone(ticketID int64, identifier string, projectID sql.Nul
 		return fmt.Errorf("update ticket: %w", err)
 	}
 
-	ticketDir := storage.TicketDirPath(d.ticketsDir, identifier)
-	if err := d.git.RemoveWorktree(d.repoRoot, storage.TicketWorktreePath(ticketDir), identifier); err != nil {
+	if err := d.git.RemoveWorktree(d.repoRoot, d.worktreePath(identifier), identifier); err != nil {
 		panic(err)
 	}
 	return nil
@@ -639,8 +665,7 @@ func (d *DB) AddComment(identifier, codeLocation, author, text string) error {
 			return err
 		}
 
-		ticketDir := storage.TicketDirPath(d.ticketsDir, identifier)
-		commitHash, _ := d.git.GetHeadCommit(storage.TicketWorktreePath(ticketDir))
+		commitHash, _ := d.git.GetHeadCommit(d.worktreePath(identifier))
 
 		threadID, err := models.NewCommentThreadID()
 		if err != nil {
