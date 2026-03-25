@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/fimmtiu/tickets/internal/config"
 	"github.com/fimmtiu/tickets/internal/storage"
 )
 
@@ -88,8 +89,8 @@ func TestInitTicketsDir_CreatesSettings(t *testing.T) {
 	if err := storage.InitTicketsDir(root); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	settingsPath := filepath.Join(root, ".tickets", "settings.json")
-	data, err := os.ReadFile(settingsPath)
+	ticketsDir := storage.TicketsDirPath(root)
+	data, err := os.ReadFile(config.Path(ticketsDir))
 	if err != nil {
 		t.Fatalf("expected settings.json to exist: %v", err)
 	}
@@ -104,7 +105,7 @@ func TestInitTicketsDir_Idempotent(t *testing.T) {
 	if err := storage.InitTicketsDir(root); err != nil {
 		t.Fatalf("first call: %v", err)
 	}
-	settingsPath := filepath.Join(root, ".tickets", "settings.json")
+	settingsPath := config.Path(storage.TicketsDirPath(root))
 	custom := []byte(`{"stale_threshold_minutes":99,"exit_after_minutes":120}`)
 	if err := os.WriteFile(settingsPath, custom, 0644); err != nil {
 		t.Fatalf("failed to write custom settings: %v", err)

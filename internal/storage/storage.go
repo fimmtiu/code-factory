@@ -49,8 +49,7 @@ func InitTicketsDir(repoRoot string) error {
 		return fmt.Errorf("InitTicketsDir: create .tickets/: %w", err)
 	}
 
-	settingsPath := filepath.Join(ticketsDir, "settings.json")
-	if _, err := os.Stat(settingsPath); errors.Is(err, os.ErrNotExist) {
+	if _, err := os.Stat(config.Path(ticketsDir)); errors.Is(err, os.ErrNotExist) {
 		if err := config.Save(ticketsDir, config.Default()); err != nil {
 			return fmt.Errorf("InitTicketsDir: write settings.json: %w", err)
 		}

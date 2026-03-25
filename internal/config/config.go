@@ -22,6 +22,11 @@ type Settings struct {
 	ExitAfterMinutes int `json:"exit_after_minutes"`
 }
 
+// Path returns the full path to the settings file within ticketsDir.
+func Path(ticketsDir string) string {
+	return filepath.Join(ticketsDir, settingsFileName)
+}
+
 // Default returns a Settings struct populated with default values.
 func Default() *Settings {
 	return &Settings{
@@ -34,7 +39,7 @@ func Default() *Settings {
 // does not exist, defaults are returned. Fields absent from the file take their
 // default values.
 func Load(ticketsDir string) (*Settings, error) {
-	path := filepath.Join(ticketsDir, settingsFileName)
+	path := Path(ticketsDir)
 
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -64,6 +69,5 @@ func Save(ticketsDir string, s *Settings) error {
 		return err
 	}
 
-	path := filepath.Join(ticketsDir, settingsFileName)
-	return os.WriteFile(path, data, 0644)
+	return os.WriteFile(Path(ticketsDir), data, 0644)
 }

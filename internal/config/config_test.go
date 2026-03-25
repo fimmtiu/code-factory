@@ -3,7 +3,6 @@ package config_test
 import (
 	"encoding/json"
 	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/fimmtiu/tickets/internal/config"
@@ -63,7 +62,7 @@ func TestLoadPartialJSON(t *testing.T) {
 	if err != nil {
 		t.Fatalf("json.Marshal failed: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "settings.json"), data, 0644); err != nil {
+	if err := os.WriteFile(config.Path(dir), data, 0644); err != nil {
 		t.Fatalf("WriteFile failed: %v", err)
 	}
 
@@ -87,7 +86,7 @@ func TestLoadPartialJSONMissingStale(t *testing.T) {
 	if err != nil {
 		t.Fatalf("json.Marshal failed: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "settings.json"), data, 0644); err != nil {
+	if err := os.WriteFile(config.Path(dir), data, 0644); err != nil {
 		t.Fatalf("WriteFile failed: %v", err)
 	}
 
@@ -110,7 +109,7 @@ func TestSaveCreatesFile(t *testing.T) {
 	if err := config.Save(dir, s); err != nil {
 		t.Fatalf("Save failed: %v", err)
 	}
-	path := filepath.Join(dir, "settings.json")
+	path := config.Path(dir)
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		t.Errorf("expected settings.json to exist at %s", path)
 	}
@@ -123,7 +122,7 @@ func TestJSONTags(t *testing.T) {
 		t.Fatalf("Save failed: %v", err)
 	}
 
-	data, err := os.ReadFile(filepath.Join(dir, "settings.json"))
+	data, err := os.ReadFile(config.Path(dir))
 	if err != nil {
 		t.Fatalf("ReadFile failed: %v", err)
 	}
