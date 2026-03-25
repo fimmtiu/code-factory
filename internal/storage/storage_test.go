@@ -88,10 +88,10 @@ func TestInitTicketsDir_CreatesSettings(t *testing.T) {
 	if err := storage.InitTicketsDir(root); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	settingsPath := filepath.Join(root, ".tickets", ".settings.json")
+	settingsPath := filepath.Join(root, ".tickets", "settings.json")
 	data, err := os.ReadFile(settingsPath)
 	if err != nil {
-		t.Fatalf("expected .settings.json to exist: %v", err)
+		t.Fatalf("expected settings.json to exist: %v", err)
 	}
 	var m map[string]interface{}
 	if err := json.Unmarshal(data, &m); err != nil {
@@ -104,7 +104,7 @@ func TestInitTicketsDir_Idempotent(t *testing.T) {
 	if err := storage.InitTicketsDir(root); err != nil {
 		t.Fatalf("first call: %v", err)
 	}
-	settingsPath := filepath.Join(root, ".tickets", ".settings.json")
+	settingsPath := filepath.Join(root, ".tickets", "settings.json")
 	custom := []byte(`{"stale_threshold_minutes":99,"exit_after_minutes":120}`)
 	if err := os.WriteFile(settingsPath, custom, 0644); err != nil {
 		t.Fatalf("failed to write custom settings: %v", err)

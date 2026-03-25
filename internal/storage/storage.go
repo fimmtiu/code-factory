@@ -40,7 +40,7 @@ func TicketsDirPath(repoRoot string) string {
 }
 
 // InitTicketsDir creates the .tickets/ directory under repoRoot (if it does not
-// already exist) and writes a default .settings.json (if one does not already
+// already exist) and writes a default settings.json (if one does not already
 // exist). It is safe to call multiple times (idempotent).
 func InitTicketsDir(repoRoot string) error {
 	ticketsDir := TicketsDirPath(repoRoot)
@@ -49,10 +49,10 @@ func InitTicketsDir(repoRoot string) error {
 		return fmt.Errorf("InitTicketsDir: create .tickets/: %w", err)
 	}
 
-	settingsPath := filepath.Join(ticketsDir, ".settings.json")
+	settingsPath := filepath.Join(ticketsDir, "settings.json")
 	if _, err := os.Stat(settingsPath); errors.Is(err, os.ErrNotExist) {
 		if err := config.Save(ticketsDir, config.Default()); err != nil {
-			return fmt.Errorf("InitTicketsDir: write .settings.json: %w", err)
+			return fmt.Errorf("InitTicketsDir: write settings.json: %w", err)
 		}
 	}
 

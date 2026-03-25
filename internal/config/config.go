@@ -1,5 +1,5 @@
 // Package config manages application settings for the tickets daemon.
-// Settings are stored as JSON in a .settings.json file within the tickets directory.
+// Settings are stored as JSON in a settings.json file within the tickets directory.
 package config
 
 import (
@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 )
 
-const settingsFileName = ".settings.json"
+const settingsFileName = "settings.json"
 
 // Settings holds configuration values for the tickets daemon.
 type Settings struct {
@@ -30,7 +30,7 @@ func Default() *Settings {
 	}
 }
 
-// Load reads settings from a .settings.json file in ticketsDir. If the file
+// Load reads settings from a settings.json file in ticketsDir. If the file
 // does not exist, defaults are returned. Fields absent from the file take their
 // default values.
 func Load(ticketsDir string) (*Settings, error) {
@@ -52,7 +52,7 @@ func Load(ticketsDir string) (*Settings, error) {
 	return s, nil
 }
 
-// Save writes the settings to a .settings.json file in ticketsDir,
+// Save writes the settings to a settings.json file in ticketsDir,
 // creating the directory if it does not exist.
 func Save(ticketsDir string, s *Settings) error {
 	if err := os.MkdirAll(ticketsDir, 0755); err != nil {
