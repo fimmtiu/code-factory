@@ -10,8 +10,9 @@ import (
 var identifierSegmentRe = regexp.MustCompile(`^[a-z][a-z0-9-]*[a-z0-9]$|^[a-z]$`)
 
 const (
-	ChangeRequestOpen   = "open"
-	ChangeRequestClosed = "closed"
+	ChangeRequestOpen      = "open"
+	ChangeRequestClosed    = "closed"
+	ChangeRequestDismissed = "dismissed"
 )
 
 // ChangeRequest records a requested code change at a specific location.
@@ -19,7 +20,7 @@ type ChangeRequest struct {
 	ID           string    `json:"id"`
 	CommitHash   string    `json:"commit_hash"`
 	CodeLocation string    `json:"code_location"`
-	Status       string    `json:"status"` // ChangeRequestOpen or ChangeRequestClosed
+	Status       string    `json:"status"` // ChangeRequestOpen, ChangeRequestClosed, or ChangeRequestDismissed
 	Date         time.Time `json:"date"`
 	Author       string    `json:"author"`
 	Description  string    `json:"description"`
