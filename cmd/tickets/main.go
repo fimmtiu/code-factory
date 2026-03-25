@@ -35,7 +35,6 @@ Subcommands (auto-start daemon if needed):
   set-status <id> <status>        Set a ticket's status (use "done" to merge and cascade)
   claim <pid>                     Claim the next available ticket for the given process ID
   release <id>                    Release the claim on a ticket
-  add-comment <id> <loc> <author> <text>
-                                  Add a comment to a work unit at a code location
+  add-comment <id> <loc> <author>  Add a comment to a work unit (text read from stdin)
   close-thread <thread-id>        Close a comment thread`)
 }

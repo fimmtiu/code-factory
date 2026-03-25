@@ -487,6 +487,42 @@ func TestRunRelease_MissingIdentifier(t *testing.T) {
 	}
 }
 
+func TestRunAddComment(t *testing.T) {
+	socketPath, done := startMockServer(t, func(cmd protocol.Command) protocol.Response {
+		if cmd.Name != "add-comment" {
+			return protocol.Response{Success: false, Error: "unexpected command"}
+		}
+		if cmd.Params["identifier"] != "my-ticket" {
+			return protocol.Response{Success: false, Error: "wrong identifier"}
+		}
+		if cmd.Params["code_location"] != "main.go:42" {
+			return protocol.Response{Success: false, Error: "wrong code_location"}
+		}
+		if cmd.Params["author"] != "alice" {
+			return protocol.Response{Success: false, Error: "wrong author"}
+		}
+		if cmd.Params["text"] != "looks good to me" {
+			return protocol.Response{Success: false, Error: "wrong text"}
+		}
+		return protocol.Response{Success: true}
+	})
+
+	captureOutput(func() {
+		stdin := strings.NewReader("looks good to me")
+		if err := runAddComment(socketPath, []string{"my-ticket", "main.go:42", "alice"}, stdin); err != nil {
+			t.Fatalf("runAddComment returned error: %v", err)
+		}
+	})
+	<-done
+}
+
+func TestRunAddComment_MissingArgs(t *testing.T) {
+	err := runAddComment("/tmp/unused.sock", []string{"only-one", "arg"}, strings.NewReader("text"))
+	if err == nil {
+		t.Error("expected error when args are missing, got nil")
+	}
+}
+
 func TestRunCommand_UnknownSubcommand(t *testing.T) {
 	err := runCommand("no-such-command", []string{})
 	if err == nil {

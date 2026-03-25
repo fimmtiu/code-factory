@@ -16,5 +16,8 @@ clean-data:
 
 install: build
 	GOBIN=$(HOME)/bin go install ./cmd/tickets ./cmd/ticketsd ./cmd/tickets-ui ./cmd/tickets-testdata
+	for skill in skills/*; do
+		cp -rf $$skill $(HOME)/.claude/skills/
+	done
 
 .PHONY: build test lint clean clean-data install

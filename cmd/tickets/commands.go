@@ -100,7 +100,7 @@ func runCommand(subcommand string, args []string) error {
 		if err != nil {
 			return err
 		}
-		return runAddComment(sockPath, args)
+		return runAddComment(sockPath, args, os.Stdin)
 	case "close-thread":
 		sockPath, err := ensureDaemon()
 		if err != nil {
@@ -332,10 +332,15 @@ func runRelease(socketPath string, args []string) error {
 	return printResponseData(resp)
 }
 
-// runAddComment sends "add-comment" with identifier, code location, author, and text.
-func runAddComment(socketPath string, args []string) error {
-	if len(args) < 4 {
-		return fmt.Errorf("usage: tickets add-comment <identifier> <code-location> <author> <text>")
+// runAddComment sends "add-comment" with identifier, code location, author,
+// and text read from stdin.
+func runAddComment(socketPath string, args []string, stdin io.Reader) error {
+	if len(args) < 3 {
+		return fmt.Errorf("usage: tickets add-comment <identifier> <code-location> <author>")
+	}
+	text, err := io.ReadAll(stdin)
+	if err != nil {
+		return fmt.Errorf("add-comment: read stdin: %w", err)
 	}
 	c := client.NewClient(socketPath)
 	resp, err := c.SendCommand(protocol.Command{
@@ -344,7 +349,7 @@ func runAddComment(socketPath string, args []string) error {
 			"identifier":    args[0],
 			"code_location": args[1],
 			"author":        args[2],
-			"text":          strings.Join(args[3:], " "),
+			"text":          string(text),
 		},
 	})
 	if err != nil {
