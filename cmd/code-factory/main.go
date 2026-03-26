@@ -4,12 +4,13 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"os/signal"
 	"path/filepath"
-	"syscall"
+
+	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/fimmtiu/tickets/internal/db"
 	"github.com/fimmtiu/tickets/internal/storage"
+	"github.com/fimmtiu/tickets/internal/ui"
 	"github.com/fimmtiu/tickets/internal/worker"
 )
 
@@ -81,10 +82,12 @@ Options:
 	pool.Start(database, ticketsDir)
 	pool.StartHousekeeping(database)
 
-	// Block until an OS signal requests shutdown.
-	sigs := make(chan os.Signal, 1)
-	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
-	<-sigs
+	// Start the TUI; it blocks until the user quits.
+	model := ui.NewModel(pool, database)
+	prog := tea.NewProgram(model, tea.WithAltScreen())
+	if _, err := prog.Run(); err != nil {
+		fmt.Fprintln(os.Stderr, "error: TUI exited with error:", err)
+	}
 
 	// Graceful shutdown: wait for all goroutines to exit.
 	pool.Stop()

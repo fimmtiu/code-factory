@@ -1,0 +1,216 @@
+package ui
+
+import (
+	"strings"
+
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+
+	"github.com/fimmtiu/tickets/internal/db"
+	"github.com/fimmtiu/tickets/internal/worker"
+)
+
+// ── Styles ───────────────────────────────────────────────────────────────────
+
+var (
+	headerStyle = lipgloss.NewStyle().
+			Bold(true).
+			Padding(0, 1)
+
+	activeTabStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("230")).
+			Background(lipgloss.Color("62")).
+			Padding(0, 1)
+
+	inactiveTabStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("245")).
+				Padding(0, 1)
+
+	helpHintStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("240")).
+			Padding(0, 1)
+)
+
+// ── Model ────────────────────────────────────────────────────────────────────
+
+// Model is the root bubbletea model for the code-factory TUI.
+type Model struct {
+	pool   *worker.Pool
+	db     *db.DB
+	width  int
+	height int
+
+	activeView ViewID
+	views      [4]viewModel
+
+	dialog dialog // nil when no dialog is open
+}
+
+// NewModel creates a new root Model with the given pool and database.
+func NewModel(pool *worker.Pool, database *db.DB) Model {
+	return Model{
+		pool:       pool,
+		db:         database,
+		activeView: ViewProject,
+		views: [4]viewModel{
+			ViewProject: NewProjectView(),
+			ViewCommand: NewCommandView(),
+			ViewWorker:  NewWorkerView(),
+			ViewLog:     NewLogView(),
+		},
+	}
+}
+
+// Init returns the initial command batch.
+func (m Model) Init() tea.Cmd {
+	return nil
+}
+
+// Update handles all incoming messages.
+func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
+		return m, nil
+
+	case dismissDialogMsg:
+		m.dialog = nil
+		return m, nil
+
+	case tea.KeyMsg:
+		// If a dialog is open, route all keys to it.
+		if m.dialog != nil {
+			updated, cmd := m.dialog.Update(msg)
+			m.dialog = updated.(dialog)
+			return m, cmd
+		}
+
+		switch msg.String() {
+		case "q", "ctrl+c":
+			return m.handleQuit()
+
+		case "?", "H":
+			m.dialog = NewHelpDialog(m.views[m.activeView].KeyBindings())
+			return m, nil
+
+		case "f1":
+			m.activeView = ViewProject
+			return m, nil
+		case "f2":
+			m.activeView = ViewCommand
+			return m, nil
+		case "f3":
+			m.activeView = ViewWorker
+			return m, nil
+		case "f4":
+			m.activeView = ViewLog
+			return m, nil
+
+		case "shift+tab":
+			m.activeView = nextView(m.activeView)
+			return m, nil
+
+		case "ctrl+tab":
+			m.activeView = prevView(m.activeView)
+			return m, nil
+		}
+
+		// Pass remaining keys to the active view.
+		updated, cmd := m.views[m.activeView].Update(msg)
+		m.views[m.activeView] = updated.(viewModel)
+		return m, cmd
+	}
+
+	// Broadcast non-key messages to the active view.
+	updated, cmd := m.views[m.activeView].Update(msg)
+	m.views[m.activeView] = updated.(viewModel)
+	return m, cmd
+}
+
+// View renders the current state of the TUI.
+func (m Model) View() string {
+	header := m.renderHeader()
+	content := m.views[m.activeView].View()
+	hint := helpHintStyle.Render("? help  Q quit")
+
+	// Compute the body area height.
+	bodyHeight := m.height - lipgloss.Height(header) - lipgloss.Height(hint)
+	if bodyHeight < 0 {
+		bodyHeight = 0
+	}
+
+	// Pad content to fill the body area.
+	contentLines := strings.Split(content, "\n")
+	for len(contentLines) < bodyHeight {
+		contentLines = append(contentLines, "")
+	}
+	// Truncate if too tall.
+	if len(contentLines) > bodyHeight {
+		contentLines = contentLines[:bodyHeight]
+	}
+	body := strings.Join(contentLines, "\n")
+
+	full := lipgloss.JoinVertical(lipgloss.Left, header, body, hint)
+
+	if m.dialog != nil {
+		overlayStr := m.dialog.View()
+		full = renderCenteredOverlay(full, overlayStr, m.width, m.height)
+	}
+
+	return full
+}
+
+// renderHeader returns the tab bar showing the active view.
+func (m Model) renderHeader() string {
+	tabs := make([]string, 4)
+	for i, name := range []string{
+		viewNames[ViewProject],
+		viewNames[ViewCommand],
+		viewNames[ViewWorker],
+		viewNames[ViewLog],
+	} {
+		label := name
+		switch ViewID(i) {
+		case ViewProject:
+			label = "F1:" + name
+		case ViewCommand:
+			label = "F2:" + name
+		case ViewWorker:
+			label = "F3:" + name
+		case ViewLog:
+			label = "F4:" + name
+		}
+		if ViewID(i) == m.activeView {
+			tabs[i] = activeTabStyle.Render(label)
+		} else {
+			tabs[i] = inactiveTabStyle.Render(label)
+		}
+	}
+	return headerStyle.Render(strings.Join(tabs, " "))
+}
+
+// handleQuit implements the quit flow: immediate exit if all workers are idle,
+// otherwise show the confirmation dialog.
+func (m Model) handleQuit() (tea.Model, tea.Cmd) {
+	if m.allWorkersIdle() {
+		return m, tea.Quit
+	}
+	m.dialog = NewQuitDialog()
+	return m, nil
+}
+
+// allWorkersIdle returns true if every worker in the pool is StatusIdle.
+func (m Model) allWorkersIdle() bool {
+	if m.pool == nil {
+		return true
+	}
+	for _, w := range m.pool.Workers {
+		if w.Status != worker.StatusIdle {
+			return false
+		}
+	}
+	return true
+}

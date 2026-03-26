@@ -1,0 +1,234 @@
+package ui
+
+import (
+	"strings"
+
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+)
+
+// dialog is an interface satisfied by all modal dialogs.
+type dialog interface {
+	tea.Model
+}
+
+// ── Styles ───────────────────────────────────────────────────────────────────
+
+var (
+	dialogBoxStyle = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("62")).
+			Padding(1, 2)
+
+	dialogTitleStyle = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(lipgloss.Color("230")).
+				MarginBottom(1)
+
+	buttonNormalStyle = lipgloss.NewStyle().
+				Padding(0, 2).
+				Background(lipgloss.Color("238")).
+				Foreground(lipgloss.Color("255"))
+
+	buttonFocusedStyle = lipgloss.NewStyle().
+				Padding(0, 2).
+				Background(lipgloss.Color("62")).
+				Foreground(lipgloss.Color("230"))
+)
+
+// renderCenteredOverlay places the overlay content in the centre of the
+// terminal, dimming the background.
+func renderCenteredOverlay(bg string, overlay string, width, height int) string {
+	overlayLines := strings.Split(overlay, "\n")
+	overlayH := len(overlayLines)
+	overlayW := 0
+	for _, l := range overlayLines {
+		if w := lipgloss.Width(l); w > overlayW {
+			overlayW = w
+		}
+	}
+
+	topPad := (height - overlayH) / 2
+	if topPad < 0 {
+		topPad = 0
+	}
+	leftPad := (width - overlayW) / 2
+	if leftPad < 0 {
+		leftPad = 0
+	}
+
+	bgLines := strings.Split(bg, "\n")
+	// Pad bg to height lines.
+	for len(bgLines) < height {
+		bgLines = append(bgLines, strings.Repeat(" ", width))
+	}
+
+	result := make([]string, height)
+	for i := 0; i < height; i++ {
+		bgLine := ""
+		if i < len(bgLines) {
+			bgLine = bgLines[i]
+		}
+		// Pad bg line to width.
+		bgRunes := []rune(bgLine)
+		for len(bgRunes) < width {
+			bgRunes = append(bgRunes, ' ')
+		}
+		bgLine = string(bgRunes)
+
+		overlayIdx := i - topPad
+		if overlayIdx < 0 || overlayIdx >= len(overlayLines) {
+			result[i] = bgLine
+			continue
+		}
+
+		ol := overlayLines[overlayIdx]
+		olRunes := []rune(ol)
+
+		// Build the merged line: bg chars + overlay in the middle.
+		merged := []rune(bgLine)
+		for j, r := range olRunes {
+			pos := leftPad + j
+			if pos < len(merged) {
+				merged[pos] = r
+			}
+		}
+		result[i] = string(merged)
+	}
+
+	return strings.Join(result, "\n")
+}
+
+// ── Quit dialog ──────────────────────────────────────────────────────────────
+
+// quitDialogFocused tracks which button has focus.
+type quitDialogFocused int
+
+const (
+	quitFocusCancel quitDialogFocused = iota
+	quitFocusQuit
+)
+
+// QuitDialog is the "really quit?" modal shown when workers are busy.
+type QuitDialog struct {
+	focused quitDialogFocused
+}
+
+func NewQuitDialog() QuitDialog {
+	return QuitDialog{focused: quitFocusCancel}
+}
+
+func (d QuitDialog) Init() tea.Cmd { return nil }
+
+func (d QuitDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "tab":
+			if d.focused == quitFocusCancel {
+				d.focused = quitFocusQuit
+			} else {
+				d.focused = quitFocusCancel
+			}
+		case "shift+tab":
+			if d.focused == quitFocusQuit {
+				d.focused = quitFocusCancel
+			} else {
+				d.focused = quitFocusQuit
+			}
+		case "left", "h":
+			d.focused = quitFocusCancel
+		case "right", "l":
+			d.focused = quitFocusQuit
+		case "enter":
+			if d.focused == quitFocusQuit {
+				return d, tea.Quit
+			}
+			// Cancel — caller will clear the dialog.
+			return d, dismissDialogCmd()
+		case "esc":
+			return d, dismissDialogCmd()
+		}
+	}
+	return d, nil
+}
+
+func (d QuitDialog) View() string {
+	cancelBtn := buttonNormalStyle.Render("Cancel")
+	quitBtn := buttonNormalStyle.Render("Quit")
+	if d.focused == quitFocusCancel {
+		cancelBtn = buttonFocusedStyle.Render("Cancel")
+	} else {
+		quitBtn = buttonFocusedStyle.Render("Quit")
+	}
+
+	body := lipgloss.JoinVertical(lipgloss.Left,
+		dialogTitleStyle.Render("Really quit?"),
+		"There are still active workers. Really quit?",
+		"",
+		lipgloss.JoinHorizontal(lipgloss.Top, cancelBtn, "  ", quitBtn),
+	)
+	return dialogBoxStyle.Render(body)
+}
+
+// ── Help dialog ───────────────────────────────────────────────────────────────
+
+// HelpDialog shows the key bindings for the current view.
+type HelpDialog struct {
+	bindings []KeyBinding
+}
+
+func NewHelpDialog(viewBindings []KeyBinding) HelpDialog {
+	all := make([]KeyBinding, 0, len(globalKeyBindings)+len(viewBindings))
+	all = append(all, viewBindings...)
+	if len(viewBindings) > 0 {
+		// separator represented as an empty binding
+		all = append(all, KeyBinding{})
+	}
+	all = append(all, globalKeyBindings...)
+	return HelpDialog{bindings: all}
+}
+
+func (d HelpDialog) Init() tea.Cmd { return nil }
+
+func (d HelpDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "enter", "esc":
+			return d, dismissDialogCmd()
+		}
+	}
+	return d, nil
+}
+
+func (d HelpDialog) View() string {
+	var sb strings.Builder
+	for _, kb := range d.bindings {
+		if kb.Key == "" {
+			sb.WriteString("\n")
+			continue
+		}
+		sb.WriteString(lipgloss.NewStyle().Bold(true).Render(kb.Key))
+		sb.WriteString("  ")
+		sb.WriteString(kb.Description)
+		sb.WriteString("\n")
+	}
+
+	body := lipgloss.JoinVertical(lipgloss.Left,
+		dialogTitleStyle.Render("Help"),
+		strings.TrimRight(sb.String(), "\n"),
+		"",
+		buttonFocusedStyle.Render("Okay"),
+	)
+	return dialogBoxStyle.Render(body)
+}
+
+// ── dismissDialogMsg ──────────────────────────────────────────────────────────
+
+// dismissDialogMsg is sent by dialogs when they want to be closed.
+type dismissDialogMsg struct{}
+
+func dismissDialogCmd() tea.Cmd {
+	return func() tea.Msg { return dismissDialogMsg{} }
+}

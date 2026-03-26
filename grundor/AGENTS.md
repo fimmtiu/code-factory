@@ -7,6 +7,7 @@
 - `internal/db/` — SQLite DB access layer; all writes go through `withTx`
 - `internal/models/` — Shared data structs (WorkUnit, LogEntry, etc.)
 - `internal/storage/` — Path utilities and `.tickets/` directory initialization
+- `internal/ui/` — Bubbletea TUI: root `Model` in `app.go`, stub view models, dialogs
 - `internal/util/` — Shared utilities: editor invocation, terminal opening, clipboard
 - `internal/worker/` — Worker pool data model: `Worker`, `Pool`, `WorkerStatus`, message types, `LogMessage`
 
@@ -26,6 +27,17 @@
 - `cmd/tickets` uses a hand-rolled subcommand parser (check `os.Args[1]`)
 - `cmd/code-factory` uses the standard `flag` package with `-p`/`--pool` and `-w`/`--wait` flags
 - Startup must verify: (1) inside a git repo via `storage.FindRepoRoot`, (2) `.tickets/` directory exists
+
+### Git: cmd/code-factory source files
+- `.gitignore` has a bare `code-factory` entry that also matches the `cmd/code-factory/` directory path, causing `git add` to refuse it
+- Use `git add -f cmd/code-factory/main.go` (or any file inside that directory)
+
+### internal/ui package (PRD-05)
+- Root model: `ui.NewModel(pool, database)` — use `tea.NewProgram(model, tea.WithAltScreen())`
+- `KeyBinding{Key, Description}` + `globalKeyBindings` in `keybinding.go`; each view returns its own via `KeyBindings() []KeyBinding`
+- Dialog dismiss is message-based: dialog sends `dismissDialogCmd()` → root model sets `m.dialog = nil`
+- `renderCenteredOverlay` in `dialogs.go` merges the dialog string over the background at the terminal centre
+- View cycle (Shift-Tab = next, Ctrl-Tab = prev): implemented via `nextView`/`prevView` helpers in `views.go`
 
 ### Makefile
 - `make build` builds all three binaries: `tickets`, `tickets-testdata`, `code-factory`
