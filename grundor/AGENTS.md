@@ -8,6 +8,7 @@
 - `internal/models/` — Shared data structs (WorkUnit, LogEntry, etc.)
 - `internal/storage/` — Path utilities and `.tickets/` directory initialization
 - `internal/util/` — Shared utilities: editor invocation, terminal opening, clipboard
+- `internal/worker/` — Worker pool data model: `Worker`, `Pool`, `WorkerStatus`, message types, `LogMessage`
 
 ## Key Conventions
 
@@ -30,6 +31,14 @@
 - `make build` builds all three binaries: `tickets`, `tickets-testdata`, `code-factory`
 - `make lint` runs `go vet` and `gofmt -w .`
 - `make test` runs `go test ./...`
+
+## internal/worker package
+
+- `WorkerStatus` is a typed `string` enum; use `StatusIdle`, `StatusAwaitingResponse`, `StatusBusy`
+- `Worker` uses two separate typed channels: `ToWorker chan MainToWorkerMessage` and `FromWorker chan WorkerToMainMessage`
+- Message kinds are typed string constants (`MainToWorkerKind`, `WorkerToMainKind`) — not plain strings
+- `Pool.GetWorker(n)` uses 1-based numbering; returns nil for out-of-range values
+- Log channel buffer is 100 to avoid blocking workers during log bursts
 
 ## internal/util package
 
