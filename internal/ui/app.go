@@ -47,14 +47,15 @@ type Model struct {
 	dialog dialog // nil when no dialog is open
 }
 
-// NewModel creates a new root Model with the given pool and database.
-func NewModel(pool *worker.Pool, database *db.DB) Model {
+// NewModel creates a new root Model with the given pool, database, and poll
+// interval (in seconds).
+func NewModel(pool *worker.Pool, database *db.DB, waitSecs int) Model {
 	return Model{
 		pool:       pool,
 		db:         database,
 		activeView: ViewProject,
 		views: [4]viewModel{
-			ViewProject: NewProjectView(),
+			ViewProject: NewProjectView(database, waitSecs),
 			ViewCommand: NewCommandView(),
 			ViewWorker:  NewWorkerView(),
 			ViewLog:     NewLogView(),
@@ -62,9 +63,15 @@ func NewModel(pool *worker.Pool, database *db.DB) Model {
 	}
 }
 
-// Init returns the initial command batch.
+// Init returns the initial command batch, including init commands from all views.
 func (m Model) Init() tea.Cmd {
-	return nil
+	var cmds []tea.Cmd
+	for _, v := range m.views {
+		if cmd := v.Init(); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+	}
+	return tea.Batch(cmds...)
 }
 
 // Update handles all incoming messages.
@@ -74,7 +81,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		return m, nil
+		// Forward to all views so they can recalculate layouts.
+		var cmds []tea.Cmd
+		for i, v := range m.views {
+			updated, cmd := v.Update(msg)
+			m.views[i] = updated.(viewModel)
+			if cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+		}
+		return m, tea.Batch(cmds...)
 
 	case dismissDialogMsg:
 		m.dialog = nil

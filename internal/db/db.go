@@ -809,6 +809,57 @@ func (d *DB) FindStaleTickets(thresholdMinutes int) ([]*models.WorkUnit, error) 
 	return tickets, nil
 }
 
+// TicketStats holds aggregate ticket counts used by the status pane.
+type TicketStats struct {
+	Total int
+	Done  int
+}
+
+// TicketStats returns the total number of tickets and how many are in the
+// "done" phase.
+func (d *DB) TicketStats() (TicketStats, error) {
+	var stats TicketStats
+	err := d.db.QueryRow(`SELECT COUNT(*) FROM tickets`).Scan(&stats.Total)
+	if err != nil {
+		return stats, fmt.Errorf("ticket stats total: %w", err)
+	}
+	err = d.db.QueryRow(`SELECT COUNT(*) FROM tickets WHERE phase = 'done'`).Scan(&stats.Done)
+	if err != nil {
+		return stats, fmt.Errorf("ticket stats done: %w", err)
+	}
+	return stats, nil
+}
+
+// UpdateDescription updates the description of a work unit (ticket or project)
+// identified by identifier.
+func (d *DB) UpdateDescription(identifier string, newDescription string) error {
+	return d.withTx(func(tx *sql.Tx) error {
+		res, err := tx.Exec(
+			`UPDATE tickets SET description = ? WHERE identifier = ?`,
+			newDescription, identifier,
+		)
+		if err != nil {
+			return fmt.Errorf("update ticket description: %w", err)
+		}
+		n, _ := res.RowsAffected()
+		if n > 0 {
+			return nil
+		}
+		res, err = tx.Exec(
+			`UPDATE projects SET description = ? WHERE identifier = ?`,
+			newDescription, identifier,
+		)
+		if err != nil {
+			return fmt.Errorf("update project description: %w", err)
+		}
+		n, _ = res.RowsAffected()
+		if n == 0 {
+			return fmt.Errorf("work unit %q not found", identifier)
+		}
+		return nil
+	})
+}
+
 // GetLogs returns all log entries ordered by timestamp ascending.
 func (d *DB) GetLogs() ([]models.LogEntry, error) {
 	rows, err := d.db.Query(

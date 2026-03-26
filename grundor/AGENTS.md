@@ -17,6 +17,8 @@
 - Add new `CREATE TABLE IF NOT EXISTS` or `CREATE INDEX IF NOT EXISTS` statements to the `schemaStatements` slice in `internal/db/db.go`
 - All DB writes use `d.withTx(func(tx *sql.Tx) error { ... })`
 - Tests use `openTestDB(t)` from `db_test.go` which injects a fake git client
+- `db.TicketStats()` returns `db.TicketStats{Total, Done}` counts
+- `db.UpdateDescription(identifier, newDescription)` updates tickets or projects table (tries tickets first, falls back to projects)
 
 ### Subprocess execution
 - Always use `os/exec`, never `tea.ExecProcess`
@@ -32,12 +34,16 @@
 - `.gitignore` has a bare `code-factory` entry that also matches the `cmd/code-factory/` directory path, causing `git add` to refuse it
 - Use `git add -f cmd/code-factory/main.go` (or any file inside that directory)
 
-### internal/ui package (PRD-05)
-- Root model: `ui.NewModel(pool, database)` — use `tea.NewProgram(model, tea.WithAltScreen())`
+### internal/ui package (PRD-05, PRD-06)
+- Root model: `ui.NewModel(pool, database, waitSecs)` — use `tea.NewProgram(model, tea.WithAltScreen())`
 - `KeyBinding{Key, Description}` + `globalKeyBindings` in `keybinding.go`; each view returns its own via `KeyBindings() []KeyBinding`
 - Dialog dismiss is message-based: dialog sends `dismissDialogCmd()` → root model sets `m.dialog = nil`
 - `renderCenteredOverlay` in `dialogs.go` merges the dialog string over the background at the terminal centre
 - View cycle (Shift-Tab = next, Ctrl-Tab = prev): implemented via `nextView`/`prevView` helpers in `views.go`
+- Sub-model `Init()` cmds must be collected and batched in the root `Init()` — bubbletea only auto-calls the root model's `Init()`
+- `tea.WindowSizeMsg` must be forwarded to all views (not just the active one) so each can compute layout
+- `ProjectView` uses a `chromeHeight = 2` constant to subtract the tab-bar and help-hint rows from the available body height
+- Three-pane layout: `lipgloss.JoinHorizontal` for top row (status + tree), `lipgloss.JoinVertical` for full layout; border style switches between `DoubleBorder` (focused, blue) and `NormalBorder` (unfocused, grey) based on focus state
 
 ### Makefile
 - `make build` builds all three binaries: `tickets`, `tickets-testdata`, `code-factory`

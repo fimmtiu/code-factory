@@ -83,7 +83,7 @@ Options:
 	pool.StartHousekeeping(database)
 
 	// Start the TUI; it blocks until the user quits.
-	model := ui.NewModel(pool, database)
+	model := ui.NewModel(pool, database, *waitSecs)
 	prog := tea.NewProgram(model, tea.WithAltScreen())
 	if _, err := prog.Run(); err != nil {
 		fmt.Fprintln(os.Stderr, "error: TUI exited with error:", err)
