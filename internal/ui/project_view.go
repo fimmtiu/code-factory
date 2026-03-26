@@ -64,6 +64,12 @@ type projectRefreshMsg struct {
 
 type projectDescriptionSavedMsg struct{}
 
+// openChangeRequestDialogMsg requests the root model to open the change
+// request dialog for the given work unit.
+type openChangeRequestDialogMsg struct {
+	wu *models.WorkUnit
+}
+
 // ── Tree node ─────────────────────────────────────────────────────────────────
 
 // treeNode is a flattened row in the tree, with its depth and the work unit.
@@ -289,7 +295,7 @@ func (v ProjectView) updateTreeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "tab":
 		v.focus = focusDetail
 	case "enter":
-		// No-op placeholder (change request dialog in phase 10)
+		return v.openChangeRequestDialog()
 	case "t", "T":
 		return v.openTerminal()
 	case "e", "E":
@@ -320,13 +326,27 @@ func (v ProjectView) updateDetailKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "tab":
 		v.focus = focusTree
 	case "enter":
-		// No-op placeholder
+		return v.openChangeRequestDialog()
 	case "t", "T":
 		return v.openTerminal()
 	case "e", "E":
 		return v.openEditor()
 	}
 	return v, nil
+}
+
+func (v ProjectView) openChangeRequestDialog() (tea.Model, tea.Cmd) {
+	if len(v.treeNodes) == 0 {
+		return v, nil
+	}
+	wu := v.treeNodes[v.treeSelected].wu
+	// Projects don't have change requests: no-op
+	if wu.IsProject {
+		return v, nil
+	}
+	return v, func() tea.Msg {
+		return openChangeRequestDialogMsg{wu: wu}
+	}
 }
 
 func (v ProjectView) openTerminal() (tea.Model, tea.Cmd) {
@@ -674,7 +694,7 @@ func (v ProjectView) KeyBindings() []KeyBinding {
 		{Key: "↑/↓", Description: "Navigate / scroll"},
 		{Key: "PgUp/PgDn", Description: "Page navigate / scroll"},
 		{Key: "Tab", Description: "Switch focus between tree and detail pane"},
-		{Key: "Enter", Description: "Open change request dialog (coming soon)"},
+		{Key: "Enter", Description: "Open change request dialog (tickets only)"},
 		{Key: "T", Description: "Open terminal in work unit worktree"},
 		{Key: "E", Description: "Edit work unit description"},
 	}

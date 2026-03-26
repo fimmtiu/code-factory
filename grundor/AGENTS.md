@@ -47,6 +47,7 @@
 - `CommandView` (PRD-07): `NewCommandView(database, pool, waitSecs)` — full-screen selectable list of actionable tickets; `Approve(db, identifier)` placeholder lives in `command_view.go` for phase 11 to replace
 - `WorkerView` (PRD-08): `NewWorkerView(pool)` — read-only monitoring view; 500ms `tea.Tick` with `workerTickMsg`; linesPerWorker=5 (status+3 output+separator); scroll only (no selection)
 - Non-key messages only go to the active view; tick-based refresh chains (fetch → schedule next tick → on tick, fetch again) only run while a view is active
+- `ChangeRequestDialog` (PRD-10): opened via `openChangeRequestDialogMsg{wu}` from ProjectView/CommandView → root model creates `NewChangeRequestDialog(db, wu, width, height)`; when a dialog is open, non-key messages are routed to the dialog (not the active view) so its own internal update messages (e.g. `crStatusChangedMsg`) arrive correctly; code context uses `git show <hash>:<file>` in the worktree dir
 
 ### Makefile
 - `make build` builds all three binaries: `tickets`, `tickets-testdata`, `code-factory`

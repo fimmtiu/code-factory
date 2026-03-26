@@ -96,6 +96,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.dialog = nil
 		return m, nil
 
+	case openChangeRequestDialogMsg:
+		m.dialog = NewChangeRequestDialog(m.db, msg.wu, m.width, m.height)
+		return m, nil
+
 	case tea.KeyMsg:
 		// If a dialog is open, route all keys to it.
 		if m.dialog != nil {
@@ -137,6 +141,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Pass remaining keys to the active view.
 		updated, cmd := m.views[m.activeView].Update(msg)
 		m.views[m.activeView] = updated.(viewModel)
+		return m, cmd
+	}
+
+	// If a dialog is open, route non-key messages to it first.
+	if m.dialog != nil {
+		updated, cmd := m.dialog.Update(msg)
+		m.dialog = updated.(dialog)
 		return m, cmd
 	}
 

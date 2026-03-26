@@ -166,6 +166,8 @@ func (v CommandView) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		v.moveUp(v.listHeight())
 	case "pgdown":
 		v.moveDown(v.listHeight())
+	case "enter":
+		return v.openChangeRequestDialog()
 	case "r", "R":
 		return v.respondToAgent()
 	case "t", "T":
@@ -343,6 +345,28 @@ func (v CommandView) openCursor() (tea.Model, tea.Cmd) {
 	return v, nil
 }
 
+func (v CommandView) openChangeRequestDialog() (tea.Model, tea.Cmd) {
+	wu := v.selectedTicket()
+	if wu == nil {
+		return v, nil
+	}
+	// Fetch fresh work units to get change requests populated
+	database := v.database
+	identifier := wu.Identifier
+	return v, func() tea.Msg {
+		units, err := database.Status()
+		if err != nil {
+			return nil
+		}
+		for _, u := range units {
+			if u.Identifier == identifier && !u.IsProject {
+				return openChangeRequestDialogMsg{wu: u}
+			}
+		}
+		return nil
+	}
+}
+
 func (v CommandView) approveTicket() (tea.Model, tea.Cmd) {
 	wu := v.selectedTicket()
 	if wu == nil || wu.Status != models.StatusUserReview {
@@ -462,6 +486,7 @@ func (v CommandView) KeyBindings() []KeyBinding {
 	return []KeyBinding{
 		{Key: "↑/↓", Description: "Navigate list"},
 		{Key: "PgUp/PgDn", Description: "Page navigate"},
+		{Key: "Enter", Description: "Open change request dialog"},
 		{Key: "R", Description: "Respond to agent (needs-attention tickets)"},
 		{Key: "T", Description: "Open terminal in worktree"},
 		{Key: "E", Description: "Open worktree in Cursor"},

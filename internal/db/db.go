@@ -745,6 +745,31 @@ func (d *DB) DismissChangeRequest(id int64) error {
 	return d.setChangeRequestStatus(id, models.ChangeRequestDismissed)
 }
 
+// ReopenChangeRequest sets the status of the change request with the given id to "open".
+func (d *DB) ReopenChangeRequest(id int64) error {
+	return d.setChangeRequestStatus(id, models.ChangeRequestOpen)
+}
+
+// UpdateChangeRequestDescription updates the description of the change request with the given id.
+func (d *DB) UpdateChangeRequestDescription(id int64, description string) error {
+	return d.withTx(func(tx *sql.Tx) error {
+		res, err := tx.Exec(
+			`UPDATE change_requests SET description = ? WHERE id = ?`, description, id,
+		)
+		if err != nil {
+			return err
+		}
+		n, err := res.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if n == 0 {
+			return fmt.Errorf("change request %d not found", id)
+		}
+		return nil
+	})
+}
+
 const maxLogEntries = 200
 
 // InsertLog inserts a log entry with the current timestamp and prunes entries
