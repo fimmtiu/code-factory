@@ -58,7 +58,7 @@ func (p *Pool) Start(database *db.DB, ticketsDir string) {
 		p.wg.Add(1)
 		go func(w *Worker) {
 			defer p.wg.Done()
-			w.run(p.ctx, database, p.LogChannel, p.PollInterval)
+			w.run(p.ctx, database, p.LogChannel, p.PollInterval, ticketsDir)
 		}(w)
 	}
 }

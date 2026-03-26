@@ -7,15 +7,13 @@ import (
 
 	"github.com/fimmtiu/tickets/internal/db"
 	"github.com/fimmtiu/tickets/internal/models"
+	"github.com/fimmtiu/tickets/internal/storage"
 )
 
-// stubWorkDuration is the amount of time the worker sleeps to simulate doing
-// real ACP work. Replaced by actual Claude subprocess execution in phase 4.
-const stubWorkDuration = 100 * time.Millisecond
-
 // run is the main loop for a worker goroutine. It claims tickets, processes
-// them (stub), and releases them, respecting pause/unpause and shutdown signals.
-func (w *Worker) run(ctx context.Context, database *db.DB, logCh chan<- LogMessage, pollIntervalSecs int) {
+// them via the ACP Claude subprocess, and releases them, respecting pause/unpause
+// and shutdown signals.
+func (w *Worker) run(ctx context.Context, database *db.DB, logCh chan<- LogMessage, pollIntervalSecs int, ticketsDir string) {
 	pollInterval := time.Duration(pollIntervalSecs) * time.Second
 
 	for {
@@ -34,7 +32,7 @@ func (w *Worker) run(ctx context.Context, database *db.DB, logCh chan<- LogMessa
 			ticket, err := database.Claim(w.Number)
 			if err == nil {
 				// Successfully claimed a ticket — process it.
-				w.processTicket(ctx, database, logCh, ticket)
+				w.processTicket(ctx, database, logCh, ticket, ticketsDir)
 				continue
 			}
 			// No ticket available — fall through to the poll sleep below.
@@ -46,9 +44,9 @@ func (w *Worker) run(ctx context.Context, database *db.DB, logCh chan<- LogMessa
 	}
 }
 
-// processTicket sets the ticket to in-progress, does the (stub) work, then
-// sets it to user-review and releases it.
-func (w *Worker) processTicket(ctx context.Context, database *db.DB, logCh chan<- LogMessage, ticket *models.WorkUnit) {
+// processTicket sets the ticket to in-progress, runs the Claude ACP subprocess,
+// transitions the ticket to user-review, and releases it.
+func (w *Worker) processTicket(ctx context.Context, database *db.DB, logCh chan<- LogMessage, ticket *models.WorkUnit, ticketsDir string) {
 	identifier := ticket.Identifier
 
 	// Mark the worker and ticket as busy.
@@ -61,18 +59,26 @@ func (w *Worker) processTicket(ctx context.Context, database *db.DB, logCh chan<
 
 	logCh <- NewLogMessage(w.Number, fmt.Sprintf("claimed ticket %s", identifier))
 
-	// Stub work: sleep briefly to simulate processing. In phase 4 this becomes
-	// the actual Claude subprocess execution.
-	select {
-	case <-ctx.Done():
-		// Shutdown arrived during work — release the ticket and exit.
+	// Resolve the worktree and logfile paths.
+	worktreePath := storage.TicketWorktreePath(storage.TicketDirPath(ticketsDir, identifier))
+	logfilePath := NextLogfilePath(ticketsDir, identifier, string(ticket.Phase))
+
+	// Build the prompt for this ticket and phase.
+	prompt, err := BuildPrompt(ticket, database, ticketsDir)
+	if err != nil {
+		logCh <- NewLogMessage(w.Number, fmt.Sprintf("error building prompt for %s: %v", identifier, err))
 		releaseTicket(database, logCh, w.Number, identifier)
 		w.Status = StatusIdle
 		return
-	case <-time.After(stubWorkDuration):
 	}
 
-	logCh <- NewLogMessage(w.Number, fmt.Sprintf("completed processing ticket %s", identifier))
+	// Run the Claude subprocess via ACP.
+	acpErr := w.runACP(ctx, database, logCh, worktreePath, identifier, string(ticket.Phase), prompt, logfilePath)
+
+	if acpErr != nil {
+		logCh <- NewLogMessageWithFile(w.Number, fmt.Sprintf("ACP error on %s: %v", identifier, acpErr), logfilePath)
+	}
+	logCh <- NewLogMessageWithFile(w.Number, fmt.Sprintf("completed processing ticket %s", identifier), logfilePath)
 
 	// Transition ticket to user-review and release the claim.
 	if err := database.SetStatus(identifier, string(ticket.Phase), models.StatusUserReview); err != nil {
