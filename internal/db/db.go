@@ -772,6 +772,43 @@ func (d *DB) InsertLog(workerNumber int, message string, logfile string) error {
 	})
 }
 
+// FindStaleTickets returns all tickets that have been in-progress for longer
+// than thresholdMinutes minutes. These are candidates for release by the
+// housekeeping thread.
+func (d *DB) FindStaleTickets(thresholdMinutes int) ([]*models.WorkUnit, error) {
+	cutoff := time.Now().Add(-time.Duration(thresholdMinutes) * time.Minute).Unix()
+	rows, err := d.db.Query(`
+		SELECT identifier, description, phase, status, last_updated
+		FROM tickets
+		WHERE status = 'in-progress' AND last_updated < ?
+	`, cutoff)
+	if err != nil {
+		return nil, fmt.Errorf("find stale tickets: %w", err)
+	}
+	defer rows.Close()
+
+	var tickets []*models.WorkUnit
+	for rows.Next() {
+		var identifier, description, phase, status string
+		var lastUpdated int64
+		if err := rows.Scan(&identifier, &description, &phase, &status, &lastUpdated); err != nil {
+			return nil, fmt.Errorf("scan stale ticket: %w", err)
+		}
+		tickets = append(tickets, &models.WorkUnit{
+			Identifier:  identifier,
+			Description: description,
+			Phase:       models.TicketPhase(phase),
+			Status:      models.TicketStatus(status),
+			LastUpdated: time.Unix(lastUpdated, 0).UTC(),
+			IsProject:   false,
+		})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("scan stale tickets: %w", err)
+	}
+	return tickets, nil
+}
+
 // GetLogs returns all log entries ordered by timestamp ascending.
 func (d *DB) GetLogs() ([]models.LogEntry, error) {
 	rows, err := d.db.Query(

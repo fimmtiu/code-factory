@@ -1,5 +1,12 @@
 package worker
 
+import (
+	"context"
+	"sync"
+
+	"github.com/fimmtiu/tickets/internal/db"
+)
+
 // logChannelBuffer is the buffer size for the shared log channel. It is kept
 // generous to avoid blocking workers during bursts of log activity.
 const logChannelBuffer = 100
@@ -11,6 +18,10 @@ type Pool struct {
 	LogChannel   chan LogMessage
 	PoolSize     int
 	PollInterval int // seconds
+
+	ctx    context.Context
+	cancel context.CancelFunc
+	wg     sync.WaitGroup
 }
 
 // NewPool creates a Pool with size workers numbered 1 through size, and a
@@ -20,11 +31,14 @@ func NewPool(size int, pollInterval int) *Pool {
 	for i := 0; i < size; i++ {
 		workers[i] = NewWorker(i + 1)
 	}
+	ctx, cancel := context.WithCancel(context.Background())
 	return &Pool{
 		Workers:      workers,
 		LogChannel:   make(chan LogMessage, logChannelBuffer),
 		PoolSize:     size,
 		PollInterval: pollInterval,
+		ctx:          ctx,
+		cancel:       cancel,
 	}
 }
 
@@ -35,4 +49,47 @@ func (p *Pool) GetWorker(number int) *Worker {
 		return nil
 	}
 	return p.Workers[number-1]
+}
+
+// Start launches one goroutine per worker. Each goroutine runs the worker's
+// main loop. The pool's shared context is used for shutdown signaling.
+func (p *Pool) Start(database *db.DB, ticketsDir string) {
+	for _, w := range p.Workers {
+		p.wg.Add(1)
+		go func(w *Worker) {
+			defer p.wg.Done()
+			w.run(p.ctx, database, p.LogChannel, p.PollInterval)
+		}(w)
+	}
+}
+
+// Stop signals all worker and housekeeping goroutines to shut down and waits
+// for them to exit.
+func (p *Pool) Stop() {
+	p.cancel()
+	p.wg.Wait()
+}
+
+// StartHousekeeping launches the background goroutine that releases stale
+// tickets. It shares the pool's context so Stop() also terminates it.
+func (p *Pool) StartHousekeeping(database *db.DB) {
+	p.wg.Add(1)
+	go func() {
+		defer p.wg.Done()
+		runHousekeeping(p.ctx, database, p.LogChannel)
+	}()
+}
+
+// PauseWorker sends a MsgPause message to the worker with the given 1-based number.
+func (p *Pool) PauseWorker(number int) {
+	if w := p.GetWorker(number); w != nil {
+		w.ToWorker <- MainToWorkerMessage{Kind: MsgPause}
+	}
+}
+
+// UnpauseWorker sends a MsgUnpause message to the worker with the given 1-based number.
+func (p *Pool) UnpauseWorker(number int) {
+	if w := p.GetWorker(number); w != nil {
+		w.ToWorker <- MainToWorkerMessage{Kind: MsgUnpause}
+	}
 }

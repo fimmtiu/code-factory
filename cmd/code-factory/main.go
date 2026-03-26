@@ -4,9 +4,13 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"syscall"
 
+	"github.com/fimmtiu/tickets/internal/db"
 	"github.com/fimmtiu/tickets/internal/storage"
+	"github.com/fimmtiu/tickets/internal/worker"
 )
 
 func main() {
@@ -64,6 +68,24 @@ Options:
 		os.Exit(1)
 	}
 
-	_ = poolSize
-	_ = waitSecs
+	// Open the database.
+	database, err := db.Open(ticketsDir, repoRoot)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "error: opening database:", err)
+		os.Exit(1)
+	}
+	defer database.Close()
+
+	// Create the pool, start workers and housekeeping.
+	pool := worker.NewPool(*poolSize, *waitSecs)
+	pool.Start(database, ticketsDir)
+	pool.StartHousekeeping(database)
+
+	// Block until an OS signal requests shutdown.
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+	<-sigs
+
+	// Graceful shutdown: wait for all goroutines to exit.
+	pool.Stop()
 }

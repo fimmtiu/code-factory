@@ -39,6 +39,11 @@
 - Message kinds are typed string constants (`MainToWorkerKind`, `WorkerToMainKind`) — not plain strings
 - `Pool.GetWorker(n)` uses 1-based numbering; returns nil for out-of-range values
 - Log channel buffer is 100 to avoid blocking workers during log bursts
+- `Pool` holds a `context.Context`/`cancel`/`sync.WaitGroup` created at `NewPool` time; `Start()` and `StartHousekeeping()` add to the WaitGroup; `Stop()` cancels the context and waits
+- Worker main loop calls `drainMessages()` at the top of each iteration so pause/unpause messages sent before `Start()` (or between iterations) take effect immediately
+- `Pool.PauseWorker(n)` / `UnpauseWorker(n)` send `MsgPause`/`MsgUnpause` to the worker's `ToWorker` channel; out-of-range numbers are silently ignored
+- `db.FindStaleTickets(thresholdMinutes int)` returns tickets where `status = 'in-progress'` and `last_updated < now - threshold`; `Claim()` alone does NOT set status to in-progress — the worker calls `db.SetStatus(..., "in-progress")` explicitly after claiming
+- Tests for stale ticket detection must call `db.SetStatus` to set status=in-progress before querying; use a negative threshold (e.g. -1) to make freshly-updated tickets appear stale in tests
 
 ## internal/util package
 
