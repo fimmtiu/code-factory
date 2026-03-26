@@ -58,7 +58,7 @@ func NewModel(pool *worker.Pool, database *db.DB, waitSecs int) Model {
 			ViewProject: NewProjectView(database, waitSecs),
 			ViewCommand: NewCommandView(database, pool, waitSecs),
 			ViewWorker:  NewWorkerView(pool),
-			ViewLog:     NewLogView(),
+			ViewLog:     NewLogView(database),
 		},
 	}
 }
@@ -123,15 +123,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case "f4":
 			m.activeView = ViewLog
-			return m, nil
+			return m, func() tea.Msg { return logActivatedMsg{} }
 
 		case "shift+tab":
 			m.activeView = nextView(m.activeView)
-			return m, nil
+			return m, m.activateViewCmd()
 
 		case "ctrl+tab":
 			m.activeView = prevView(m.activeView)
-			return m, nil
+			return m, m.activateViewCmd()
 		}
 
 		// Pass remaining keys to the active view.
@@ -206,6 +206,15 @@ func (m Model) renderHeader() string {
 		}
 	}
 	return headerStyle.Render(strings.Join(tabs, " "))
+}
+
+// activateViewCmd returns a command that sends an activation message for the
+// newly-active view (currently only used by LogView for immediate refresh).
+func (m Model) activateViewCmd() tea.Cmd {
+	if m.activeView == ViewLog {
+		return func() tea.Msg { return logActivatedMsg{} }
+	}
+	return nil
 }
 
 // handleQuit implements the quit flow: immediate exit if all workers are idle,
