@@ -44,17 +44,17 @@ func (c *acpWorkerClient) appendOutput(text string) {
 	}
 
 	// Maintain the last three non-empty lines.
-	lines := strings.Split(text, "\n")
-	for _, line := range lines {
+	current := c.w.GetLastOutput()
+	for _, line := range strings.Split(text, "\n") {
 		if line == "" {
 			continue
 		}
-		combined := append(c.w.LastOutput, line)
-		if len(combined) > 3 {
-			combined = combined[len(combined)-3:]
+		current = append(current, line)
+		if len(current) > 3 {
+			current = current[len(current)-3:]
 		}
-		c.w.LastOutput = combined
 	}
+	c.w.SetLastOutput(current)
 }
 
 // SessionUpdate receives streaming output from the agent and writes it to the

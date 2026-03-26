@@ -57,7 +57,7 @@ func NewModel(pool *worker.Pool, database *db.DB, waitSecs int) Model {
 		views: [4]viewModel{
 			ViewProject: NewProjectView(database, waitSecs),
 			ViewCommand: NewCommandView(database, pool, waitSecs),
-			ViewWorker:  NewWorkerView(),
+			ViewWorker:  NewWorkerView(pool),
 			ViewLog:     NewLogView(),
 		},
 	}

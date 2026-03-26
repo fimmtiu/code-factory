@@ -1,5 +1,7 @@
 package worker
 
+import "sync"
+
 // workerChannelBuffer is the buffer size for the worker communication channels.
 const workerChannelBuffer = 16
 
@@ -24,8 +26,12 @@ type Worker struct {
 	FromWorker chan WorkerToMainMessage
 
 	// LastOutput holds the last three lines of agent output, used for display
-	// in the worker status view.
+	// in the worker status view. Protected by mu.
 	LastOutput []string
+
+	// mu guards LastOutput for concurrent access between the worker goroutine
+	// (writer) and the UI goroutine (reader).
+	mu sync.RWMutex
 }
 
 // NewWorker creates a new Worker with the given 1-based number. The worker
@@ -39,4 +45,21 @@ func NewWorker(number int) *Worker {
 		FromWorker: make(chan WorkerToMainMessage, workerChannelBuffer),
 		LastOutput: []string{},
 	}
+}
+
+// GetLastOutput returns a copy of the worker's last output lines, safe for
+// concurrent access from the UI goroutine.
+func (w *Worker) GetLastOutput() []string {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	out := make([]string, len(w.LastOutput))
+	copy(out, w.LastOutput)
+	return out
+}
+
+// SetLastOutput replaces the worker's last output slice under the write lock.
+func (w *Worker) SetLastOutput(lines []string) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.LastOutput = lines
 }

@@ -1,16 +1,252 @@
 package ui
 
-import tea "github.com/charmbracelet/bubbletea"
+import (
+	"fmt"
+	"strings"
+	"time"
 
-// WorkerView is a stub for the worker view.
-type WorkerView struct{}
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
-func NewWorkerView() WorkerView { return WorkerView{} }
+	"github.com/fimmtiu/tickets/internal/worker"
+)
 
-func (v WorkerView) Init() tea.Cmd { return nil }
+// ── Styles ───────────────────────────────────────────────────────────────────
 
-func (v WorkerView) Update(msg tea.Msg) (tea.Model, tea.Cmd) { return v, nil }
+var (
+	workerIdleStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("240")) // grey
 
-func (v WorkerView) View() string { return "Worker View" }
+	workerAwaitingStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("9")) // red
 
-func (v WorkerView) KeyBindings() []KeyBinding { return nil }
+	workerBusyStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("2")) // dark green
+
+	workerPausedStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("3")) // yellow
+
+	workerOutputStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("245")) // dim grey for output lines
+
+	workerNoOutputStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("238")) // darker grey for "No output"
+)
+
+// linesPerWorker is the number of rendered lines each worker section occupies:
+// 1 status line + 3 output lines + 1 separator.
+const linesPerWorker = 5
+
+// ── Messages ─────────────────────────────────────────────────────────────────
+
+type workerTickMsg struct{}
+
+// ── WorkerView ────────────────────────────────────────────────────────────────
+
+// WorkerView is a read-only full-screen pane that shows each worker's status
+// and the last three lines of agent output. It supports scrolling but has no
+// selectable item.
+type WorkerView struct {
+	pool   *worker.Pool
+	width  int
+	height int
+	offset int // first visible line (scroll offset)
+}
+
+// NewWorkerView creates a WorkerView backed by the given worker pool.
+func NewWorkerView(pool *worker.Pool) WorkerView {
+	return WorkerView{pool: pool}
+}
+
+// Init schedules the first periodic refresh tick.
+func (v WorkerView) Init() tea.Cmd {
+	return v.tickCmd()
+}
+
+// tickCmd schedules a refresh tick at 500 ms intervals.
+func (v WorkerView) tickCmd() tea.Cmd {
+	return tea.Tick(500*time.Millisecond, func(time.Time) tea.Msg {
+		return workerTickMsg{}
+	})
+}
+
+// ── Update ────────────────────────────────────────────────────────────────────
+
+func (v WorkerView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+
+	case tea.WindowSizeMsg:
+		v.width = msg.Width
+		v.height = msg.Height
+		v.clampScroll()
+		return v, nil
+
+	case workerTickMsg:
+		// Re-render on each tick; schedule the next tick.
+		return v, v.tickCmd()
+
+	case tea.KeyMsg:
+		return v.handleKey(msg)
+	}
+
+	return v, nil
+}
+
+func (v WorkerView) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "up":
+		v.scrollBy(-1)
+	case "down":
+		v.scrollBy(1)
+	case "pgup":
+		v.scrollBy(-v.viewHeight())
+	case "pgdown":
+		v.scrollBy(v.viewHeight())
+	}
+	return v, nil
+}
+
+func (v *WorkerView) scrollBy(delta int) {
+	v.offset += delta
+	v.clampScroll()
+}
+
+func (v *WorkerView) clampScroll() {
+	if v.offset < 0 {
+		v.offset = 0
+	}
+	total := v.totalLines()
+	vh := v.viewHeight()
+	max := total - vh
+	if max < 0 {
+		max = 0
+	}
+	if v.offset > max {
+		v.offset = max
+	}
+}
+
+// ── Dimension helpers ─────────────────────────────────────────────────────────
+
+// viewHeight returns the number of lines available for the list body.
+func (v WorkerView) viewHeight() int {
+	h := v.height - chromeHeight
+	if h < 1 {
+		h = 1
+	}
+	return h
+}
+
+// totalLines returns the total rendered line count for all workers.
+func (v WorkerView) totalLines() int {
+	if v.pool == nil {
+		return 0
+	}
+	return len(v.pool.Workers) * linesPerWorker
+}
+
+// ── View ──────────────────────────────────────────────────────────────────────
+
+func (v WorkerView) View() string {
+	if v.pool == nil || len(v.pool.Workers) == 0 {
+		return workerNoOutputStyle.Render("(no workers)")
+	}
+
+	// Build all lines for all workers.
+	all := v.renderAllLines()
+
+	vh := v.viewHeight()
+	start := v.offset
+	if start >= len(all) {
+		start = len(all) - 1
+		if start < 0 {
+			start = 0
+		}
+	}
+	end := start + vh
+	if end > len(all) {
+		end = len(all)
+	}
+
+	return strings.Join(all[start:end], "\n")
+}
+
+// renderAllLines builds the full list of display lines for every worker.
+func (v WorkerView) renderAllLines() []string {
+	separator := strings.Repeat("─", v.width)
+	if v.width <= 0 {
+		separator = "─"
+	}
+
+	var lines []string
+	for _, w := range v.pool.Workers {
+		// Status line: "<N>: <status>"
+		statusLine := v.renderStatusLine(w)
+		lines = append(lines, statusLine)
+
+		// Last three lines of agent output.
+		output := w.GetLastOutput()
+		for i := 0; i < 3; i++ {
+			if i < len(output) {
+				line := output[i]
+				// Truncate if wider than the pane.
+				line = truncateLine(line, v.width)
+				lines = append(lines, workerOutputStyle.Render(line))
+			} else {
+				if w.Status == worker.StatusIdle && len(output) == 0 {
+					lines = append(lines, workerNoOutputStyle.Render("No output"))
+				} else {
+					lines = append(lines, "")
+				}
+			}
+		}
+
+		// Separator line.
+		lines = append(lines, separator)
+	}
+	return lines
+}
+
+// renderStatusLine returns the styled "<N>: <status>" line for a worker.
+func (v WorkerView) renderStatusLine(w *worker.Worker) string {
+	text := fmt.Sprintf("%d: %s", w.Number, w.Status.String())
+	if w.Paused {
+		text = fmt.Sprintf("%d: paused", w.Number)
+		return workerPausedStyle.Render(text)
+	}
+	switch w.Status {
+	case worker.StatusIdle:
+		return workerIdleStyle.Render(text)
+	case worker.StatusAwaitingResponse:
+		return workerAwaitingStyle.Render(text)
+	case worker.StatusBusy:
+		return workerBusyStyle.Render(text)
+	default:
+		return workerIdleStyle.Render(text)
+	}
+}
+
+// truncateLine truncates a string to at most maxWidth visible characters,
+// appending an ellipsis if truncation occurred.
+func truncateLine(s string, maxWidth int) string {
+	if maxWidth <= 0 {
+		return s
+	}
+	runes := []rune(s)
+	if len(runes) <= maxWidth {
+		return s
+	}
+	if maxWidth > 1 {
+		return string(runes[:maxWidth-1]) + "…"
+	}
+	return string(runes[:maxWidth])
+}
+
+// ── KeyBindings ───────────────────────────────────────────────────────────────
+
+func (v WorkerView) KeyBindings() []KeyBinding {
+	return []KeyBinding{
+		{Key: "↑/↓", Description: "Scroll up/down one line"},
+		{Key: "PgUp/PgDn", Description: "Scroll up/down one page"},
+	}
+}

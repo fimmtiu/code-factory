@@ -45,6 +45,7 @@
 - `ProjectView` uses a `chromeHeight = 2` constant to subtract the tab-bar and help-hint rows from the available body height
 - Three-pane layout: `lipgloss.JoinHorizontal` for top row (status + tree), `lipgloss.JoinVertical` for full layout; border style switches between `DoubleBorder` (focused, blue) and `NormalBorder` (unfocused, grey) based on focus state
 - `CommandView` (PRD-07): `NewCommandView(database, pool, waitSecs)` — full-screen selectable list of actionable tickets; `Approve(db, identifier)` placeholder lives in `command_view.go` for phase 11 to replace
+- `WorkerView` (PRD-08): `NewWorkerView(pool)` — read-only monitoring view; 500ms `tea.Tick` with `workerTickMsg`; linesPerWorker=5 (status+3 output+separator); scroll only (no selection)
 - Non-key messages only go to the active view; tick-based refresh chains (fetch → schedule next tick → on tick, fetch again) only run while a view is active
 
 ### Makefile
@@ -55,6 +56,7 @@
 ## internal/worker package
 
 - `WorkerStatus` is a typed `string` enum; use `StatusIdle`, `StatusAwaitingResponse`, `StatusBusy`
+- `Worker.LastOutput` is protected by `Worker.mu` (sync.RWMutex); use `GetLastOutput()` to read and `SetLastOutput()` to write from any goroutine
 - `Worker` uses two separate typed channels: `ToWorker chan MainToWorkerMessage` and `FromWorker chan WorkerToMainMessage`
 - Message kinds are typed string constants (`MainToWorkerKind`, `WorkerToMainKind`) — not plain strings
 - `Pool.GetWorker(n)` uses 1-based numbering; returns nil for out-of-range values
