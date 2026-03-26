@@ -45,6 +45,16 @@
 - `db.FindStaleTickets(thresholdMinutes int)` returns tickets where `status = 'in-progress'` and `last_updated < now - threshold`; `Claim()` alone does NOT set status to in-progress — the worker calls `db.SetStatus(..., "in-progress")` explicitly after claiming
 - Tests for stale ticket detection must call `db.SetStatus` to set status=in-progress before querying; use a negative threshold (e.g. -1) to make freshly-updated tickets appear stale in tests
 
+### ACP integration (PRD-04)
+
+- Claude is launched via `npx -y @zed-industries/claude-code-acp@latest`; set `cmd.Dir` to the worktree path — NEVER call `os.Chdir`
+- `acpWorkerClient` in `acp.go` implements `acp.Client`; it captures the worker, logfile, and db references needed during callbacks
+- `RequestPermission` callback sets worker to `AwaitingResponse`, marks ticket `needs-attention`, sends `MsgPermissionRequest` on `FromWorker`, and blocks on `ToWorker` for `MsgPermission`
+- `BuildPrompt` in `prompt.go` generates phase-specific prompts; implement phase appends parent context via `db.GetProjectContext`
+- `NextLogfilePath` in `logfile.go` returns `.tickets/<id>/<phase>.log` with `.1`, `.2`, … suffixes for subsequent runs
+- `db.GetProjectContext(identifier)` returns `[]db.ProjectContext` walking up the parent chain (immediate parent first)
+- The `dbInterface` in `acp.go` is a minimal interface over `*db.DB` to allow test substitution without importing the full db package in client code
+
 ## internal/util package
 
 - `EditText(content string) (string, error)` — opens `$EDITOR` on a temp file; errors if `$EDITOR` unset
