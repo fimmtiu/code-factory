@@ -131,6 +131,14 @@ var schemaStatements = []string{
 	`CREATE INDEX IF NOT EXISTS "idx_tickets_status" ON "tickets"("status")`,
 	`CREATE INDEX IF NOT EXISTS "idx_deps_work_unit" ON "dependencies"("work_unit_type", "work_unit_id")`,
 	`CREATE INDEX IF NOT EXISTS "idx_change_requests_ticket_id" ON "change_requests"("ticket_id")`,
+	`CREATE TABLE IF NOT EXISTS "logs" (
+		"id" integer PRIMARY KEY,
+		"timestamp" integer NOT NULL,
+		"worker_number" integer NOT NULL,
+		"message" text NOT NULL,
+		"logfile" text
+	)`,
+	`CREATE INDEX IF NOT EXISTS "idx_logs_timestamp" ON "logs"("timestamp")`,
 }
 
 func (d *DB) createSchema() error {
@@ -735,4 +743,61 @@ func (d *DB) CloseChangeRequest(id int64) error {
 // DismissChangeRequest sets the status of the change request with the given id to "dismissed".
 func (d *DB) DismissChangeRequest(id int64) error {
 	return d.setChangeRequestStatus(id, models.ChangeRequestDismissed)
+}
+
+const maxLogEntries = 200
+
+// InsertLog inserts a log entry with the current timestamp and prunes entries
+// beyond maxLogEntries by deleting the oldest ones.
+func (d *DB) InsertLog(workerNumber int, message string, logfile string) error {
+	return d.withTx(func(tx *sql.Tx) error {
+		now := time.Now().Unix()
+		var nullLogfile sql.NullString
+		if logfile != "" {
+			nullLogfile = sql.NullString{String: logfile, Valid: true}
+		}
+		if _, err := tx.Exec(
+			`INSERT INTO logs (timestamp, worker_number, message, logfile) VALUES (?, ?, ?, ?)`,
+			now, workerNumber, message, nullLogfile,
+		); err != nil {
+			return fmt.Errorf("insert log: %w", err)
+		}
+
+		// Prune oldest entries beyond maxLogEntries.
+		_, err := tx.Exec(`
+			DELETE FROM logs WHERE id IN (
+				SELECT id FROM logs ORDER BY timestamp ASC LIMIT MAX(0, (SELECT COUNT(*) FROM logs) - ?)
+			)`, maxLogEntries)
+		return err
+	})
+}
+
+// GetLogs returns all log entries ordered by timestamp ascending.
+func (d *DB) GetLogs() ([]models.LogEntry, error) {
+	rows, err := d.db.Query(
+		`SELECT id, timestamp, worker_number, message, logfile FROM logs ORDER BY timestamp ASC`,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("get logs: %w", err)
+	}
+	defer rows.Close()
+
+	var entries []models.LogEntry
+	for rows.Next() {
+		var e models.LogEntry
+		var ts int64
+		var nullLogfile sql.NullString
+		if err := rows.Scan(&e.ID, &ts, &e.WorkerNumber, &e.Message, &nullLogfile); err != nil {
+			return nil, fmt.Errorf("scan log entry: %w", err)
+		}
+		e.Timestamp = time.Unix(ts, 0).UTC()
+		if nullLogfile.Valid {
+			e.Logfile = nullLogfile.String
+		}
+		entries = append(entries, e)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("scan logs: %w", err)
+	}
+	return entries, nil
 }
