@@ -26,7 +26,6 @@ type ChangeRequest struct {
 	Description  string    `json:"description"`
 }
 
-
 type WorkUnit struct {
 	Identifier     string          `json:"identifier"`
 	Description    string          `json:"description"`

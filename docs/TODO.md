@@ -1,7 +1,5 @@
 TO DO
 
-- Update references to "comments" in /cf-review
-
 - Update references to "comments" in /cf-respond
 
 - Add a /cf-change skill to manually add change requests to the ticket that the current worktree belongs to.
