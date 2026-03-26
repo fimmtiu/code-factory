@@ -860,6 +860,49 @@ func (d *DB) UpdateDescription(identifier string, newDescription string) error {
 	})
 }
 
+// ActionableTickets returns tickets with status 'needs-attention' or
+// 'user-review', ordered so that 'needs-attention' tickets come first and
+// within each group tickets are sorted by last_updated ascending (oldest first).
+func (d *DB) ActionableTickets() ([]*models.WorkUnit, error) {
+	rows, err := d.db.Query(`
+		SELECT identifier, description, phase, status, claimed_by, last_updated
+		FROM tickets
+		WHERE status IN ('needs-attention', 'user-review')
+		ORDER BY CASE status WHEN 'needs-attention' THEN 0 ELSE 1 END, last_updated ASC
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("actionable tickets: %w", err)
+	}
+	defer rows.Close()
+
+	var tickets []*models.WorkUnit
+	for rows.Next() {
+		var identifier, description, phase, status string
+		var claimedBy sql.NullInt64
+		var lastUpdated int64
+		if err := rows.Scan(&identifier, &description, &phase, &status, &claimedBy, &lastUpdated); err != nil {
+			return nil, fmt.Errorf("scan actionable ticket: %w", err)
+		}
+		wu := &models.WorkUnit{
+			Identifier:   identifier,
+			Description:  description,
+			Phase:        models.TicketPhase(phase),
+			Status:       models.TicketStatus(status),
+			LastUpdated:  time.Unix(lastUpdated, 0).UTC(),
+			IsProject:    false,
+			Dependencies: []string{},
+		}
+		if claimedBy.Valid {
+			wu.ClaimedBy = strconv.FormatInt(claimedBy.Int64, 10)
+		}
+		tickets = append(tickets, wu)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("scan actionable tickets: %w", err)
+	}
+	return tickets, nil
+}
+
 // GetLogs returns all log entries ordered by timestamp ascending.
 func (d *DB) GetLogs() ([]models.LogEntry, error) {
 	rows, err := d.db.Query(

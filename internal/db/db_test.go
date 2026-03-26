@@ -275,3 +275,43 @@ func TestCreateTicket_NoDirectoryOnFailure(t *testing.T) {
 		t.Error("directory should not be created when the transaction fails")
 	}
 }
+
+// ===== ActionableTickets =====
+
+func TestActionableTickets_ReturnsOnlyActionable(t *testing.T) {
+	d, _, _ := openTestDB(t)
+	if err := d.CreateProject("proj", "A project", nil); err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"t1", "t2", "t3", "t4"} {
+		if err := d.CreateTicket("proj/"+id, "desc", nil); err != nil {
+			t.Fatalf("CreateTicket %s: %v", id, err)
+		}
+	}
+	// Set different statuses
+	if err := d.SetStatus("proj/t1", "implement", "needs-attention"); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.SetStatus("proj/t2", "implement", "user-review"); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.SetStatus("proj/t3", "implement", "in-progress"); err != nil {
+		t.Fatal(err)
+	}
+	// t4 stays idle
+
+	tickets, err := d.ActionableTickets()
+	if err != nil {
+		t.Fatalf("ActionableTickets: %v", err)
+	}
+	if len(tickets) != 2 {
+		t.Fatalf("expected 2 actionable tickets, got %d", len(tickets))
+	}
+	// needs-attention must come first
+	if tickets[0].Status != "needs-attention" {
+		t.Errorf("expected first ticket status needs-attention, got %q", tickets[0].Status)
+	}
+	if tickets[1].Status != "user-review" {
+		t.Errorf("expected second ticket status user-review, got %q", tickets[1].Status)
+	}
+}

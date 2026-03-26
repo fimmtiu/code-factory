@@ -44,6 +44,8 @@
 - `tea.WindowSizeMsg` must be forwarded to all views (not just the active one) so each can compute layout
 - `ProjectView` uses a `chromeHeight = 2` constant to subtract the tab-bar and help-hint rows from the available body height
 - Three-pane layout: `lipgloss.JoinHorizontal` for top row (status + tree), `lipgloss.JoinVertical` for full layout; border style switches between `DoubleBorder` (focused, blue) and `NormalBorder` (unfocused, grey) based on focus state
+- `CommandView` (PRD-07): `NewCommandView(database, pool, waitSecs)` — full-screen selectable list of actionable tickets; `Approve(db, identifier)` placeholder lives in `command_view.go` for phase 11 to replace
+- Non-key messages only go to the active view; tick-based refresh chains (fetch → schedule next tick → on tick, fetch again) only run while a view is active
 
 ### Makefile
 - `make build` builds all three binaries: `tickets`, `tickets-testdata`, `code-factory`
