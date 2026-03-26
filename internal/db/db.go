@@ -928,6 +928,90 @@ func (d *DB) ActionableTickets() ([]*models.WorkUnit, error) {
 	return tickets, nil
 }
 
+// GetTicketPhase returns the current phase of the ticket with the given
+// identifier, or an error if it is not found.
+func (d *DB) GetTicketPhase(identifier string) (string, error) {
+	var phase string
+	err := d.db.QueryRow(`SELECT phase FROM tickets WHERE identifier = ?`, identifier).Scan(&phase)
+	if err == sql.ErrNoRows {
+		return "", fmt.Errorf("ticket %q not found", identifier)
+	}
+	if err != nil {
+		return "", err
+	}
+	return phase, nil
+}
+
+// SetProjectPhase updates the phase of the project with the given identifier.
+func (d *DB) SetProjectPhase(identifier, phase string) error {
+	return d.withTx(func(tx *sql.Tx) error {
+		res, err := tx.Exec(
+			`UPDATE projects SET phase = ?, last_updated = ? WHERE identifier = ?`,
+			phase, time.Now().Unix(), identifier,
+		)
+		if err != nil {
+			return err
+		}
+		n, err := res.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if n == 0 {
+			return fmt.Errorf("project %q not found", identifier)
+		}
+		return nil
+	})
+}
+
+// AllChildrenDone reports whether all direct children (tickets and subprojects)
+// of the project with the given identifier have phase "done".
+func (d *DB) AllChildrenDone(projectIdentifier string) (bool, error) {
+	var projectID int64
+	err := d.db.QueryRow(`SELECT id FROM projects WHERE identifier = ?`, projectIdentifier).Scan(&projectID)
+	if err == sql.ErrNoRows {
+		return false, fmt.Errorf("project %q not found", projectIdentifier)
+	}
+	if err != nil {
+		return false, err
+	}
+
+	// Count tickets that are NOT done and belong directly to this project.
+	var notDone int
+	err = d.db.QueryRow(
+		`SELECT COUNT(*) FROM tickets WHERE project_id = ? AND phase != 'done'`,
+		projectID,
+	).Scan(&notDone)
+	if err != nil {
+		return false, err
+	}
+	if notDone > 0 {
+		return false, nil
+	}
+
+	// Count subprojects that are NOT done and belong directly to this project.
+	err = d.db.QueryRow(
+		`SELECT COUNT(*) FROM projects WHERE project_id = ? AND phase != 'done'`,
+		projectID,
+	).Scan(&notDone)
+	if err != nil {
+		return false, err
+	}
+	if notDone > 0 {
+		return false, nil
+	}
+
+	// Make sure there is at least one child (avoid marking empty projects done).
+	var total int
+	err = d.db.QueryRow(`
+		SELECT (SELECT COUNT(*) FROM tickets WHERE project_id = ?) +
+		       (SELECT COUNT(*) FROM projects WHERE project_id = ?)
+	`, projectID, projectID).Scan(&total)
+	if err != nil {
+		return false, err
+	}
+	return total > 0, nil
+}
+
 // GetLogs returns all log entries ordered by timestamp ascending.
 func (d *DB) GetLogs() ([]models.LogEntry, error) {
 	rows, err := d.db.Query(

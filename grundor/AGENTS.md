@@ -78,6 +78,14 @@
 - `db.GetProjectContext(identifier)` returns `[]db.ProjectContext` walking up the parent chain (immediate parent first)
 - The `dbInterface` in `acp.go` is a minimal interface over `*db.DB` to allow test substitution without importing the full db package in client code
 
+## internal/workflow package (PRD-11)
+
+- `workflow.Approve(db, identifier) error` — advances a ticket through its phases: implement → refactor → review → respond → done
+- After marking a ticket done, it recursively walks up the parent project chain and marks each project done via `db.SetProjectPhase` when `db.AllChildrenDone` returns true
+- `db.GetTicketPhase(identifier)` — returns current phase of a ticket
+- `db.SetProjectPhase(identifier, phase)` — updates a project's phase column
+- `db.AllChildrenDone(projectIdentifier)` — returns true only when ALL direct children (tickets + subprojects) have phase "done" AND at least one child exists
+
 ## internal/util package
 
 - `EditText(content string) (string, error)` — opens `$EDITOR` on a temp file; errors if `$EDITOR` unset

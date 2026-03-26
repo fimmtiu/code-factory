@@ -15,6 +15,7 @@ import (
 	"github.com/fimmtiu/tickets/internal/storage"
 	"github.com/fimmtiu/tickets/internal/util"
 	"github.com/fimmtiu/tickets/internal/worker"
+	"github.com/fimmtiu/tickets/internal/workflow"
 )
 
 // ── Styles ───────────────────────────────────────────────────────────────────
@@ -62,6 +63,8 @@ type CommandView struct {
 	rows     []listRow
 	selected int // index into rows (never points at a separator)
 	offset   int // first visible row
+
+	errorMsg string // brief error shown in the status area
 }
 
 // NewCommandView creates a CommandView wired to the given database, worker
@@ -148,6 +151,14 @@ func (v CommandView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		v.clampSelected()
 		v.clampScroll()
 		return v, v.tickCmd()
+
+	case approveResultMsg:
+		if msg.err != nil {
+			v.errorMsg = fmt.Sprintf("approve error: %s", msg.err)
+			return v, nil
+		}
+		v.errorMsg = ""
+		return v, v.fetchCmd()
 
 	case tea.KeyMsg:
 		return v.handleKey(msg)
@@ -367,6 +378,10 @@ func (v CommandView) openChangeRequestDialog() (tea.Model, tea.Cmd) {
 	}
 }
 
+type approveResultMsg struct {
+	err error
+}
+
 func (v CommandView) approveTicket() (tea.Model, tea.Cmd) {
 	wu := v.selectedTicket()
 	if wu == nil || wu.Status != models.StatusUserReview {
@@ -376,16 +391,9 @@ func (v CommandView) approveTicket() (tea.Model, tea.Cmd) {
 	database := v.database
 	identifier := wu.Identifier
 	return v, func() tea.Msg {
-		_ = Approve(database, identifier)
-		return commandRefreshMsg{} // triggers re-fetch after approval
+		err := workflow.Approve(database, identifier)
+		return approveResultMsg{err: err}
 	}
-}
-
-// Approve is the placeholder approval function for phase 11.
-// Its signature is fixed so the real implementation can be swapped in later.
-func Approve(database *db.DB, identifier string) error {
-	// TODO: implement approval logic in phase 11
-	return nil
 }
 
 // ── Dimension helpers ─────────────────────────────────────────────────────────
@@ -401,9 +409,19 @@ func (v CommandView) listHeight() int {
 
 // ── View ──────────────────────────────────────────────────────────────────────
 
+var cmdErrorStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("196")) // bright red
+
 func (v CommandView) View() string {
+	var sb strings.Builder
+
+	if v.errorMsg != "" {
+		sb.WriteString(cmdErrorStyle.Render(v.errorMsg))
+		sb.WriteString("\n")
+	}
+
 	if len(v.rows) == 0 {
-		return "(no actionable tickets)"
+		sb.WriteString("(no actionable tickets)")
+		return sb.String()
 	}
 
 	h := v.listHeight()
@@ -412,7 +430,6 @@ func (v CommandView) View() string {
 		end = len(v.rows)
 	}
 
-	var sb strings.Builder
 	for i := v.offset; i < end; i++ {
 		row := v.rows[i]
 		if row.separator {
