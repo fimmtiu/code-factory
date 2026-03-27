@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -30,8 +31,7 @@ var (
 	// Pane borders
 	focusedBorderStyle = lipgloss.NewStyle().
 				Border(lipgloss.DoubleBorder()).
-				BorderForeground(lipgloss.Color("12")). // blue
-				Bold(true)
+				BorderForeground(lipgloss.Color("12")) // blue
 
 	unfocusedBorderStyle = lipgloss.NewStyle().
 				Border(lipgloss.NormalBorder()).
@@ -84,6 +84,7 @@ type treeNode struct {
 type ProjectView struct {
 	database *db.DB
 	waitSecs int
+	repoName string // basename of the repo root, shown in the status pane
 
 	// Window dimensions (set by WindowSizeMsg broadcast from root)
 	width  int
@@ -107,9 +108,14 @@ type ProjectView struct {
 
 // NewProjectView creates a new ProjectView.
 func NewProjectView(database *db.DB, waitSecs int) ProjectView {
+	repoName := ""
+	if root, err := storage.FindRepoRoot("."); err == nil {
+		repoName = filepath.Base(root)
+	}
 	return ProjectView{
 		database: database,
 		waitSecs: waitSecs,
+		repoName: repoName,
 	}
 }
 
@@ -214,13 +220,18 @@ func buildTree(units []*models.WorkUnit) []treeNode {
 }
 
 // treeLabel returns the display label for a tree node row.
-func treeLabel(node treeNode, idx int, total int) string {
+// isLast is true when the node is a project or the last child of its parent,
+// which causes a └── connector to be used instead of ├──.
+func treeLabel(node treeNode, isLast bool) string {
 	if node.depth == 0 {
 		return node.wu.Identifier
 	}
-	// Determine whether this is the last child of its parent at its depth level.
 	prefix := strings.Repeat("    ", node.depth-1)
-	return prefix + "├── " + node.wu.Identifier
+	connector := "├── "
+	if isLast {
+		connector = "└── "
+	}
+	return prefix + connector + node.wu.Identifier
 }
 
 // ── Update ────────────────────────────────────────────────────────────────────
@@ -533,6 +544,9 @@ func (v ProjectView) View() string {
 	return lipgloss.JoinVertical(lipgloss.Left, topRow, detailPane)
 }
 
+// repoNameStyle renders the repository name bold and underlined.
+var repoNameStyle = lipgloss.NewStyle().Bold(true).Underline(true)
+
 // renderStatusContent returns the text content for the status pane.
 func (v ProjectView) renderStatusContent() string {
 	total := v.stats.Total
@@ -542,7 +556,8 @@ func (v ProjectView) renderStatusContent() string {
 	if total > 0 {
 		pct = done * 100 / total
 	}
-	return fmt.Sprintf("Tickets: %d\nOpen:    %d\nDone:    %d%%", total, open, pct)
+	stats := fmt.Sprintf("Tickets: %d\nOpen:    %d\nDone:    %d%%", total, open, pct)
+	return repoNameStyle.Render(v.repoName) + "\n\n" + stats
 }
 
 // renderTreeContent returns the text content for the tree pane.
@@ -563,7 +578,8 @@ func (v ProjectView) renderTreeContent() string {
 
 	for i := v.treeOffset; i < end; i++ {
 		node := v.treeNodes[i]
-		label := treeLabel(node, i, total)
+		isLast := node.wu.IsProject || i+1 >= total || v.treeNodes[i+1].depth < node.depth
+		label := treeLabel(node, isLast)
 
 		// Truncate to pane width
 		if lipgloss.Width(label) > w {
@@ -575,16 +591,20 @@ func (v ProjectView) renderTreeContent() string {
 			}
 		}
 
-		var styled string
+		var baseStyle lipgloss.Style
 		if i == v.treeSelected {
-			styled = treeSelectedStyle.Width(w).Render(label)
+			baseStyle = treeSelectedStyle.Width(w)
 		} else if node.wu.Phase == models.PhaseBlocked {
-			styled = treeBlockedStyle.Render(label)
+			baseStyle = treeBlockedStyle
 		} else if node.wu.Phase == models.PhaseDone || (node.wu.IsProject && node.wu.Phase == models.ProjectPhaseDone) {
-			styled = treeDoneStyle.Render(label)
+			baseStyle = treeDoneStyle
 		} else {
-			styled = treeDefaultStyle.Render(label)
+			baseStyle = treeDefaultStyle
 		}
+		if node.wu.IsProject {
+			baseStyle = baseStyle.Bold(true)
+		}
+		styled := baseStyle.Render(label)
 
 		sb.WriteString(styled)
 		if i < end-1 {
