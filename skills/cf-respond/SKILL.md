@@ -1,12 +1,12 @@
 ---
 name: cf-respond
-description: Thoroughly respond a changeset from a variety of different perspectives. Trigger on `/respond` or `/cf-respond`.
+description: Implement change requests on a branch from a variety of different perspectives. Trigger on `/respond` or `/cf-respond`.
 user-invocable: true
 ---
 
-# Respond to code review comments
+# Respond to code review change requests
 
-We will read actionable code review comments from the `tickets` system and address them one by one.
+We will read actionable code review change requests from the `tickets` system and address them one by one.
 
 Trigger on `/respond` or `/cf-respond`.
 
@@ -19,16 +19,14 @@ Before starting, run through ALL of the following steps:
 
 Then run the following steps in order:
 
-## Step 1: Get comments for the ticket
+## Step 1: Get change requests for the ticket
 
-Run `tickets get-comments <ticket-identifier>` to get a JSON dump of the comments on the ticket.
+Run `tickets get-change-requests <ticket-identifier>` to get a JSON dump of the change requests on the ticket.
 
-## Step 2: Respond to comments
+## Step 2: Respond to change requests
 
-For each comment, make changes to address the issue it's describing. You must change the tests first, then change the code. Before committing, run linting and formatting commands to proofread your changes.
+For each change request, implement changes to address the issue it's describing. You MUST write or update the tests first, then change the code. Before committing, run linting and formatting commands to proofread your changes.
 
-The work to address each comment should be committed in separate commits, which must include a detailed description of what you changed and why the change was made.
+The work to address each change request should be committed a separate commit, which must include a detailed description of what you changed and why the change was made.
 
-## Step 3: Clean up
-
-Run `tickets close-comments <ticket-identifier>` to mark all comments as addressed.
+After committing, run `tickets close-change-request <change-request-id>` to mark the change request as addressed.

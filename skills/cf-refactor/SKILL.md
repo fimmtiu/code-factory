@@ -19,13 +19,17 @@ Run ALL of these steps before starting the refactoring loop:
    ```bash
    git branch -l main master --format='%(refname:short)' | head -1
    ```
-   Store the output as `DEFAULT_BRANCH`.
+   Store the output as `DEFAULT_BRANCH`. If the output is empty (neither `main` nor `master` exists locally), ask the user: "What is the default branch name?" and use their answer.
 
 3. **Branchpoint identification**:
    ```bash
    git merge-base origin/<DEFAULT_BRANCH> HEAD
    ```
-   Substitute the value from step 2 for `<DEFAULT_BRANCH>`. You MUST prepend `origin/` to the branch name. Store the output as `BRANCHPOINT`.
+   Substitute the value from step 2 for `<DEFAULT_BRANCH>`. You MUST prepend `origin/` to the branch name. If this fails (e.g., no remote tracking branch), fall back to:
+   ```bash
+   git merge-base <DEFAULT_BRANCH> HEAD
+   ```
+   If this also fails, tell the user "Cannot determine branchpoint — is the remote configured?" and stop. Store the output as `BRANCHPOINT`.
 
 4. **Branch purpose**: Read the commit messages between `BRANCHPOINT` and `HEAD`:
    ```bash
@@ -33,18 +37,34 @@ Run ALL of these steps before starting the refactoring loop:
    ```
    Generate a one-sentence summary of what this branch does. Store as `BRANCH_PURPOSE`. Print it so the user can see it.
 
-5. **Detect project tooling**: Check for a test runner and linter:
-   - Look for `package.json` (scripts.test, scripts.lint), `Makefile`, `pytest.ini`/`pyproject.toml`, `Cargo.toml`, etc.
-   - Store the test command as `TEST_CMD` and linter command as `LINT_CMD`. If not found, set to empty.
+5. **Detect project tooling**: Determine `BUILD_CMD`, `TEST_CMD`, and `LINT_CMD` by checking these sources in priority order:
 
-## Find changes
+   a. **Workspace rules** (CLAUDE.md, .cursorrules, AGENTS.md, etc.) — these take highest priority.
+   b. **Makefile** — look for `build`, `test`, and `lint` targets. If found, use `make build` / `make test` / `make lint`.
+   c. **package.json** — check `scripts.build`, `scripts.test`, `scripts.lint`. If found, use `npm run build` / `npm test` / `npm run lint`.
+   d. **pyproject.toml / pytest.ini** — use `python -m py_compile` for build, `pytest` for tests, check for `ruff` or `flake8` for linting.
+   e. **Cargo.toml** — use `cargo build` / `cargo test` / `cargo clippy`.
+   f. **go.mod** — use `go build ./...` / `go test ./...` / `gofmt -w .` (or `make lint` if Makefile exists).
 
-If unspecified, prompt the user for what they want to refactor:
-   1. All code in the repository (recurse over the filesystem to fetch the names of all files)
-   2. All changes on this branch (use `git diff --stat <BRANCHPOINT>` to fetch the names of the changed files)
-   3. Uncommitted changes only (use `git diff --stat` to fetch the names of the changed files)
+   If a command is not found for a given variable, set it to empty string. Print the detected commands.
 
-Filter this list to source code files only — exclude binary files, images, lockfiles (package-lock.json, yarn.lock, Cargo.lock, etc.), generated files, and non-code config files. Store the filtered list as `CHANGED_FILES`.
+## Find Changes
+
+Determine the refactoring scope. The user may specify scope after the trigger (e.g., `/refactorizer branch`, `/refactorizer all`, `/refactorizer uncommitted`). If no scope is specified, **default to option 2** (all changes on this branch).
+
+Available scopes:
+   1. `all` — All code in the repository. Run `git ls-files` to get all tracked source files.
+   2. `branch` (default) — All changes on this branch. Run `git diff --stat <BRANCHPOINT>` to get changed file names.
+   3. `uncommitted` — Uncommitted changes only. Run `git diff --stat` to get changed file names.
+
+Filter to source code files only. Exclude:
+- Binary files and images
+- Lockfiles: `package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`, `Cargo.lock`, `go.sum`, `Gemfile.lock`, `poetry.lock`
+- Generated files: files with "generated" in their name or a generation header comment (e.g., `// Code generated ... DO NOT EDIT.`)
+- Config/data-only files: `.json`, `.yaml`, `.yml`, `.toml`, `.xml`, `.env` (UNLESS they contain logic, e.g., `Makefile` is kept)
+- Vendor/dependency directories: `vendor/`, `node_modules/`, `third_party/`
+
+When in doubt about whether a file is source code, include it — it is better to scan unnecessarily than to miss code. Store the filtered list as `CHANGED_FILES`.
 
 ## Scope Rules
 
@@ -52,7 +72,12 @@ These rules are ABSOLUTE and apply to every phase:
 
 1. **Write scope**: ONLY modify files that appear in `CHANGED_FILES`. When a refactoring creates a NEW file (e.g., Extract Class), add it to `CHANGED_FILES` for subsequent phases.
 2. **Read scope**: You MAY read any file in the repository for context (understanding class hierarchies, finding callers, checking conventions).
-3. **Change focus**: Focus on code that was added or modified on this branch. Pre-existing code in unchanged sections should not be refactored UNLESS it is directly entangled with changed code (e.g., extracting a method from a function where new lines are intermixed with old).
+3. **Change focus**: Only refactor code that meets ONE of these criteria:
+   - The line itself was added or modified on this branch (appears in `git diff <BRANCHPOINT>`)
+   - The line is inside a function/method where at least 30% of lines were modified on this branch
+   - The line must move to accommodate an Extract Method/Class refactoring of changed code
+   
+   Do NOT refactor pre-existing code that merely appears in the same file as changes.
 4. **Deferred refactorings**: If a refactoring would require modifying files outside `CHANGED_FILES` (e.g., updating callers in untouched files), note it in the summary as a "deferred refactoring" but do NOT make the change.
 5. **No backtracking**: Files created by a refactoring in phase N are considered "clean" for smells 1 through N. Do not re-check earlier smells on newly created files.
 6. **Language-agnostic**: Adapt all treatments to the specific language and conventions of the project. The smell descriptions are language-agnostic concepts.
@@ -67,23 +92,23 @@ For smell N of 23:
 
 1. **Announce**: Print `[N/23] Scanning for <SMELL_NAME>...`
 
-2. **Re-diff**: Get the current state of all changed files:
+2. **Re-diff**: Get the current diff for changed files:
    ```bash
    git diff <BRANCHPOINT> -- <space-separated CHANGED_FILES>
    ```
-   Also read the full content of each changed file to understand context.
+   Only re-read the full content of files that were modified in the *previous* phase. For files unchanged since your last read, rely on your existing knowledge of their contents.
 
 3. **Detect**: Examine each changed file for instances of this smell, using the description and detection criteria from the catalog entry below.
 
 4. **Filter**: For each instance found, check the "When to Ignore" criteria from the catalog entry. If an ignore criterion applies, skip this instance and record why.
 
 5. **Refactor**: For each remaining instance, apply one or more of the listed treatments:
-   - Be AGGRESSIVE: apply the refactoring unless there is a clear, specific reason not to.
-   - Prefer the first listed treatment as the default choice.
+   - DEFAULT TO APPLYING the refactoring. Only skip if you can articulate a specific, concrete reason — not "it might break something" but naming exactly what would break and why.
+   - When multiple treatments are listed, prefer the first one unless a later treatment is clearly better suited to the specific instance.
    - Follow existing naming conventions in the codebase.
    - Update all references within `CHANGED_FILES` when moving/renaming.
 
-6. **Verify**: After refactoring, ensure the code still parses. If `LINT_CMD` is set, run it on modified files and fix any issues.
+6. **Verify**: After refactoring, run `BUILD_CMD` (if set) to confirm the code still compiles/parses. Then run `LINT_CMD` (if set) on modified files and fix any issues.
 
 7. **Report**: Print one of:
    - `[N/23] <SMELL_NAME>: Found <X> instances, refactored <Y>, ignored <Z> (<reasons>)`
@@ -108,7 +133,7 @@ Remove noise, dead weight, and unnecessary abstractions first. This reduces the 
 - Inline Class or Collapse Hierarchy for unnecessary classes
 - Remove Parameter for unneeded parameters
 
-**When to ignore**: n/a — dead code should always be removed.
+**When to ignore**: Code gated by build tags, feature flags, or conditional compilation (`//go:build`, `#ifdef`, etc.). Also skip code that implements an interface contract even if no in-repo caller exists — it may be called externally.
 
 ---
 
@@ -178,7 +203,7 @@ Remove noise, dead weight, and unnecessary abstractions first. This reduces the 
 - Move Method / Extract Method (find operations on this class's data that live elsewhere and migrate them into the class)
 - Remove Setting Method / Hide Method (restrict access after adding behavior)
 
-**When to ignore**: n/a — data classes almost always benefit from encapsulation and behavior migration.
+**When to ignore**: Plain data-transfer structs that are idiomatic in the language (e.g., Go structs used as DTOs, config holders, or protobuf-generated types). Also skip types whose sole purpose is serialization/deserialization (JSON payloads, API request/response types).
 
 ---
 
@@ -200,7 +225,7 @@ Shrink oversized constructs. These are the most common refactorings and create t
 - Replace Method with Method Object (when local variables prevent extraction — turn the method into its own class)
 - Decompose Conditional (extract complex conditional logic into named methods)
 
-**When to ignore**: n/a — long methods should always be decomposed.
+**When to ignore**: Table-driven test functions whose length comes from test case declarations, not logic. Also skip methods that are long only because they contain a single cohesive algorithm where extraction would scatter the logic without improving clarity.
 
 ---
 
@@ -214,7 +239,7 @@ Shrink oversized constructs. These are the most common refactorings and create t
 - Extract Interface (when a client only uses a subset of the class's interface)
 - Duplicate Observed Data (for GUI-heavy classes, separate domain data from presentation)
 
-**When to ignore**: n/a — large classes should be decomposed.
+**When to ignore**: Files that are large only because the language requires colocating related definitions (e.g., a Go file defining all methods on a single type, or a module that groups cohesive but numerous helper functions). Size alone is not sufficient — the class must have multiple distinct responsibilities to qualify.
 
 ---
 
@@ -242,7 +267,7 @@ Shrink oversized constructs. These are the most common refactorings and create t
 - Replace Type Code with Class / Subclasses / State-Strategy
 - Replace Array with Object (when arrays hold heterogeneous data)
 
-**When to ignore**: n/a — primitives used to represent domain concepts should be wrapped.
+**When to ignore**: Languages where wrapping every primitive introduces excessive ceremony for minimal benefit (e.g., Go, where a `type UserID string` is useful but wrapping every `string` field is not idiomatic). Only flag primitives that represent domain concepts with validation rules, formatting, or multiple co-traveling values.
 
 ---
 
@@ -262,6 +287,8 @@ Shrink oversized constructs. These are the most common refactorings and create t
 ### Pass 3 — Object-Orientation Abusers
 
 Fix misuse of OO features. Process these after Bloaters because Extract Method/Class from the previous pass may have surfaced new patterns.
+
+**For non-OO languages** (Go, Rust, C): These smells still apply — look for the equivalent structural patterns (unnecessary embedding, type-switch dispatch, parallel type families). Individual smell entries include "Language adaptation" notes where the mapping is non-obvious.
 
 ---
 
@@ -289,7 +316,9 @@ Fix misuse of OO features. Process these after Bloaters because Extract Method/C
 - Extract Class (move the temporary field and all code that uses it into a new class)
 - Introduce Null Object (provide a default object for the "empty" case)
 
-**When to ignore**: n/a — temporary fields confuse readers and should be extracted.
+**When to ignore**: Fields that represent optional or lazily-initialized state where the type system makes this explicit (e.g., `*T` or `Option<T>`). Also skip fields that are legitimately stateful across a lifecycle (e.g., connection state in a long-lived object).
+
+**Language adaptation**: In languages without classes (Go, Rust, C), check for struct fields that are only populated by certain methods and sit zero-valued otherwise.
 
 ---
 
@@ -301,7 +330,9 @@ Fix misuse of OO features. Process these after Bloaters because Extract Method/C
 - Replace Inheritance with Delegation (change from "is-a" to "has-a")
 - Extract Superclass (when inheritance is appropriate but the hierarchy is wrong)
 
-**When to ignore**: n/a — if a subclass doesn't want its parent's interface, delegation is more appropriate.
+**When to ignore**: When the unused inherited methods are required by a framework or interface contract (e.g., a base handler class that requires all lifecycle methods to be present).
+
+**Language adaptation**: In languages without class inheritance (Go, Rust, C), check for struct embedding where the outer type only uses a fraction of the embedded type's methods, or interface implementations where most methods are no-ops.
 
 ---
 
@@ -316,6 +347,8 @@ Fix misuse of OO features. Process these after Bloaters because Extract Method/C
 - Delete the redundant class (when fully equivalent)
 
 **When to ignore**: When the classes exist in separate libraries or packages that you don't control.
+
+**Language adaptation**: In languages without class inheritance (Go, Rust, C), check for types or packages that serve the same purpose but expose different function names or signatures. "Extract Superclass" becomes "extract a shared interface."
 
 ---
 
@@ -333,7 +366,7 @@ Improve modularity so changes don't cascade across the codebase.
 - Extract Class (split each axis of change into its own class)
 - Extract Superclass / Extract Subclass (if the axes of change follow an inheritance pattern)
 
-**When to ignore**: n/a — a class that changes for multiple reasons violates SRP.
+**When to ignore**: When the "multiple reasons" are actually facets of a single cohesive responsibility (e.g., a parser that handles multiple node types is still about parsing). Only flag when the axes of change are genuinely unrelated.
 
 ---
 
@@ -346,7 +379,7 @@ Improve modularity so changes don't cascade across the codebase.
 - Create a new class if no existing class is the right home
 - Inline Class (collapse classes that became too thin after consolidation)
 
-**When to ignore**: n/a — scattered responsibilities should be consolidated.
+**When to ignore**: When the scattered changes are inherently cross-cutting (e.g., adding a new field to a serialization format requires touching the type definition, the encoder, and the decoder — this is expected, not a smell).
 
 ---
 
@@ -359,6 +392,8 @@ Improve modularity so changes don't cascade across the codebase.
 - Move Method / Move Field to eliminate the redundant hierarchy
 
 **When to ignore**: When eliminating the parallel hierarchy would degrade code quality or introduce worse coupling. Accept the duplication if the alternative is genuinely worse.
+
+**Language adaptation**: In languages without class inheritance (Go, Rust, C), check for parallel type families connected by naming convention (e.g., `FooConfig`/`FooHandler`/`FooResult` mirrored as `BarConfig`/`BarHandler`/`BarResult`) where adding a new variant requires creating types in multiple places.
 
 ---
 
@@ -390,7 +425,7 @@ Reduce excessive coupling between objects. Process these last because class stru
 - Change Bidirectional to Unidirectional Association
 - Replace Delegation with Inheritance (when one class truly IS a specialization of the other)
 
-**When to ignore**: n/a — tight coupling between classes should be reduced.
+**When to ignore**: Types that are inherently co-designed (e.g., a builder and the type it builds, or a type and its closely-coupled test helper). Also skip when the "intimacy" is accessing exported/public fields on a type that intentionally exposes them.
 
 ---
 
@@ -431,37 +466,38 @@ Reduce excessive coupling between objects. Process these last because class stru
 
 ## Commit Strategy
 
-After completing all 23 smell phases:
+Create a SINGLE commit after all five passes are complete.
 
-1. Review all changes made across all phases.
-2. Create ONE commit per smell category that had changes (up to 5 commits):
+1. Stage all modified and newly created files: `git add <all CHANGED_FILES>`
+2. Read `git diff --cached` to see exactly what is staged.
+3. Commit with the message: `refactor: remove code smells from branch changes`
+4. The commit message body MUST be organized by pass. For each pass that produced changes, list the smells addressed and a count of refactorings applied. Example:
 
-   - `refactor: remove dispensable code (dead code, duplicates, speculative generality)`
-   - `refactor: decompose bloated constructs (long methods, large classes, parameter lists)`
-   - `refactor: fix OO abuse patterns (switch statements, refused bequest, temp fields)`
-   - `refactor: improve change resilience (divergent change, shotgun surgery)`
-   - `refactor: reduce coupling (feature envy, message chains, middle man)`
+   ```
+   Dispensables: removed 3 dead-code instances, consolidated 2 duplicates
+   Bloaters: extracted 4 methods from long functions
+   Couplers: moved 1 method to reduce feature envy
+   ```
 
-3. Each commit message body should list the specific smells addressed and a count of refactorings applied.
-4. Skip categories where no changes were made.
+5. Omit passes where no changes were made.
 
-**CRITICAL:** Generate the commit message body by reading `git diff --cached`, not by recalling planned changes. If a change you intended to include is not shown by `git diff --cached`, either stage it first or omit it from the message. Only describe changes that are staged.
+**CRITICAL:** Generate the commit message body from `git diff --cached`, not from memory. If a change you intended to include is not shown by `git diff --cached`, either stage it first or omit it from the message. Only describe changes that are actually staged.
 
 ## Post-Refactoring Verification
 
-After all commits:
+After all passes are complete and committed:
 
 1. Show total impact:
    ```bash
    git diff --stat <BRANCHPOINT>
    ```
 
-2. If `TEST_CMD` was detected, run the test suite.
+2. If `TEST_CMD` was detected, run the full test suite.
 
 3. If tests fail:
    a. Analyze which refactoring likely caused the failure.
    b. Attempt to fix the test or the refactored code.
-   c. If unfixable after a reasonable attempt, offer to revert the most recent category's commit.
+   c. If unfixable after a reasonable attempt, offer to revert the entire refactoring commit with `git revert HEAD`.
 
 4. If `LINT_CMD` was detected, run the linter and fix any issues.
 
