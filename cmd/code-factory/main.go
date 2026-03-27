@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 
@@ -81,6 +82,13 @@ Options:
 	pool := worker.NewPool(*poolSize, *waitSecs)
 	pool.Start(database, ticketsDir)
 	pool.StartHousekeeping(database)
+
+	// Redirect the standard logger to a file so library log output doesn't
+	// corrupt the bubbletea terminal display.
+	if logFile, err := os.OpenFile(filepath.Join(ticketsDir, "code-factory.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644); err == nil {
+		log.SetOutput(logFile)
+		defer logFile.Close()
+	}
 
 	// Start the TUI; it blocks until the user quits.
 	model := ui.NewModel(pool, database, *waitSecs)

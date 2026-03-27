@@ -184,7 +184,7 @@ func (m Model) View() string {
 
 	if m.dialog != nil {
 		overlayStr := m.dialog.View()
-		full = renderCenteredOverlay(full, overlayStr, m.width, m.height)
+		full = lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, overlayStr)
 	}
 
 	return full

@@ -36,69 +36,6 @@ var (
 				Foreground(lipgloss.Color("230"))
 )
 
-// renderCenteredOverlay places the overlay content in the centre of the
-// terminal, dimming the background.
-func renderCenteredOverlay(bg string, overlay string, width, height int) string {
-	overlayLines := strings.Split(overlay, "\n")
-	overlayH := len(overlayLines)
-	overlayW := 0
-	for _, l := range overlayLines {
-		if w := lipgloss.Width(l); w > overlayW {
-			overlayW = w
-		}
-	}
-
-	topPad := (height - overlayH) / 2
-	if topPad < 0 {
-		topPad = 0
-	}
-	leftPad := (width - overlayW) / 2
-	if leftPad < 0 {
-		leftPad = 0
-	}
-
-	bgLines := strings.Split(bg, "\n")
-	// Pad bg to height lines.
-	for len(bgLines) < height {
-		bgLines = append(bgLines, strings.Repeat(" ", width))
-	}
-
-	result := make([]string, height)
-	for i := 0; i < height; i++ {
-		bgLine := ""
-		if i < len(bgLines) {
-			bgLine = bgLines[i]
-		}
-		// Pad bg line to width.
-		bgRunes := []rune(bgLine)
-		for len(bgRunes) < width {
-			bgRunes = append(bgRunes, ' ')
-		}
-		bgLine = string(bgRunes)
-
-		overlayIdx := i - topPad
-		if overlayIdx < 0 || overlayIdx >= len(overlayLines) {
-			result[i] = bgLine
-			continue
-		}
-
-		ol := overlayLines[overlayIdx]
-		olRunes := []rune(ol)
-
-		// Build the merged line: bg chars + overlay in the middle.
-		merged := []rune(bgLine)
-		for j, r := range olRunes {
-			pos := leftPad + j
-			if pos < len(merged) {
-				merged[pos] = r
-			}
-		}
-		result[i] = string(merged)
-	}
-
-	return strings.Join(result, "\n")
-}
-
 // ── Quit dialog ──────────────────────────────────────────────────────────────
 
 // quitDialogFocused tracks which button has focus.

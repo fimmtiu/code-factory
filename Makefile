@@ -1,5 +1,7 @@
 build:
-	go build ./cmd/tickets ./cmd/tickets-testdata ./cmd/code-factory
+	go build ./cmd/tickets
+	go build ./cmd/tickets-testdata
+	go build ./cmd/code-factory
 
 test:
 	go test ./...
