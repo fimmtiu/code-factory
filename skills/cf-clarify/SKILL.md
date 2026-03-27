@@ -1,3 +1,9 @@
+---
+name: cf-clarify
+description: Examine a project design document and find details that are underspecified or won't be clear to an implementer. Trigger on: `clarify` or `/cf-clarify`.
+user-invocable: true
+---
+
 In plan mode, read the project specification provided by the user and identify aspects that would be ambiguous for an implementer. Ignore any sections where the work to be done is clear. Areas to focus on include:
 
 - **Problem/Goal:** What problem does this solve?

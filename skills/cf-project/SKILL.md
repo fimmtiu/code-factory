@@ -1,6 +1,6 @@
 ---
 name: cf-project
-description: "Break a large project description down into a series of smaller feature projects. Use when starting a new project. Triggers on: create a project, write project for, plan this project, requirements for, spec out, /cf-project."
+description: "Use when starting a new project that needs to be decomposed into smaller work units for parallel implementation. Triggers on: create a project, write project for, plan this project, requirements for, spec out, /cf-project."
 user-invocable: true
 ---
 
@@ -8,52 +8,84 @@ user-invocable: true
 
 Takes a specification for a large proposed change and breaks it down into a series of Code Factory projects, each containing detailed Code Factory tickets that are clear, actionable, and suitable for implementation.
 
----
+Terminology for the `tickets` system:
+- A "work unit" means a project or ticket.
+- A "project" is a collection of tickets that share a single goal.
+- A "subproject" is a project nested under another project.
+- A "ticket" is a single piece of work, small enough to be accomplished by a single agent in under ten minutes. They often, but not always, belong to projects — you can have individual tickets at the top level for very small pieces of work that don't belong anywhere else.
+- An "identifier" is the name of a work unit in kebab-case, hierarchically structured like `parent-project/subproject` or `parent-project/subproject/ticket-name`.
 
-**FIXME FIXME FIXME**:
-- [ ] Make priority more flexible. Projects should be able to be worked on in parallel when they don't depend on each other.
-- [ ] Tickets should contain the project context somehow. Do we duplicate it, or do we have `code-factory` read context from the parent projects as well? I strongly prefer the latter.
-- [ ] Go over everything, ensure that terminology is correct and we're not mis-using "project".
-- [ ] Ensure all references to "grundor" are removed.
+**Identifier rules:**
+- Each slash-separated segment must match `[a-z][a-z0-9-]*` (lowercase, starts with a letter, hyphens allowed, no underscores or uppercase)
+- A child work unit's identifier is formed by prefixing the parent's identifier with a slash: if project `auth` has a ticket for login, the ticket identifier is `auth/login`
+- The system derives parent-child relationships from this prefix structure, so getting it wrong breaks the hierarchy
+- Dependencies must also use full identifiers (e.g., `auth/login-endpoint`, not just `login-endpoint`)
 
 ## The Job
 
-1. Read a user-provided file containing a specification for the work to be done
-2. Divide the work into logical phases, each with a short descriptive name (preferably less than 30 characters). Each of these will become a Code Factory project.
-3. Order the phases in order of priority. A phase should never depend on work in a later phase.
-4. For each phase:
-  4a. Prompt the user with up to 5 essential clarifying questions (with lettered options)
-  4b. Generate a structured PRD based on answers
-  4c. Create a project with `tickets create-project <project-name>`, piping the PRD into its standard input.
-  4d. For each user story in the project, create a ticket for it with `tickets
+1. Read the user-provided specification for the work to be done
+2. Divide the work into logical pieces, each with a short identifier (preferably less than 30 characters, following the identifier rules above). Each of these will become a Code Factory project.
+3. Collect all clarifying questions across all projects and present them to the user in a single batch (see "How to ask clarifying questions" below). Wait for answers before proceeding. If nothing is ambiguous, skip this step.
+4. Determine the dependencies between projects
+5. For each project, in dependency order (parents and dependencies first):
+  5a. Generate a structured PRD, guided by the user's answers from Step 3
+  5b. Create the project by piping a JSON description into `tickets create-project`:
+  ```bash
+  tickets create-project <project-identifier> <<'TICKET_JSON'
+  {
+    "dependencies": [
+      "identifier-of-a-dependency",
+      "another-dependency"
+    ],
+    "description": "Full PRD content here (see below for format)..."
+  }
+  TICKET_JSON
+  ```
+  Omit `dependencies` or pass `[]` if the project has none.
+  5c. For each user story in the PRD, create a ticket. Derive the ticket identifier from the user story title, not its number — for a story titled "US-001: Add priority field" in project `task-priority`, the ticket identifier would be `task-priority/add-priority-field`.
+  ```bash
+  tickets create-ticket <project-identifier>/<ticket-name> <<'TICKET_JSON'
+  {
+    "dependencies": [
+      "project-name/other-ticket"
+    ],
+    "description": "Full user story content here..."
+  }
+  TICKET_JSON
+  ```
 
-**Important:** Do NOT start implementing. Just create the PRDs in the `grundor/` directory.
+**Important:** Do NOT start implementing. Your job ends when all projects and tickets have been created with `tickets`. Do not write any code, modify any source files, or begin work on any ticket.
 
 ---
 
-## How to Divide the Project
+## How to divide the project
 
-Each phase should either describe an individual feature of the project or lay necessary groundwork for implementing future features. Each output PRD must be small enough that it's easily read and worked on in a single context window. If the phase encompasses a very broad, general feature, you may break that phase into separate phases with their own short descriptive names and PRDs.
+Each project should either describe an individual feature of the proposed change or lay necessary groundwork for implementing future features. Each output PRD must be small enough that it's easily read and worked on in a single context window.
 
-## How to Order the Project
+If the project encompasses a very broad, general feature, you may break that project into multiple subprojects of that parent project with their own short descriptive names and PRDs. Subprojects may themselves contain subprojects. There are no hard limits on nesting, but if you've gone deeper than three levels of nesting then something is wrong and you're probably making the projects too fine-grained.
 
-* Each phase has a unique number from 1..(total number of phases) indicating the order they should be implemented in.
-* Each phase must be independent — no phase may depend on functionality implemented by a later phase. If you encounter a circular dependency situation, resolve it by splitting out common functionality into a separate phase that's implemented first, then renumber as needed.
+## How to choose project dependencies
 
-## How to Generate a PRD
+You should aim to split up the work into projects such that we can parallelize as much work as possible. Any changes (libraries, shared code, foundational functionality, etc.) which will be used by other projects MUST be marked as a dependency for those subsequent projects. A work unit MUST ONLY depend on functionality implemented by work units that are in its `dependencies` list, or functionality implemented by work units that the work units in the `dependencies` list themselves depend on. (It's a tree; the work you rely on must be in one of the ancestors.)
 
-### Step 1: Ask Clarifying Questions
+If you encounter a circular dependency situation, resolve it by splitting out common functionality into a separate project that's implemented first. Other projects can depend on that common functionality instead of depending on each other.
 
-Ask only critical questions where the initial prompt is ambiguous. If the work to be done is clear, don't ask any questions. Focus on:
+## How to order the work units
+
+The work units must be created in order such that you MUST create a work unit before you create any work units that depend on it, or which are children of it. Before creating tickets or projects, order them so that the parents and/or dependencies of each work unit occur earlier in the order.
+
+### How to ask clarifying questions
+
+Ask only critical questions where the initial prompt is ambiguous. If the work to be done is clear, or if one of the answers is much more likely than the rest, don't ask the question. Focus on making these points clear:
 
 - **Problem/Goal:** What problem does this solve?
 - **Core Functionality:** What are the key actions?
 - **Scope/Boundaries:** What should it NOT do?
 - **Success Criteria:** How do we know it's done?
 
-Don't put the questions in your output. Prompt the user directly for an answer before project context or tickets are generated.
+NEVER put the questions in the output we send to `tickets`. Prompt the user directly for an answer before projects or tickets are generated.
 
-#### Format Questions Like This:
+#### Format questions like this:
 
 ```
 1. What is the primary goal of this feature?
@@ -77,19 +109,17 @@ Don't put the questions in your output. Prompt the user directly for an answer b
 
 This lets users respond with "1A, 2C, 3B" for quick iteration. Remember to indent the options.
 
----
+## How to Generate a PRD
 
-### Step 2: Generate Structured PRD
+A PRD should be in Markdown format. It must have these sections:
 
-Generate the PRD with these sections:
-
-#### 1. Introduction/Overview
+### 1. Introduction/Overview
 Brief description of the feature and the problem it solves.
 
-#### 2. Goals
+### 2. Goals
 Specific, measurable objectives (bullet list).
 
-#### 3. User Stories
+### 3. User Stories
 Each story needs:
 - **Title:** Short descriptive name
 - **Description:** "As a [user], I want [feature] so that [benefit]"
@@ -113,27 +143,27 @@ Each story should be small enough to implement in one focused session.
 - Acceptance criteria must be verifiable, not vague. "Works correctly" is bad. "Button shows confirmation dialog before deleting" is good.
 - **For any story with UI changes:** Always include "Verify in browser using dev-browser skill" as acceptance criteria. This ensures visual verification of frontend work.
 
-#### 4. Functional Requirements
+### 4. Functional Requirements
 Numbered list of specific functionalities:
 - "FR-1: The system must allow users to..."
 - "FR-2: When a user clicks X, the system must..."
 
 Be explicit and unambiguous.
 
-#### 5. Non-Goals (Out of Scope)
+### 5. Non-Goals (Out of Scope)
 What this feature will NOT include. Critical for managing scope.
 
-#### 6. Design Considerations (Optional)
+### 6. Design Considerations (Optional)
 - UI/UX requirements
 - Link to mockups if available
 - Relevant existing components to reuse
 
-#### 7. Technical Considerations (Optional)
+### 7. Technical Considerations (Optional)
 - Known constraints or dependencies
 - Integration points with existing systems
 - Performance requirements
 
-#### 8. Success Metrics
+### 8. Success Metrics
 How will success be measured?
 - "Reduce time to complete X by 50%"
 - "Increase conversion rate by 10%"
@@ -245,4 +275,3 @@ Before saving the PRD:
 - [ ] User stories are small and specific
 - [ ] Functional requirements are numbered and unambiguous
 - [ ] Non-goals section defines clear boundaries
-- [ ] Saved to `grundor/prd-[NN]-[feature-name].md`

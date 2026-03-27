@@ -1,6 +1,7 @@
 ---
 name: cf-respond
 description: Thoroughly respond a changeset from a variety of different perspectives. Trigger on `/respond` or `/cf-respond`.
+user-invocable: true
 ---
 
 # Respond to code review comments

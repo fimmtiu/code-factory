@@ -1,6 +1,7 @@
 ---
 name: cf-review
 description: Thoroughly review a changeset from a variety of different perspectives. Trigger on `/review` or `/cf-review`.
+user-invocable: true
 ---
 
 # Code Review
