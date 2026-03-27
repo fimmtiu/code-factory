@@ -11,8 +11,14 @@ TO DO
 - Settings file:
   - Wait-for editor command
   - Independent editor command
-  - Ticket poll delay
-  - Number of workers
   - Terminal-opening command
 
-- The logic that merges worktrees into parent projects!
+- Run Claude on the other skills to get suggestions
+
+- Change repo name to `code-factory`
+
+
+We're going add a few new parameters in the settings file. These include:
+- `blocking_editor_command`: replaces the current use of $EDITOR in the code base. Default value: the value of $EDITOR, or `cursor --wait` if not specified.
+- `nonblocking_editor_command`: replaces the current use of `"cursor"` in openCursor(). Defaults to `cursor` if not specified. In the process, rename `openCursor()` to `openEditorNonblocking()`.
+- `open_terminal_command`: replaces the current use of `open -a iTerm`. Defaults to `open -a iTerm .` if not specified.

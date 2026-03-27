@@ -520,7 +520,7 @@ func (v CommandView) debugTicket() (tea.Model, tea.Cmd) {
 	tell current window
 		set myNewTab to create tab with default profile
 		tell current session of myNewTab
-			write text "claude %s"
+			write text "claude < %s"
 		end tell
 	end tell
 end tell`, tmpPath)
