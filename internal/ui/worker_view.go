@@ -21,7 +21,7 @@ var (
 				Foreground(lipgloss.Color("9")).Bold(true) // red
 
 	workerBusyStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("2")).Bold(true) // dark green
+			Foreground(lipgloss.Color("22")).Bold(true) // dark green
 
 	workerPausedStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("3")).Bold(true) // yellow

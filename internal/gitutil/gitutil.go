@@ -54,9 +54,10 @@ func (g *RealGitClient) CreateWorktree(repoRoot, worktreePath, branchName string
 	if err := os.MkdirAll(worktreePath, 0755); err != nil {
 		return fmt.Errorf("failed to create worktree directory %s: %w", worktreePath, err)
 	}
+	safeBranchName := strings.ReplaceAll(branchName, "/", "_")
 
 	// git worktree add <path> -b <branch>
-	if err := runGit("-C", repoRoot, "worktree", "add", worktreePath, "-b", branchName); err != nil {
+	if err := runGit("-C", repoRoot, "worktree", "add", worktreePath, "-b", safeBranchName); err != nil {
 		return fmt.Errorf("CreateWorktree(%q, %q): %w", repoRoot, worktreePath, err)
 	}
 	return nil
