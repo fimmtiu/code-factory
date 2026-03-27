@@ -139,8 +139,8 @@ func TestMergeBranch(t *testing.T) {
 		t.Fatalf("failed to checkout base branch: %v\n%s", err, out)
 	}
 
-	// Merge featureBranch into baseBranch.
-	err = client.MergeBranch(dir, featureBranch, baseBranch)
+	// Merge featureBranch into the currently-checked-out baseBranch.
+	err = client.MergeBranch(dir, featureBranch)
 	if err != nil {
 		t.Fatalf("MergeBranch returned error: %v", err)
 	}
@@ -151,7 +151,7 @@ func TestMergeBranch(t *testing.T) {
 		t.Fatal("feature.txt not present after merge")
 	}
 
-	// We should still be on baseBranch (or MergeBranch restored original).
+	// We should still be on baseBranch.
 	branch := currentBranch(t, dir)
 	if branch != baseBranch {
 		t.Fatalf("expected to be on %q after merge, got %q", baseBranch, branch)

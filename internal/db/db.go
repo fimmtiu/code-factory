@@ -552,18 +552,18 @@ func (d *DB) SetStatus(identifier, phase, status string) error {
 	})
 }
 
-// markTicketDone merges the ticket's branch, updates it to done in the DB, and
-// removes its worktree.
+// markTicketDone merges the ticket's branch into the parent project's worktree
+// (or repoRoot if there is no parent), updates the DB, and removes the worktree.
 func (d *DB) markTicketDone(ticketID int64, identifier string, projectID sql.NullInt64) error {
-	intoBranch := "main"
+	mergeTarget := d.repoRoot
 	if projectID.Valid {
 		var parentIdentifier string
 		if err := d.db.QueryRow(`SELECT identifier FROM projects WHERE id = ?`, projectID.Int64).Scan(&parentIdentifier); err == nil {
-			intoBranch = parentIdentifier
+			mergeTarget = storage.TicketWorktreePathIn(d.ticketsDir, parentIdentifier)
 		}
 	}
 
-	if err := d.git.MergeBranch(d.repoRoot, identifier, intoBranch); err != nil {
+	if err := d.git.MergeBranch(mergeTarget, identifier); err != nil {
 		return fmt.Errorf("merge failed: %w", err)
 	}
 
@@ -961,7 +961,23 @@ func (d *DB) GetTicketPhase(identifier string) (string, error) {
 }
 
 // SetProjectPhase updates the phase of the project with the given identifier.
+// When phase is "done", the project's branch is merged into the parent project's
+// worktree (or repoRoot if there is no parent).
 func (d *DB) SetProjectPhase(identifier, phase string) error {
+	if phase == string(models.ProjectPhaseDone) {
+		mergeTarget := d.repoRoot
+		var parentProjectID sql.NullInt64
+		if err := d.db.QueryRow(`SELECT project_id FROM projects WHERE identifier = ?`, identifier).Scan(&parentProjectID); err == nil && parentProjectID.Valid {
+			var parentIdentifier string
+			if err := d.db.QueryRow(`SELECT identifier FROM projects WHERE id = ?`, parentProjectID.Int64).Scan(&parentIdentifier); err == nil {
+				mergeTarget = storage.TicketWorktreePathIn(d.ticketsDir, parentIdentifier)
+			}
+		}
+		if err := d.git.MergeBranch(mergeTarget, identifier); err != nil {
+			return fmt.Errorf("merge project %q: %w", identifier, err)
+		}
+	}
+
 	return d.withTx(func(tx *sql.Tx) error {
 		res, err := tx.Exec(
 			`UPDATE projects SET phase = ?, last_updated = ? WHERE identifier = ?`,

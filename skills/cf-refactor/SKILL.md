@@ -5,7 +5,7 @@ description: "Scan branch changes for code smells and aggressively refactor to r
 
 # Refactorizer
 
-Aggressively scan the changes on the current branch for code smells and refactor to remove them, applying Martin Fowler-style refactoring techniques from the catalog at refactoring.guru.
+Aggressively scan the changes on the current branch for code smells and refactor to remove them, applying Martin Fowler-style refactoring techniques.
 
 Trigger with `/refactorizer`.
 
@@ -39,12 +39,12 @@ Run ALL of these steps before starting the refactoring loop:
 
 ## Find changes
 
-   Prompt the user for what they want to refactor:
-     1. All code in the repository (recurse over the filesystem to fetch the names of all files)
-     2. All changes on this branch (use `git diff --stat <BRANCHPOINT>` to fetch the names of the changed files)
-     3. Uncommitted changes only (use `git diff --stat` to fetch the names of the changed files)
+If unspecified, prompt the user for what they want to refactor:
+   1. All code in the repository (recurse over the filesystem to fetch the names of all files)
+   2. All changes on this branch (use `git diff --stat <BRANCHPOINT>` to fetch the names of the changed files)
+   3. Uncommitted changes only (use `git diff --stat` to fetch the names of the changed files)
 
-   Filter this list to source code files only — exclude binary files, images, lockfiles (package-lock.json, yarn.lock, Cargo.lock, etc.), generated files, and non-code config files. Store the filtered list as `CHANGED_FILES`.
+Filter this list to source code files only — exclude binary files, images, lockfiles (package-lock.json, yarn.lock, Cargo.lock, etc.), generated files, and non-code config files. Store the filtered list as `CHANGED_FILES`.
 
 ## Scope Rules
 

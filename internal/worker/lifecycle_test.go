@@ -16,7 +16,7 @@ import (
 type fakeGitClient struct{}
 
 func (f *fakeGitClient) CreateWorktree(_, worktreePath, _ string) error { return nil }
-func (f *fakeGitClient) MergeBranch(_, _, _ string) error               { return nil }
+func (f *fakeGitClient) MergeBranch(_, _ string) error                  { return nil }
 func (f *fakeGitClient) RemoveWorktree(_, _, _ string) error            { return nil }
 func (f *fakeGitClient) GetHeadCommit(_ string) (string, error)         { return "", nil }
 

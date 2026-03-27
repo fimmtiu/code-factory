@@ -14,7 +14,7 @@ import (
 type noopGitClient struct{}
 
 func (noopGitClient) CreateWorktree(_, _, _ string) error    { return nil }
-func (noopGitClient) MergeBranch(_, _, _ string) error       { return nil }
+func (noopGitClient) MergeBranch(_, _ string) error          { return nil }
 func (noopGitClient) RemoveWorktree(_, _, _ string) error    { return nil }
 func (noopGitClient) GetHeadCommit(_ string) (string, error) { return "", nil }
 

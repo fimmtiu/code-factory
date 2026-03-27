@@ -10,7 +10,10 @@ import (
 // GitClient defines the git operations needed by the tickets tool.
 type GitClient interface {
 	CreateWorktree(repoRoot, worktreePath, branchName string) error
-	MergeBranch(repoRoot, fromBranch, intoBranch string) error
+	// MergeBranch merges fromBranch into whichever branch is currently checked
+	// out at worktreeDir using --no-ff. worktreeDir must already be on the
+	// desired target branch (e.g. the parent project's worktree, or repoRoot).
+	MergeBranch(worktreeDir, fromBranch string) error
 	RemoveWorktree(repoRoot, worktreePath, branchName string) error
 	// GetHeadCommit returns the abbreviated HEAD commit hash for the git
 	// repository rooted at path.
@@ -59,36 +62,16 @@ func (g *RealGitClient) CreateWorktree(repoRoot, worktreePath, branchName string
 	return nil
 }
 
-// MergeBranch merges fromBranch into intoBranch using --no-ff, then restores
-// the original branch. It runs all git commands against repoRoot.
-func (g *RealGitClient) MergeBranch(repoRoot, fromBranch, intoBranch string) error {
-	// Save the current branch so we can restore it afterward.
-	originalBranch, err := runGitOutput("-C", repoRoot, "rev-parse", "--abbrev-ref", "HEAD")
+// MergeBranch merges fromBranch into the branch currently checked out at
+// worktreeDir using --no-ff. The caller is responsible for ensuring worktreeDir
+// is already on the desired target branch.
+func (g *RealGitClient) MergeBranch(worktreeDir, fromBranch string) error {
+	intoBranch, err := runGitOutput("-C", worktreeDir, "rev-parse", "--abbrev-ref", "HEAD")
 	if err != nil {
 		return fmt.Errorf("MergeBranch: could not determine current branch: %w", err)
 	}
-
-	if originalBranch != intoBranch {
-		if err := runGit("-C", repoRoot, "checkout", intoBranch); err != nil {
-			return fmt.Errorf("MergeBranch: checkout %q: %w", intoBranch, err)
-		}
-	}
-
 	mergeMsg := fmt.Sprintf("merge %s into %s", fromBranch, intoBranch)
-	mergeErr := runGit("-C", repoRoot, "merge", "--no-ff", fromBranch, "-m", mergeMsg)
-
-	// Restore original branch regardless of merge outcome.
-	if originalBranch != intoBranch {
-		if restoreErr := runGit("-C", repoRoot, "checkout", originalBranch); restoreErr != nil {
-			// Log but don't mask merge error.
-			if mergeErr != nil {
-				return fmt.Errorf("MergeBranch: merge failed (%v) and restore branch failed: %w", mergeErr, restoreErr)
-			}
-			return fmt.Errorf("MergeBranch: restore branch %q: %w", originalBranch, restoreErr)
-		}
-	}
-
-	return mergeErr
+	return runGit("-C", worktreeDir, "merge", "--no-ff", fromBranch, "-m", mergeMsg)
 }
 
 // GetHeadCommit returns the abbreviated HEAD commit hash for the git
