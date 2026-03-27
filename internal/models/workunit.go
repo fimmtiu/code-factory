@@ -61,35 +61,14 @@ func NewProject(identifier, description string) *WorkUnit {
 	}
 }
 
-// MergeTargetBranch returns the branch this work unit should be merged into
-// when done: the parent's identifier when one exists, or "main" for top-level
-// work units.
-func (wu *WorkUnit) MergeTargetBranch() string {
-	if wu.Parent != "" {
-		return wu.Parent
+// ParentIdentifierOf returns the parent portion of a slash-separated identifier
+// (e.g. "proj/ticket" → "proj", true) and whether one was found.
+func ParentIdentifierOf(identifier string) (string, bool) {
+	idx := strings.LastIndex(identifier, "/")
+	if idx < 0 {
+		return "", false
 	}
-	return "main"
-}
-
-// IsClaimable reports whether a ticket can be handed out by the claim command:
-// not a project, not blocked or done, status is idle, and not already claimed.
-func (wu *WorkUnit) IsClaimable() bool {
-	return !wu.IsProject &&
-		wu.Phase != PhaseBlocked && wu.Phase != PhaseDone &&
-		wu.Status == StatusIdle &&
-		wu.ClaimedBy == ""
-}
-
-// SetDependencies sets the dependencies of the ticket and adjusts the initial
-// phase: blocked when there are unresolved deps, plan otherwise.
-func (wu *WorkUnit) SetDependencies(deps []string) {
-	wu.Dependencies = deps
-	if len(deps) > 0 {
-		wu.Phase = PhaseBlocked
-	} else {
-		wu.Phase = PhaseImplement
-	}
-	wu.Status = StatusIdle
+	return identifier[:idx], true
 }
 
 func ValidateIdentifier(s string) error {

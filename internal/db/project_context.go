@@ -1,5 +1,7 @@
 package db
 
+import "github.com/fimmtiu/tickets/internal/models"
+
 // ProjectContext holds the identifier and description of a project in the
 // hierarchy above a ticket.
 type ProjectContext struct {
@@ -19,7 +21,7 @@ func (d *DB) GetProjectContext(identifier string) ([]ProjectContext, error) {
 
 	current := identifier
 	for {
-		parent, hasParent := parentIdentifierOf(current)
+		parent, hasParent := models.ParentIdentifierOf(current)
 		if !hasParent {
 			break
 		}

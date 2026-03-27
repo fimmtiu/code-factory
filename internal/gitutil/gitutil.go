@@ -12,7 +12,6 @@ type GitClient interface {
 	CreateWorktree(repoRoot, worktreePath, branchName string) error
 	MergeBranch(repoRoot, fromBranch, intoBranch string) error
 	RemoveWorktree(repoRoot, worktreePath, branchName string) error
-	GetRepoRoot(path string) (string, error)
 	// GetHeadCommit returns the abbreviated HEAD commit hash for the git
 	// repository rooted at path.
 	GetHeadCommit(path string) (string, error)
@@ -42,17 +41,6 @@ func runGitOutput(args ...string) (string, error) {
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("git %s failed: %w\n%s", strings.Join(args, " "), err, strings.TrimSpace(string(out)))
-	}
-	return strings.TrimSpace(string(out)), nil
-}
-
-// GetRepoRoot returns the absolute path to the top-level of the git repository
-// that contains path.
-func (g *RealGitClient) GetRepoRoot(path string) (string, error) {
-	cmd := exec.Command("git", "-C", path, "rev-parse", "--show-toplevel")
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return "", fmt.Errorf("git rev-parse --show-toplevel failed: %w\n%s", err, strings.TrimSpace(string(out)))
 	}
 	return strings.TrimSpace(string(out)), nil
 }

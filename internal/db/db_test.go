@@ -20,10 +20,9 @@ func (f *fakeGitClient) CreateWorktree(_, worktreePath, _ string) error {
 	f.worktreesCreated = append(f.worktreesCreated, worktreePath)
 	return nil
 }
-func (f *fakeGitClient) MergeBranch(_, _, _ string) error        { return nil }
-func (f *fakeGitClient) RemoveWorktree(_, _, _ string) error     { return nil }
-func (f *fakeGitClient) GetRepoRoot(path string) (string, error) { return path, nil }
-func (f *fakeGitClient) GetHeadCommit(_ string) (string, error)  { return "", nil }
+func (f *fakeGitClient) MergeBranch(_, _, _ string) error       { return nil }
+func (f *fakeGitClient) RemoveWorktree(_, _, _ string) error    { return nil }
+func (f *fakeGitClient) GetHeadCommit(_ string) (string, error) { return "", nil }
 
 var _ gitutil.GitClient = (*fakeGitClient)(nil) // compile-time interface check
 

@@ -45,7 +45,7 @@ func Approve(database *db.DB, identifier string) error {
 // identifier, marking each project as done when all its direct children are
 // done.
 func markParentProjectsDone(database *db.DB, identifier string) error {
-	parentID, hasParent := parentIdentifierOf(identifier)
+	parentID, hasParent := models.ParentIdentifierOf(identifier)
 	if !hasParent {
 		return nil
 	}
@@ -64,15 +64,4 @@ func markParentProjectsDone(database *db.DB, identifier string) error {
 
 	// Recurse up the tree.
 	return markParentProjectsDone(database, parentID)
-}
-
-// parentIdentifierOf returns the parent portion of a slash-separated
-// identifier (e.g. "proj/ticket" → "proj", true).
-func parentIdentifierOf(identifier string) (string, bool) {
-	for i := len(identifier) - 1; i >= 0; i-- {
-		if identifier[i] == '/' {
-			return identifier[:i], true
-		}
-	}
-	return "", false
 }

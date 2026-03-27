@@ -63,24 +63,6 @@ func branchExists(t *testing.T, repoRoot, branch string) bool {
 	return err == nil
 }
 
-func TestGetRepoRoot(t *testing.T) {
-	dir := initTestRepo(t)
-	client := gitutil.NewRealGitClient()
-
-	root, err := client.GetRepoRoot(dir)
-	if err != nil {
-		t.Fatalf("GetRepoRoot returned error: %v", err)
-	}
-	if root == "" {
-		t.Fatal("GetRepoRoot returned empty string")
-	}
-	// The returned root should contain the temp dir path (may be resolved via symlinks).
-	// Just verify it is a valid directory containing a .git entry.
-	if _, err := os.Stat(filepath.Join(root, ".git")); err != nil {
-		t.Fatalf("GetRepoRoot returned %q which has no .git: %v", root, err)
-	}
-}
-
 func TestCreateWorktree(t *testing.T) {
 	dir := initTestRepo(t)
 	client := gitutil.NewRealGitClient()
