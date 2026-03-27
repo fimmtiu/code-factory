@@ -11,6 +11,11 @@ import (
 // generous to avoid blocking workers during bursts of log activity.
 const logChannelBuffer = 100
 
+// WorkFn is the signature for the function that does the actual work on a
+// claimed ticket. The default is runACP; set to MockWorkFn for UI testing
+// without a running Claude process.
+type WorkFn func(ctx context.Context, w *Worker, database dbInterface, logCh chan<- LogMessage, worktreePath, identifier, phase, prompt, logfilePath string) error
+
 // Pool holds the collection of workers and the shared log channel. It is the
 // single point of management for the main goroutine.
 type Pool struct {
@@ -18,6 +23,10 @@ type Pool struct {
 	LogChannel   chan LogMessage
 	PoolSize     int
 	PollInterval int // seconds
+
+	// WorkFn is called by each worker to do the actual work on a claimed ticket.
+	// Defaults to runACP; set to MockWorkFn for UI testing.
+	WorkFn WorkFn
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -37,6 +46,7 @@ func NewPool(size int, pollInterval int) *Pool {
 		LogChannel:   make(chan LogMessage, logChannelBuffer),
 		PoolSize:     size,
 		PollInterval: pollInterval,
+		WorkFn:       runACP,
 		ctx:          ctx,
 		cancel:       cancel,
 	}
@@ -58,6 +68,7 @@ func (p *Pool) Start(database *db.DB, ticketsDir string) {
 		w.database = database
 		w.logCh = p.LogChannel
 		w.ticketsDir = ticketsDir
+		w.workFn = p.WorkFn // nil = real ACP
 		p.wg.Add(1)
 		go func(w *Worker) {
 			defer p.wg.Done()

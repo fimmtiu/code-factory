@@ -204,8 +204,9 @@ var _ acp.Client = (*acpWorkerClient)(nil)
 // runACP launches Claude Code as an ACP subprocess in the ticket's worktree
 // directory, sends the prompt, and streams all output to the logfile.
 // It returns after the prompt completes or the context is cancelled.
-func (w *Worker) runACP(
+func runACP(
 	ctx context.Context,
+	w *Worker,
 	database dbInterface,
 	logCh chan<- LogMessage,
 	worktreePath string,

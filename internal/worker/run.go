@@ -61,7 +61,7 @@ func (w *Worker) processTicket(ctx context.Context, ticket *models.WorkUnit) {
 		return
 	}
 
-	acpErr := w.runACP(ctx, w.database, w.logCh, worktreePath, identifier, string(ticket.Phase), prompt, logfilePath)
+	acpErr := w.workFn(ctx, w, w.database, w.logCh, worktreePath, identifier, string(ticket.Phase), prompt, logfilePath)
 
 	if acpErr != nil {
 		w.logCh <- NewLogMessageWithFile(w.Number, fmt.Sprintf("ACP error on %s: %v", identifier, acpErr), logfilePath)

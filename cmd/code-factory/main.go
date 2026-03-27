@@ -19,17 +19,19 @@ func main() {
 	fs := flag.NewFlagSet("code-factory", flag.ContinueOnError)
 	poolSize := fs.Int("pool", 4, "worker pool size")
 	waitSecs := fs.Int("wait", 5, "poll interval in seconds")
+	mock := fs.Bool("mock", false, "use mock workers instead of real ACP subprocesses")
 
 	// Support short flags -p and -w as aliases
 	fs.IntVar(poolSize, "p", 4, "worker pool size (shorthand)")
 	fs.IntVar(waitSecs, "w", 5, "poll interval in seconds (shorthand)")
 
 	fs.Usage = func() {
-		fmt.Fprintln(os.Stderr, `Usage: code-factory [-p <pool>] [-w <wait>]
+		fmt.Fprintln(os.Stderr, `Usage: code-factory [-p <pool>] [-w <wait>] [--mock]
 
 Options:
   -p, --pool <N>   Worker pool size (default 4)
   -w, --wait <N>   Poll interval in seconds (default 5)
+      --mock       Use mock workers for UI testing (no real Claude subprocess)
   -h, --help       Show this help message`)
 	}
 
@@ -79,7 +81,11 @@ Options:
 	defer database.Close()
 
 	// Create the pool, start workers and housekeeping.
+	// NewPool defaults WorkFn to the real ACP subprocess; --mock overrides it.
 	pool := worker.NewPool(*poolSize, *waitSecs)
+	if *mock {
+		pool.WorkFn = worker.MockWorkFn
+	}
 	pool.Start(database, ticketsDir)
 	pool.StartHousekeeping(database)
 

@@ -37,11 +37,12 @@ type Worker struct {
 	// (writer) and the UI goroutine (reader).
 	mu sync.RWMutex
 
-	// database, logCh, and ticketsDir are set by Pool.Start before the goroutine
-	// is launched and remain constant for the worker's lifetime.
+	// database, logCh, ticketsDir, and workFn are set by Pool.Start before the
+	// goroutine is launched and remain constant for the worker's lifetime.
 	database   *db.DB
 	logCh      chan<- LogMessage
 	ticketsDir string
+	workFn     WorkFn // nil = real ACP subprocess
 }
 
 // NewWorker creates a new Worker with the given 1-based number. The worker
