@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"github.com/fimmtiu/tickets/internal/db"
+	"github.com/fimmtiu/tickets/internal/models"
 	"github.com/fimmtiu/tickets/internal/storage"
 )
 
@@ -22,24 +23,16 @@ func openDB() (*db.DB, error) {
 
 // runCommand dispatches to the appropriate subcommand handler.
 func runCommand(subcommand string, args []string) error {
-	switch subcommand {
-	case "init":
+	if subcommand == "init" {
 		return runInit()
-	case "status", "create-project", "create-ticket", "set-status",
-		"claim", "release", "add-change-request", "close-change-request", "dismiss-change-request":
-		d, err := openDB()
-		if err != nil {
-			return err
-		}
-		defer d.Close()
-		return runCommandWithDB(subcommand, args, d)
-	default:
-		return fmt.Errorf("unknown subcommand %q; run 'tickets' for usage", subcommand)
 	}
-}
 
-// runCommandWithDB handles subcommands that require an open database.
-func runCommandWithDB(subcommand string, args []string, d *db.DB) error {
+	d, err := openDB()
+	if err != nil {
+		return err
+	}
+	defer d.Close()
+
 	switch subcommand {
 	case "status":
 		return runStatus(d)
@@ -59,8 +52,9 @@ func runCommandWithDB(subcommand string, args []string, d *db.DB) error {
 		return runCloseChangeRequest(d, args)
 	case "dismiss-change-request":
 		return runDismissChangeRequest(d, args)
+	default:
+		return fmt.Errorf("unknown subcommand %q; run 'tickets' for usage", subcommand)
 	}
-	return nil
 }
 
 // runInit finds the repo root, initialises .tickets/, and prints a message.
@@ -142,7 +136,7 @@ func runSetStatus(d *db.DB, args []string) error {
 	if len(args) < 2 {
 		return fmt.Errorf("usage: tickets set-status <identifier> <phase> [<status>]")
 	}
-	status := "idle"
+	status := models.StatusIdle
 	if len(args) >= 3 {
 		status = args[2]
 	}

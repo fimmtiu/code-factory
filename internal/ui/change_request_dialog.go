@@ -68,9 +68,7 @@ func NewChangeRequestDialog(database *db.DB, wu *models.WorkUnit, width, height 
 		return crs[i].Date.After(crs[j].Date)
 	})
 
-	repoRoot, _ := storage.FindRepoRoot(".")
-	ticketsDir := storage.TicketsDirPath(repoRoot)
-	worktree := storage.TicketWorktreePath(storage.TicketDirPath(ticketsDir, wu.Identifier))
+	worktree, _ := storage.WorktreePathForIdentifier(wu.Identifier)
 
 	d := &ChangeRequestDialog{
 		database:       database,

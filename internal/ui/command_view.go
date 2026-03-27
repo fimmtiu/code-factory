@@ -331,12 +331,10 @@ func (v CommandView) openTerminal() (tea.Model, tea.Cmd) {
 	if wu == nil {
 		return v, nil
 	}
-	repoRoot, err := storage.FindRepoRoot(".")
+	dir, err := storage.WorktreePathForIdentifier(wu.Identifier)
 	if err != nil {
 		return v, nil
 	}
-	ticketsDir := storage.TicketsDirPath(repoRoot)
-	dir := storage.TicketWorktreePath(storage.TicketDirPath(ticketsDir, wu.Identifier))
 	_ = util.OpenTerminal(dir)
 	return v, nil
 }
@@ -346,12 +344,10 @@ func (v CommandView) openCursor() (tea.Model, tea.Cmd) {
 	if wu == nil {
 		return v, nil
 	}
-	repoRoot, err := storage.FindRepoRoot(".")
+	dir, err := storage.WorktreePathForIdentifier(wu.Identifier)
 	if err != nil {
 		return v, nil
 	}
-	ticketsDir := storage.TicketsDirPath(repoRoot)
-	dir := storage.TicketWorktreePath(storage.TicketDirPath(ticketsDir, wu.Identifier))
 	_ = exec.Command("cursor", dir).Start()
 	return v, nil
 }

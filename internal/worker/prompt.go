@@ -13,7 +13,7 @@ import (
 // from the ticket's parent project hierarchy.
 func BuildPrompt(ticket *models.WorkUnit, database *db.DB, ticketsDir string) (string, error) {
 	identifier := ticket.Identifier
-	worktreePath := storage.TicketWorktreePath(storage.TicketDirPath(ticketsDir, identifier))
+	worktreePath := storage.TicketWorktreePathIn(ticketsDir, identifier)
 
 	var prompt string
 	switch ticket.Phase {

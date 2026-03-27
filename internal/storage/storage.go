@@ -67,3 +67,19 @@ func TicketDirPath(ticketsDir, identifier string) string {
 func TicketWorktreePath(ticketDir string) string {
 	return filepath.Join(ticketDir, "worktree")
 }
+
+// TicketWorktreePathIn returns the git worktree path for a ticket identifier
+// within the given ticketsDir, without resolving the repo root.
+func TicketWorktreePathIn(ticketsDir, identifier string) string {
+	return TicketWorktreePath(TicketDirPath(ticketsDir, identifier))
+}
+
+// WorktreePathForIdentifier returns the git worktree path for the given ticket
+// identifier, resolving the repo root from the current directory.
+func WorktreePathForIdentifier(identifier string) (string, error) {
+	repoRoot, err := FindRepoRoot(".")
+	if err != nil {
+		return "", err
+	}
+	return TicketWorktreePathIn(TicketsDirPath(repoRoot), identifier), nil
+}
