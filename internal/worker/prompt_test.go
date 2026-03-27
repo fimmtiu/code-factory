@@ -45,7 +45,7 @@ func TestBuildPrompt_Implement(t *testing.T) {
 	if !strings.Contains(prompt, "experienced staff software developer") {
 		t.Error("expected implement preamble in prompt")
 	}
-	if !strings.Contains(prompt, "writing new specs") {
+	if !strings.Contains(prompt, "writing new tests") {
 		t.Error("expected spec requirement in implement prompt")
 	}
 }

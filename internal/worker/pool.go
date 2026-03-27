@@ -94,6 +94,23 @@ func (p *Pool) StartHousekeeping(database *db.DB) {
 	}()
 }
 
+// StartLogDrainer launches the background goroutine that reads from LogChannel
+// and persists each entry to the database via InsertLog.
+func (p *Pool) StartLogDrainer(database *db.DB) {
+	p.wg.Add(1)
+	go func() {
+		defer p.wg.Done()
+		for {
+			select {
+			case <-p.ctx.Done():
+				return
+			case msg := <-p.LogChannel:
+				_ = database.InsertLog(msg.WorkerNumber, msg.Message, msg.Logfile)
+			}
+		}
+	}()
+}
+
 // PauseWorker sends a MsgPause message to the worker with the given 1-based number.
 func (p *Pool) PauseWorker(number int) {
 	if w := p.GetWorker(number); w != nil {

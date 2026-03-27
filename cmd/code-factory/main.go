@@ -88,6 +88,7 @@ Options:
 	}
 	pool.Start(database, ticketsDir)
 	pool.StartHousekeeping(database)
+	pool.StartLogDrainer(database)
 
 	// Redirect the standard logger to a file so library log output doesn't
 	// corrupt the bubbletea terminal display.
