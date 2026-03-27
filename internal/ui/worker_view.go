@@ -15,22 +15,22 @@ import (
 
 var (
 	workerIdleStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("240")) // grey
+			Foreground(lipgloss.Color("240")).Bold(true) // grey
 
 	workerAwaitingStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("9")) // red
+				Foreground(lipgloss.Color("9")).Bold(true) // red
 
 	workerBusyStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("2")) // dark green
+			Foreground(lipgloss.Color("2")).Bold(true) // dark green
 
 	workerPausedStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("3")) // yellow
+				Foreground(lipgloss.Color("3")).Bold(true) // yellow
 
 	workerOutputStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("245")) // dim grey for output lines
 
 	workerNoOutputStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("238")) // darker grey for "No output"
+				Foreground(lipgloss.Color("250")) // light grey
 )
 
 // linesPerWorker is the number of rendered lines each worker section occupies:
@@ -185,20 +185,17 @@ func (v WorkerView) renderAllLines() []string {
 		statusLine := v.renderStatusLine(w)
 		lines = append(lines, statusLine)
 
-		// Last three lines of agent output.
+		// Last three lines of agent output. When there is no output at all,
+		// show "(no output)" in light grey on the middle line only.
 		output := w.GetLastOutput()
 		for i := 0; i < 3; i++ {
 			if i < len(output) {
-				line := output[i]
-				// Truncate if wider than the pane.
-				line = truncateLine(line, innerW)
+				line := truncateLine(output[i], innerW)
 				lines = append(lines, workerOutputStyle.Render(line))
+			} else if len(output) == 0 && i == 1 {
+				lines = append(lines, workerNoOutputStyle.Render("(no output)"))
 			} else {
-				if w.Status == worker.StatusIdle && len(output) == 0 {
-					lines = append(lines, workerNoOutputStyle.Render("No output"))
-				} else {
-					lines = append(lines, "")
-				}
+				lines = append(lines, "")
 			}
 		}
 
@@ -208,11 +205,11 @@ func (v WorkerView) renderAllLines() []string {
 	return lines
 }
 
-// renderStatusLine returns the styled "<N>: <status>" line for a worker.
+// renderStatusLine returns the styled "Worker <N>: <status>" line for a worker.
 func (v WorkerView) renderStatusLine(w *worker.Worker) string {
-	text := fmt.Sprintf("%d: %s", w.Number, w.Status.String())
+	text := fmt.Sprintf("Worker %d: %s", w.Number, w.Status.String())
 	if w.Paused {
-		text = fmt.Sprintf("%d: paused", w.Number)
+		text = fmt.Sprintf("Worker %d: paused", w.Number)
 		return workerPausedStyle.Render(text)
 	}
 	switch w.Status {

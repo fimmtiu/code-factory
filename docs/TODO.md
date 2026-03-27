@@ -4,8 +4,6 @@ TO DO
 
 - Add a /cf-change skill to manually add change requests to the ticket that the current worktree belongs to.
 
-- Add a /cf-plan skill that's basically a rework of grundor-project.
-
 - Some sort of `tickets clean` command that removes directories for all tickets/projects that are closed
 
 - Ephemeral pop-ups that show current view name when you switch, and tell you when you copy stuff &c.

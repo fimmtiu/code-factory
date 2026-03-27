@@ -29,7 +29,7 @@ var (
 				Foreground(lipgloss.Color("214")) // orange
 
 	cmdUserReviewStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("10")) // green
+				Foreground(lipgloss.Color("22")) // dark green
 )
 
 // ── Messages ─────────────────────────────────────────────────────────────────
@@ -416,7 +416,8 @@ func (v CommandView) View() string {
 	}
 
 	if len(v.rows) == 0 {
-		return viewPaneStyle.Width(v.width - viewBorderOverhead).Height(v.listHeight()).Render("(no actionable tickets)")
+		return viewPaneStyle.Width(v.width - viewBorderOverhead).Height(v.listHeight()).
+			Render(lipgloss.Place(v.width-viewBorderOverhead, v.listHeight(), lipgloss.Center, lipgloss.Center, "No actionable tickets"))
 	}
 
 	h := v.listHeight()

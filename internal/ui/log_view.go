@@ -276,7 +276,8 @@ func (v LogView) messageWidth() int {
 
 func (v LogView) View() string {
 	if len(v.entries) == 0 {
-		return viewPaneStyle.Width(v.width - viewBorderOverhead).Height(v.listHeight()).Render("(no log entries)")
+		return viewPaneStyle.Width(v.width - viewBorderOverhead).Height(v.listHeight()).
+			Render(lipgloss.Place(v.width-viewBorderOverhead, v.listHeight(), lipgloss.Center, lipgloss.Center, "No log entries"))
 	}
 
 	h := v.listHeight()

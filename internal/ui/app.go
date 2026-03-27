@@ -152,10 +152,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 
-	// Broadcast non-key messages to the active view.
-	updated, cmd := m.views[m.activeView].Update(msg)
-	m.views[m.activeView] = updated.(viewModel)
-	return m, cmd
+	// Broadcast non-key messages to all views so that each view receives its
+	// own async results (e.g. commandRefreshMsg) regardless of which view is
+	// currently active.
+	var cmds []tea.Cmd
+	for i, v := range m.views {
+		updated, cmd := v.Update(msg)
+		m.views[i] = updated.(viewModel)
+		if cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+	}
+	return m, tea.Batch(cmds...)
 }
 
 // View renders the current state of the TUI.
