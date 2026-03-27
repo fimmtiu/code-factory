@@ -9,6 +9,16 @@ import (
 	"path/filepath"
 )
 
+const (
+	defaultBlockingEditorCommand    = "cursor --wait"
+	defaultNonblockingEditorCommand = "cursor"
+	defaultOpenTerminalCommand      = "open -a iTerm ."
+)
+
+// Current holds the active settings for the running process. It is set once
+// by Init at startup and is safe to read from any goroutine thereafter.
+var Current *Settings
+
 const settingsFileName = "settings.json"
 
 // Settings holds configuration values for the tickets daemon.
@@ -20,6 +30,21 @@ type Settings struct {
 	// ExitAfterMinutes is how many minutes a daemon will sit idle before
 	// exiting. Defaults to 60.
 	ExitAfterMinutes int `json:"exit_after_minutes"`
+
+	// BlockingEditorCommand is the command used to open an editor that blocks
+	// until the user closes it (e.g. for composing responses). Defaults to the
+	// value of $EDITOR, or "cursor --wait" if $EDITOR is not set.
+	BlockingEditorCommand string `json:"blocking_editor_command"`
+
+	// NonblockingEditorCommand is the command used to open an editor in the
+	// background without waiting (e.g. to browse a worktree). Defaults to
+	// "cursor".
+	NonblockingEditorCommand string `json:"nonblocking_editor_command"`
+
+	// OpenTerminalCommand is the command used to open a terminal window in a
+	// given directory. It is run with the working directory set to the target
+	// path. Defaults to "open -a iTerm .".
+	OpenTerminalCommand string `json:"open_terminal_command"`
 }
 
 // Path returns the full path to the settings file within ticketsDir.
@@ -29,10 +54,28 @@ func Path(ticketsDir string) string {
 
 // Default returns a Settings struct populated with default values.
 func Default() *Settings {
-	return &Settings{
-		StaleThresholdMinutes: 30,
-		ExitAfterMinutes:      60,
+	blockingEditor := os.Getenv("EDITOR")
+	if blockingEditor == "" {
+		blockingEditor = defaultBlockingEditorCommand
 	}
+	return &Settings{
+		StaleThresholdMinutes:    30,
+		ExitAfterMinutes:         60,
+		BlockingEditorCommand:    blockingEditor,
+		NonblockingEditorCommand: defaultNonblockingEditorCommand,
+		OpenTerminalCommand:      defaultOpenTerminalCommand,
+	}
+}
+
+// Init loads settings from ticketsDir and stores them in Current. It must be
+// called once before any code reads config.Current.
+func Init(ticketsDir string) error {
+	s, err := Load(ticketsDir)
+	if err != nil {
+		return err
+	}
+	Current = s
+	return nil
 }
 
 // Load reads settings from a settings.json file in ticketsDir. If the file

@@ -2,8 +2,6 @@ package ui
 
 import (
 	"fmt"
-	"os"
-	"os/exec"
 	"strings"
 	"time"
 
@@ -216,27 +214,16 @@ func (v LogView) selectedEntry() *models.LogEntry {
 	return &v.entries[v.selected]
 }
 
-// openLogfile opens the selected entry's logfile in $EDITOR. The actual file
-// path is opened directly (not a temp copy). Uses os/exec, not tea.ExecProcess.
+// openLogfile opens the selected entry's logfile in the blocking editor. The
+// actual file path is opened directly (not a temp copy). Uses os/exec, not
+// tea.ExecProcess.
 func (v LogView) openLogfile() (tea.Model, tea.Cmd) {
 	entry := v.selectedEntry()
 	if entry == nil || entry.Logfile == "" {
 		return v, nil
 	}
 
-	editor := os.Getenv("EDITOR")
-	if editor == "" {
-		return v, nil
-	}
-
-	logfile := entry.Logfile
-	parts := strings.Fields(editor)
-	args := append(parts[1:], logfile)
-	cmd := exec.Command(parts[0], args...)
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	_ = cmd.Run()
+	_ = util.OpenFileInEditor(entry.Logfile)
 
 	return v, nil
 }

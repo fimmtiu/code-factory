@@ -9,6 +9,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/fimmtiu/tickets/internal/config"
 	"github.com/fimmtiu/tickets/internal/db"
 	"github.com/fimmtiu/tickets/internal/storage"
 	"github.com/fimmtiu/tickets/internal/ui"
@@ -69,6 +70,12 @@ Options:
 	info, err := os.Stat(ticketsDir)
 	if err != nil || !info.IsDir() {
 		fmt.Fprintln(os.Stderr, "error: .tickets/ directory not found; run 'tickets init' first")
+		os.Exit(1)
+	}
+
+	// Load settings into config.Current (falls back to defaults if missing/partial).
+	if err := config.Init(ticketsDir); err != nil {
+		fmt.Fprintln(os.Stderr, "error: loading settings:", err)
 		os.Exit(1)
 	}
 

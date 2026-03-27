@@ -4,24 +4,27 @@ import (
 	"os"
 	"testing"
 
+	"github.com/fimmtiu/tickets/internal/config"
 	"github.com/fimmtiu/tickets/internal/util"
 )
 
-func TestEditText_NoEditor(t *testing.T) {
-	t.Setenv("EDITOR", "")
+func init() {
+	// Provide a minimal config.Current so util functions can read it.
+	config.Current = config.Default()
+}
+
+func TestEditText_NoCommand(t *testing.T) {
+	config.Current.BlockingEditorCommand = ""
+	defer func() { config.Current.BlockingEditorCommand = "true" }()
+
 	_, err := util.EditText("some content")
 	if err == nil {
-		t.Fatal("expected error when $EDITOR is unset, got nil")
+		t.Fatal("expected error when command is empty, got nil")
 	}
 }
 
 func TestEditText_HappyPath_CatPreservesContent(t *testing.T) {
-	// Use "cat" as a no-op editor: it reads stdin but we're not piping stdin,
-	// so it just exits 0 leaving the temp file unchanged. However on some
-	// systems cat with a filename echoes it to stdout and doesn't modify the
-	// file. We really want a command that leaves the file alone.
-	// Use "true" which ignores arguments and exits 0 — file is left unchanged.
-	t.Setenv("EDITOR", "true")
+	config.Current.BlockingEditorCommand = "true"
 	content := "hello, world!"
 	result, err := util.EditText(content)
 	if err != nil {
@@ -33,8 +36,7 @@ func TestEditText_HappyPath_CatPreservesContent(t *testing.T) {
 }
 
 func TestEditText_WithEditorArguments(t *testing.T) {
-	// Use "sh -c true" to test that $EDITOR with arguments is parsed correctly.
-	t.Setenv("EDITOR", "sh -c true")
+	config.Current.BlockingEditorCommand = "sh -c true"
 	_, err := util.EditText("test content")
 	if err != nil {
 		t.Fatalf("EditText with args: %v", err)
@@ -42,9 +44,7 @@ func TestEditText_WithEditorArguments(t *testing.T) {
 }
 
 func TestEditText_TempFileDeletedAfterSuccess(t *testing.T) {
-	t.Setenv("EDITOR", "true")
-
-	// Track temp files before and after; the file should not persist.
+	config.Current.BlockingEditorCommand = "true"
 	tmpDir := os.TempDir()
 	beforeEntries, _ := os.ReadDir(tmpDir)
 
@@ -54,7 +54,6 @@ func TestEditText_TempFileDeletedAfterSuccess(t *testing.T) {
 	}
 
 	afterEntries, _ := os.ReadDir(tmpDir)
-	// Verify no extra code-factory-edit-*.txt files remain.
 	before := countEditFiles(beforeEntries)
 	after := countEditFiles(afterEntries)
 	if after > before {

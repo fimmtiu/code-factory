@@ -10,6 +10,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/fimmtiu/tickets/internal/config"
 	"github.com/fimmtiu/tickets/internal/db"
 	"github.com/fimmtiu/tickets/internal/models"
 	"github.com/fimmtiu/tickets/internal/storage"
@@ -184,7 +185,7 @@ func (v CommandView) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "t", "T":
 		return v.openTerminal()
 	case "e", "E":
-		return v.openCursor()
+		return v.openEditorNonblocking()
 	case "a", "A":
 		return v.approveTicket()
 	case "d", "D":
@@ -341,7 +342,7 @@ func (v CommandView) openTerminal() (tea.Model, tea.Cmd) {
 	return v, nil
 }
 
-func (v CommandView) openCursor() (tea.Model, tea.Cmd) {
+func (v CommandView) openEditorNonblocking() (tea.Model, tea.Cmd) {
 	wu := v.selectedTicket()
 	if wu == nil {
 		return v, nil
@@ -350,7 +351,7 @@ func (v CommandView) openCursor() (tea.Model, tea.Cmd) {
 	if err != nil {
 		return v, nil
 	}
-	_ = exec.Command("cursor", dir).Start()
+	_ = exec.Command(config.Current.NonblockingEditorCommand, dir).Start()
 	return v, nil
 }
 

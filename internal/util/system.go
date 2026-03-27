@@ -4,12 +4,22 @@ import (
 	"bytes"
 	"fmt"
 	"os/exec"
+	"strings"
+
+	"github.com/fimmtiu/tickets/internal/config"
 )
 
-// OpenTerminal opens a new iTerm window in the given directory. It fires and
-// forgets — it does not wait for the process to finish.
+// OpenTerminal opens a terminal window in dir using the command from
+// config.Current. It fires and forgets — it does not wait for the process
+// to finish.
 func OpenTerminal(dir string) error {
-	cmd := exec.Command("open", "-a", "iTerm", dir)
+	command := config.Current.OpenTerminalCommand
+	parts := strings.Fields(command)
+	if len(parts) == 0 {
+		return fmt.Errorf("OpenTerminal: empty command")
+	}
+	cmd := exec.Command(parts[0], parts[1:]...)
+	cmd.Dir = dir
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("OpenTerminal: %w", err)
 	}

@@ -40,10 +40,10 @@ var (
 
 // Model is the root bubbletea model for the code-factory TUI.
 type Model struct {
-	pool   *worker.Pool
-	db     *db.DB
-	width  int
-	height int
+	pool     *worker.Pool
+	db       *db.DB
+	width    int
+	height   int
 
 	activeView ViewID
 	views      [4]viewModel
@@ -51,8 +51,8 @@ type Model struct {
 	dialog dialog // nil when no dialog is open
 }
 
-// NewModel creates a new root Model with the given pool, database, and poll
-// interval (in seconds).
+// NewModel creates a new root Model with the given pool, database, poll
+// interval (in seconds), and settings.
 func NewModel(pool *worker.Pool, database *db.DB, waitSecs int) Model {
 	return Model{
 		pool:       pool,

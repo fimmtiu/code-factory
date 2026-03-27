@@ -6,11 +6,13 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+
+	"github.com/fimmtiu/tickets/internal/config"
 )
 
-// EditText writes existingContent to a temporary file, opens $EDITOR on it,
-// waits for the editor to exit, reads back the file contents, deletes the
-// temp file, and returns the contents.
+// EditText writes existingContent to a temporary file, opens the blocking
+// editor from config.Current, waits for it to exit, reads back the file
+// contents, deletes the temp file, and returns the contents.
 func EditText(existingContent string) (string, error) {
 	content, _, err := editTextImpl(existingContent, true)
 	return content, err
@@ -23,10 +25,27 @@ func EditTextKeepFile(existingContent string) (content, path string, err error) 
 	return editTextImpl(existingContent, false)
 }
 
+// OpenFileInEditor opens an existing file directly in the blocking editor from
+// config.Current and waits for the editor to exit. The file is not modified
+// or deleted by this function.
+func OpenFileInEditor(path string) error {
+	command := config.Current.BlockingEditorCommand
+	if command == "" {
+		return fmt.Errorf("OpenFileInEditor: no editor command configured")
+	}
+	parts := strings.Fields(command)
+	args := append(parts[1:], path)
+	cmd := exec.Command(parts[0], args...)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
 func editTextImpl(existingContent string, deleteAfter bool) (string, string, error) {
-	editor := os.Getenv("EDITOR")
-	if editor == "" {
-		return "", "", fmt.Errorf("EditText: $EDITOR is not set")
+	command := config.Current.BlockingEditorCommand
+	if command == "" {
+		return "", "", fmt.Errorf("EditText: no editor command configured")
 	}
 
 	tmpFile, err := os.CreateTemp("", "code-factory-edit-*.txt")
@@ -45,8 +64,8 @@ func editTextImpl(existingContent string, deleteAfter bool) (string, string, err
 		return "", "", fmt.Errorf("EditText: close temp file: %w", err)
 	}
 
-	// $EDITOR may contain arguments (e.g. "vim -u NONE"), so split on spaces.
-	parts := strings.Fields(editor)
+	// Command may contain arguments (e.g. "cursor --wait"), so split on spaces.
+	parts := strings.Fields(command)
 	args := append(parts[1:], tmpPath)
 	cmd := exec.Command(parts[0], args...)
 	cmd.Stdin = os.Stdin
