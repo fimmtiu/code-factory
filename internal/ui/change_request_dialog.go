@@ -84,32 +84,61 @@ func NewChangeRequestDialog(database *db.DB, wu *models.WorkUnit, width, height 
 	return d
 }
 
-// computeDimensions recalculates pane widths and heights from d.width/d.height.
+// computeDimensions recalculates pane widths and heights from d.width/d.height
+// (which hold the full terminal dimensions passed in from the root model).
+//
+// Overhead chain (horizontal):
+//
+//	dialogBoxStyle: border(1+1) + padding(2+2) = 6
+//	two crPaneStyle borders side by side: 2+2 = 4
+//	total to subtract from terminal width: marginH(8) + 6 + 4 = 18
+//
+// Overhead chain (vertical):
+//
+//	dialogBoxStyle: border(1+1) + padding(1+1) = 4
+//	crPaneStyle top+bottom border: 2
+//	fixed rows: title(1) + dialogTitleStyle MarginBottom(1) + hint(1) = 3
+//	total to subtract from terminal height: marginV(4) + 4 + 2 + 3 = 13
 func (d *ChangeRequestDialog) computeDimensions() {
-	// Dialog box has 2 border + 2 padding on each side = 4 chars removed.
-	// But we're building the inner content ourselves, so we use width/height directly.
-	inner := d.width - 4   // 2 border + 2 padding each side
-	innerH := d.height - 6 // title + 2 border + 2 padding + extra line
+	const (
+		marginH      = 8  // terminal margin left+right
+		marginV      = 4  // terminal margin top+bottom
+		dlgOverheadH = 10 // dialogBoxStyle(6) + two pane borders(4)
+		dlgOverheadV = 9  // dialogBoxStyle(4) + pane borders(2) + fixed rows(3)
+	)
 
-	if inner < 4 {
-		inner = 4
+	// Outer dialog dimensions.
+	d.width = d.width - marginH
+	d.height = d.height - marginV
+	if d.width < 40 {
+		d.width = 40
 	}
-	if innerH < 2 {
-		innerH = 2
+	if d.height < 15 {
+		d.height = 15
 	}
 
-	// Split the inner width: list pane gets ~30%, contents pane gets ~70%
-	d.listW = inner * 30 / 100
+	// Pane content dimensions.
+	availW := d.width - dlgOverheadH
+	availH := d.height - dlgOverheadV
+
+	if availW < 4 {
+		availW = 4
+	}
+	if availH < 2 {
+		availH = 2
+	}
+
+	d.listW = availW * 30 / 100
 	if d.listW < 15 {
 		d.listW = 15
 	}
-	d.contentsW = inner - d.listW - 1 // -1 for separator
+	d.contentsW = availW - d.listW
 	if d.contentsW < 10 {
 		d.contentsW = 10
 	}
 
-	d.listH = innerH
-	d.contentsH = innerH
+	d.listH = availH
+	d.contentsH = availH
 }
 
 func (d *ChangeRequestDialog) Init() tea.Cmd { return nil }
@@ -318,7 +347,10 @@ func (d *ChangeRequestDialog) View() string {
 		panes,
 		hint,
 	)
-	return dialogBoxStyle.Render(body)
+	// Width(n) sets the content area; total rendered width = n + 6 (border+padding overhead).
+	// Width(n) = frame width including padding(4) but excluding border(2).
+	// Total rendered = n + 2. To get total = d.width, use Width(d.width - 2).
+	return dialogBoxStyle.Width(d.width - 2).Render(body)
 }
 
 func (d *ChangeRequestDialog) renderListPane() string {
@@ -385,7 +417,13 @@ func (d *ChangeRequestDialog) renderContentsPane() string {
 	sb.WriteString(lipgloss.NewStyle().Bold(true).Render("Description:") + "\n")
 	sb.WriteString(cr.Description)
 
-	return crPaneStyle.Width(d.contentsW).Height(d.contentsH).Render(sb.String())
+	// Truncate content to d.contentsH lines — lipgloss Height() is a minimum,
+	// not a maximum, so we must limit lines explicitly to prevent overflow.
+	lines := strings.Split(sb.String(), "\n")
+	if len(lines) > d.contentsH {
+		lines = lines[:d.contentsH]
+	}
+	return crPaneStyle.Width(d.contentsW).Height(d.contentsH).Render(strings.Join(lines, "\n"))
 }
 
 // parseCodeLocationForDisplay splits "file.go:42" → ("file.go", 42).
