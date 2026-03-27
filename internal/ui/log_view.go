@@ -255,7 +255,7 @@ func (v LogView) copyLogfilePath() (tea.Model, tea.Cmd) {
 
 // listHeight returns the number of visible rows in the list body.
 func (v LogView) listHeight() int {
-	h := v.height - chromeHeight
+	h := v.height - chromeHeight - viewBorderOverhead
 	if h < 1 {
 		h = 1
 	}
@@ -264,7 +264,7 @@ func (v LogView) listHeight() int {
 
 // messageWidth returns the width available for the message column.
 func (v LogView) messageWidth() int {
-	used := logTimestampWidth + logColGap + logWorkerWidth + logColGap
+	used := logTimestampWidth + logColGap + logWorkerWidth + logColGap + viewBorderOverhead
 	w := v.width - used
 	if w < 1 {
 		w = 1
@@ -276,7 +276,7 @@ func (v LogView) messageWidth() int {
 
 func (v LogView) View() string {
 	if len(v.entries) == 0 {
-		return "(no log entries)"
+		return viewPaneStyle.Width(v.width - viewBorderOverhead).Height(v.listHeight()).Render("(no log entries)")
 	}
 
 	h := v.listHeight()
@@ -293,7 +293,7 @@ func (v LogView) View() string {
 			sb.WriteString("\n")
 		}
 	}
-	return sb.String()
+	return viewPaneStyle.Width(v.width - viewBorderOverhead).Height(v.listHeight()).Render(sb.String())
 }
 
 // renderRow formats one log entry as a three-column row.
@@ -324,7 +324,7 @@ func (v LogView) renderRow(e *models.LogEntry, selected bool) string {
 	)
 
 	if selected {
-		return logSelectedStyle.Width(v.width).Render(line)
+		return logSelectedStyle.Width(v.width - viewBorderOverhead).Render(line)
 	}
 	if e.Logfile != "" {
 		return logFileIndicatorStyle.Render(line)

@@ -396,7 +396,7 @@ func (v CommandView) approveTicket() (tea.Model, tea.Cmd) {
 
 // listHeight returns the number of visible rows in the list body.
 func (v CommandView) listHeight() int {
-	h := v.height - chromeHeight
+	h := v.height - chromeHeight - viewBorderOverhead
 	if h < 1 {
 		h = 1
 	}
@@ -416,8 +416,7 @@ func (v CommandView) View() string {
 	}
 
 	if len(v.rows) == 0 {
-		sb.WriteString("(no actionable tickets)")
-		return sb.String()
+		return viewPaneStyle.Width(v.width - viewBorderOverhead).Height(v.listHeight()).Render("(no actionable tickets)")
 	}
 
 	h := v.listHeight()
@@ -439,7 +438,7 @@ func (v CommandView) View() string {
 			sb.WriteString("\n")
 		}
 	}
-	return sb.String()
+	return viewPaneStyle.Width(v.width - viewBorderOverhead).Height(v.listHeight()).Render(sb.String())
 }
 
 // renderRow formats one ticket row in tabular style:
@@ -456,8 +455,8 @@ func (v CommandView) renderRow(wu *models.WorkUnit, selected bool) string {
 	}
 	right := fmt.Sprintf("  %s  %dm", wu.Status, mins)
 
-	// Available width for identifier.
-	availW := v.width - lipgloss.Width(right)
+	// Available width for identifier (subtract border overhead).
+	availW := v.width - viewBorderOverhead - lipgloss.Width(right)
 	if availW < 1 {
 		availW = 1
 	}
@@ -482,7 +481,7 @@ func (v CommandView) renderRow(wu *models.WorkUnit, selected bool) string {
 	line := id + right
 
 	if selected {
-		return cmdSelectedStyle.Width(v.width).Render(line)
+		return cmdSelectedStyle.Width(v.width - viewBorderOverhead).Render(line)
 	}
 	switch wu.Status {
 	case models.StatusNeedsAttention:

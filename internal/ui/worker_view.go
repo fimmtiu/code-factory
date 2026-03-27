@@ -130,7 +130,7 @@ func (v *WorkerView) clampScroll() {
 
 // viewHeight returns the number of lines available for the list body.
 func (v WorkerView) viewHeight() int {
-	h := v.height - chromeHeight
+	h := v.height - chromeHeight - viewBorderOverhead
 	if h < 1 {
 		h = 1
 	}
@@ -149,7 +149,7 @@ func (v WorkerView) totalLines() int {
 
 func (v WorkerView) View() string {
 	if v.pool == nil || len(v.pool.Workers) == 0 {
-		return workerNoOutputStyle.Render("(no workers)")
+		return viewPaneStyle.Width(v.width - viewBorderOverhead).Height(v.viewHeight()).Render("(no workers)")
 	}
 
 	// Build all lines for all workers.
@@ -168,15 +168,16 @@ func (v WorkerView) View() string {
 		end = len(all)
 	}
 
-	return strings.Join(all[start:end], "\n")
+	return viewPaneStyle.Width(v.width - viewBorderOverhead).Height(v.viewHeight()).Render(strings.Join(all[start:end], "\n"))
 }
 
 // renderAllLines builds the full list of display lines for every worker.
 func (v WorkerView) renderAllLines() []string {
-	separator := strings.Repeat("─", v.width)
-	if v.width <= 0 {
-		separator = "─"
+	innerW := v.width - viewBorderOverhead
+	if innerW <= 0 {
+		innerW = 1
 	}
+	separator := strings.Repeat("─", innerW)
 
 	var lines []string
 	for _, w := range v.pool.Workers {
@@ -190,7 +191,7 @@ func (v WorkerView) renderAllLines() []string {
 			if i < len(output) {
 				line := output[i]
 				// Truncate if wider than the pane.
-				line = truncateLine(line, v.width)
+				line = truncateLine(line, innerW)
 				lines = append(lines, workerOutputStyle.Render(line))
 			} else {
 				if w.Status == worker.StatusIdle && len(output) == 0 {

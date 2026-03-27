@@ -1,6 +1,17 @@
 package ui
 
-import tea "github.com/charmbracelet/bubbletea"
+import (
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+)
+
+// viewPaneStyle is the blue single-line border applied to Command, Worker, and Log views.
+var viewPaneStyle = lipgloss.NewStyle().
+	Border(lipgloss.NormalBorder()).
+	BorderForeground(lipgloss.Color("12")) // blue
+
+// viewBorderOverhead is the number of rows (and columns) consumed by viewPaneStyle.
+const viewBorderOverhead = 2
 
 // ViewID is an enum for the four main views.
 type ViewID int
