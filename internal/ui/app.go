@@ -18,15 +18,18 @@ var (
 			Bold(true).
 			Padding(0, 1)
 
-	activeTabStyle = lipgloss.NewStyle().
+	tabBaseStyle = lipgloss.NewStyle().
 			Bold(true).
+			Padding(0, 1)
+
+	activeTabStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("230")).
 			Background(lipgloss.Color("62")).
-			Padding(0, 1)
+			Inherit(tabBaseStyle)
 
 	inactiveTabStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("245")).
-				Padding(0, 1)
+				Inherit(tabBaseStyle)
 
 	helpHintStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("240")).
@@ -237,7 +240,7 @@ func (m Model) renderHeader() string {
 			tabs[i] = inactiveTabStyle.Render(label)
 		}
 	}
-	return headerStyle.Render(strings.Join(tabs, " "))
+	return headerStyle.Render(strings.Join(tabs, "  "))
 }
 
 // activateViewCmd returns a command that sends an activation message for the

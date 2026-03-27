@@ -403,16 +403,16 @@ func (d *ChangeRequestDialog) renderContentsPane() string {
 	filename, lineNumber := parseCodeLocationForDisplay(cr.CodeLocation)
 
 	var sb strings.Builder
-	sb.WriteString(lipgloss.NewStyle().Bold(true).Render("File:") + " " + filename + "\n")
-	sb.WriteString(lipgloss.NewStyle().Bold(true).Render("Line:") + " " + strconv.Itoa(lineNumber) + "\n")
-	sb.WriteString(lipgloss.NewStyle().Bold(true).Render("Status:") + " " + cr.Status + "\n")
+	sb.WriteString(detailLabelStyle.Render("File:") + " " + filename + "\n")
+	sb.WriteString(detailLabelStyle.Render("Line:") + " " + strconv.Itoa(lineNumber) + "\n")
+	sb.WriteString(detailLabelStyle.Render("Status:") + " " + cr.Status + "\n")
 	sb.WriteString("\n")
 
 	codeCtx := d.fetchCodeContext(cr.CommitHash, filename, lineNumber)
-	sb.WriteString(lipgloss.NewStyle().Bold(true).Render("Code:") + "\n")
+	sb.WriteString(detailLabelStyle.Render("Code:") + "\n")
 	sb.WriteString(codeCtx)
 	sb.WriteString("\n\n")
-	sb.WriteString(lipgloss.NewStyle().Bold(true).Render("Description:") + "\n")
+	sb.WriteString(detailLabelStyle.Render("Description:") + "\n")
 	sb.WriteString(cr.Description)
 
 	// Truncate content to d.contentsH lines — lipgloss Height() is a minimum,

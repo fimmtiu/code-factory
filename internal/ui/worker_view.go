@@ -14,17 +14,12 @@ import (
 // ── Styles ───────────────────────────────────────────────────────────────────
 
 var (
-	workerIdleStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("240")).Bold(true) // grey
+	workerStatusStyle = lipgloss.NewStyle().Bold(true)
 
-	workerAwaitingStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("9")).Bold(true) // red
-
-	workerBusyStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("22")).Bold(true) // dark green
-
-	workerPausedStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("3")).Bold(true) // yellow
+	workerIdleStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("240")).Inherit(workerStatusStyle) // grey
+	workerAwaitingStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Inherit(workerStatusStyle)   // red
+	workerBusyStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("22")).Inherit(workerStatusStyle)  // dark green
+	workerPausedStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("3")).Inherit(workerStatusStyle)   // yellow
 
 	workerOutputStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("245")) // dim grey for output lines

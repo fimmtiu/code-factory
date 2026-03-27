@@ -25,15 +25,17 @@ var (
 				Foreground(lipgloss.Color("230")).
 				MarginBottom(1)
 
+	buttonBaseStyle = lipgloss.NewStyle().Padding(0, 2)
+
 	buttonNormalStyle = lipgloss.NewStyle().
-				Padding(0, 2).
 				Background(lipgloss.Color("238")).
-				Foreground(lipgloss.Color("255"))
+				Foreground(lipgloss.Color("255")).
+				Inherit(buttonBaseStyle)
 
 	buttonFocusedStyle = lipgloss.NewStyle().
-				Padding(0, 2).
 				Background(lipgloss.Color("62")).
-				Foreground(lipgloss.Color("230"))
+				Foreground(lipgloss.Color("230")).
+				Inherit(buttonBaseStyle)
 )
 
 // ── Quit dialog ──────────────────────────────────────────────────────────────
@@ -146,7 +148,7 @@ func (d HelpDialog) View() string {
 			sb.WriteString("\n")
 			continue
 		}
-		sb.WriteString(lipgloss.NewStyle().Bold(true).Render(kb.Key))
+		sb.WriteString(detailLabelStyle.Render(kb.Key))
 		sb.WriteString("  ")
 		sb.WriteString(kb.Description)
 		sb.WriteString("\n")
