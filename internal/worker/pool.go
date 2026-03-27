@@ -55,10 +55,13 @@ func (p *Pool) GetWorker(number int) *Worker {
 // main loop. The pool's shared context is used for shutdown signaling.
 func (p *Pool) Start(database *db.DB, ticketsDir string) {
 	for _, w := range p.Workers {
+		w.database = database
+		w.logCh = p.LogChannel
+		w.ticketsDir = ticketsDir
 		p.wg.Add(1)
 		go func(w *Worker) {
 			defer p.wg.Done()
-			w.run(p.ctx, database, p.LogChannel, p.PollInterval, ticketsDir)
+			w.run(p.ctx, p.PollInterval)
 		}(w)
 	}
 }

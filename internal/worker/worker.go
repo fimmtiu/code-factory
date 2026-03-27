@@ -1,6 +1,10 @@
 package worker
 
-import "sync"
+import (
+	"sync"
+
+	"github.com/fimmtiu/tickets/internal/db"
+)
 
 // workerChannelBuffer is the buffer size for the worker communication channels.
 const workerChannelBuffer = 16
@@ -32,6 +36,12 @@ type Worker struct {
 	// mu guards LastOutput for concurrent access between the worker goroutine
 	// (writer) and the UI goroutine (reader).
 	mu sync.RWMutex
+
+	// database, logCh, and ticketsDir are set by Pool.Start before the goroutine
+	// is launched and remain constant for the worker's lifetime.
+	database   *db.DB
+	logCh      chan<- LogMessage
+	ticketsDir string
 }
 
 // NewWorker creates a new Worker with the given 1-based number. The worker

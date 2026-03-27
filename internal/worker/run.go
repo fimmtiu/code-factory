@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/fimmtiu/tickets/internal/db"
 	"github.com/fimmtiu/tickets/internal/models"
 	"github.com/fimmtiu/tickets/internal/storage"
 )
@@ -13,89 +12,77 @@ import (
 // run is the main loop for a worker goroutine. It claims tickets, processes
 // them via the ACP Claude subprocess, and releases them, respecting pause/unpause
 // and shutdown signals.
-func (w *Worker) run(ctx context.Context, database *db.DB, logCh chan<- LogMessage, pollIntervalSecs int, ticketsDir string) {
+func (w *Worker) run(ctx context.Context, pollIntervalSecs int) {
 	pollInterval := time.Duration(pollIntervalSecs) * time.Second
 
 	for {
-		// Process any pending messages before deciding what to do next.
 		w.drainMessages()
 
-		// Check for shutdown.
 		select {
 		case <-ctx.Done():
 			return
 		default:
 		}
 
-		// If not paused, try to claim a ticket.
 		if !w.Paused {
-			ticket, err := database.Claim(w.Number)
+			ticket, err := w.database.Claim(w.Number)
 			if err == nil {
-				// Successfully claimed a ticket — process it.
-				w.processTicket(ctx, database, logCh, ticket, ticketsDir)
+				w.processTicket(ctx, ticket)
 				continue
 			}
-			// No ticket available — fall through to the poll sleep below.
 		}
 
-		// Sleep for the poll interval, but remain responsive to messages and
-		// shutdown signals.
 		w.waitForNextPoll(ctx, pollInterval)
 	}
 }
 
 // processTicket sets the ticket to in-progress, runs the Claude ACP subprocess,
 // transitions the ticket to user-review, and releases it.
-func (w *Worker) processTicket(ctx context.Context, database *db.DB, logCh chan<- LogMessage, ticket *models.WorkUnit, ticketsDir string) {
+func (w *Worker) processTicket(ctx context.Context, ticket *models.WorkUnit) {
 	identifier := ticket.Identifier
 
-	// Mark the worker and ticket as busy.
 	w.Status = StatusBusy
-	if err := database.SetStatus(identifier, string(ticket.Phase), models.StatusInProgress); err != nil {
-		logCh <- NewLogMessage(w.Number, fmt.Sprintf("error setting in-progress on %s: %v", identifier, err))
+	if err := w.database.SetStatus(identifier, string(ticket.Phase), models.StatusInProgress); err != nil {
+		w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("error setting in-progress on %s: %v", identifier, err))
 		w.Status = StatusIdle
 		return
 	}
 
-	logCh <- NewLogMessage(w.Number, fmt.Sprintf("claimed ticket %s", identifier))
+	w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("claimed ticket %s", identifier))
 
-	// Resolve the worktree and logfile paths.
-	worktreePath := storage.TicketWorktreePath(storage.TicketDirPath(ticketsDir, identifier))
-	logfilePath := NextLogfilePath(ticketsDir, identifier, string(ticket.Phase))
+	worktreePath := storage.TicketWorktreePathIn(w.ticketsDir, identifier)
+	logfilePath := NextLogfilePath(w.ticketsDir, identifier, string(ticket.Phase))
 
-	// Build the prompt for this ticket and phase.
-	prompt, err := BuildPrompt(ticket, database, ticketsDir)
+	prompt, err := BuildPrompt(ticket, w.database, w.ticketsDir)
 	if err != nil {
-		logCh <- NewLogMessage(w.Number, fmt.Sprintf("error building prompt for %s: %v", identifier, err))
-		releaseTicket(database, logCh, w.Number, identifier)
+		w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("error building prompt for %s: %v", identifier, err))
+		w.releaseTicket(identifier)
 		w.Status = StatusIdle
 		return
 	}
 
-	// Run the Claude subprocess via ACP.
-	acpErr := w.runACP(ctx, database, logCh, worktreePath, identifier, string(ticket.Phase), prompt, logfilePath)
+	acpErr := w.runACP(ctx, w.database, w.logCh, worktreePath, identifier, string(ticket.Phase), prompt, logfilePath)
 
 	if acpErr != nil {
-		logCh <- NewLogMessageWithFile(w.Number, fmt.Sprintf("ACP error on %s: %v", identifier, acpErr), logfilePath)
+		w.logCh <- NewLogMessageWithFile(w.Number, fmt.Sprintf("ACP error on %s: %v", identifier, acpErr), logfilePath)
 	}
-	logCh <- NewLogMessageWithFile(w.Number, fmt.Sprintf("completed processing ticket %s", identifier), logfilePath)
+	w.logCh <- NewLogMessageWithFile(w.Number, fmt.Sprintf("completed processing ticket %s", identifier), logfilePath)
 
-	// Transition ticket to user-review and release the claim.
-	if err := database.SetStatus(identifier, string(ticket.Phase), models.StatusUserReview); err != nil {
-		logCh <- NewLogMessage(w.Number, fmt.Sprintf("error setting user-review on %s: %v", identifier, err))
+	if err := w.database.SetStatus(identifier, string(ticket.Phase), models.StatusUserReview); err != nil {
+		w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("error setting user-review on %s: %v", identifier, err))
 	}
-	releaseTicket(database, logCh, w.Number, identifier)
+	w.releaseTicket(identifier)
 
 	w.Status = StatusIdle
 }
 
 // releaseTicket clears the claim on a ticket and sends a log message.
-func releaseTicket(database *db.DB, logCh chan<- LogMessage, workerNumber int, identifier string) {
-	if err := database.Release(identifier); err != nil {
-		logCh <- NewLogMessage(workerNumber, fmt.Sprintf("error releasing ticket %s: %v", identifier, err))
+func (w *Worker) releaseTicket(identifier string) {
+	if err := w.database.Release(identifier); err != nil {
+		w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("error releasing ticket %s: %v", identifier, err))
 		return
 	}
-	logCh <- NewLogMessage(workerNumber, fmt.Sprintf("released ticket %s", identifier))
+	w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("released ticket %s", identifier))
 }
 
 // waitForNextPoll waits for the poll interval to elapse, processing any

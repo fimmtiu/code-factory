@@ -166,17 +166,7 @@ func (d *DB) createSchema() error {
 
 // worktreePath returns the git worktree path for a ticket identifier.
 func (d *DB) worktreePath(identifier string) string {
-	return storage.TicketWorktreePath(storage.TicketDirPath(d.ticketsDir, identifier))
-}
-
-// parentIdentifierOf returns the parent portion of a slash-separated identifier
-// (e.g. "proj/ticket" → "proj", true) and whether one was found.
-func parentIdentifierOf(identifier string) (string, bool) {
-	idx := strings.LastIndex(identifier, "/")
-	if idx < 0 {
-		return "", false
-	}
-	return identifier[:idx], true
+	return storage.TicketWorktreePathIn(d.ticketsDir, identifier)
 }
 
 // parseCodeLocation splits "file.go:42" into ("file.go", 42, nil).
@@ -300,7 +290,7 @@ func (d *DB) loadProjects() (map[int64]*models.WorkUnit, error) {
 	rows.Close()
 
 	for _, wu := range projectByID {
-		if parent, ok := parentIdentifierOf(wu.Identifier); ok {
+		if parent, ok := models.ParentIdentifierOf(wu.Identifier); ok {
 			wu.Parent = parent
 		}
 	}
@@ -445,7 +435,7 @@ func (d *DB) CreateProject(identifier, description string, deps []string) error 
 	}
 	if err := d.withTx(func(tx *sql.Tx) error {
 		var parentID sql.NullInt64
-		if parent, hasParent := parentIdentifierOf(identifier); hasParent {
+		if parent, hasParent := models.ParentIdentifierOf(identifier); hasParent {
 			pid, err := lookupProjectID(tx, parent)
 			if err != nil {
 				return err
@@ -486,7 +476,7 @@ func (d *DB) CreateTicket(identifier, description string, deps []string) error {
 		}
 
 		var projectID sql.NullInt64
-		if parent, hasParent := parentIdentifierOf(identifier); hasParent {
+		if parent, hasParent := models.ParentIdentifierOf(identifier); hasParent {
 			pid, err := lookupProjectID(tx, parent)
 			if err != nil {
 				return err
@@ -597,83 +587,101 @@ func (d *DB) markTicketDone(ticketID int64, identifier string, projectID sql.Nul
 func (d *DB) Claim(pid int) (*models.WorkUnit, error) {
 	var result *models.WorkUnit
 	err := d.withTx(func(tx *sql.Tx) error {
-		var id int64
-		var identifier, description, phase, status string
-		var lastUpdated int64
-		var projectID sql.NullInt64
-		err := tx.QueryRow(`
-			SELECT id, identifier, description, phase, status, last_updated, project_id
-			FROM tickets
-			WHERE phase NOT IN ('blocked', 'done')
-			  AND status = 'idle'
-			  AND claimed_by IS NULL
-			LIMIT 1
-		`).Scan(&id, &identifier, &description, &phase, &status, &lastUpdated, &projectID)
-		if err == sql.ErrNoRows {
-			return fmt.Errorf("no claimable ticket available")
-		}
+		id, wu, err := claimTicketRow(tx, pid)
 		if err != nil {
 			return err
 		}
-
-		now := time.Now().Unix()
-		if _, err := tx.Exec(
-			`UPDATE tickets SET claimed_by = ?, last_updated = ? WHERE id = ?`,
-			pid, now, id,
-		); err != nil {
+		if err := loadTicketDeps(tx, id, wu); err != nil {
 			return err
 		}
-
-		wu := &models.WorkUnit{
-			Identifier:   identifier,
-			Description:  description,
-			Phase:        models.TicketPhase(phase),
-			Status:       models.TicketStatus(status),
-			ClaimedBy:    strconv.Itoa(pid),
-			LastUpdated:  time.Unix(now, 0).UTC(),
-			IsProject:    false,
-			Dependencies: []string{},
-		}
-		if projectID.Valid {
-			var parentIdentifier string
-			if err := tx.QueryRow(`SELECT identifier FROM projects WHERE id = ?`, projectID.Int64).Scan(&parentIdentifier); err == nil {
-				wu.Parent = parentIdentifier
-			}
-		}
-
-		depRows, err := tx.Query(`
-			SELECT dependency_type, dependency_id FROM dependencies
-			WHERE work_unit_type = ? AND work_unit_id = ?
-		`, workUnitTypeTicket, id)
-		if err != nil {
-			return err
-		}
-		defer depRows.Close()
-		for depRows.Next() {
-			var depType int
-			var depID int64
-			if err := depRows.Scan(&depType, &depID); err != nil {
-				return err
-			}
-			var depIdentifier string
-			switch depType {
-			case workUnitTypeTicket:
-				_ = tx.QueryRow(`SELECT identifier FROM tickets WHERE id = ?`, depID).Scan(&depIdentifier)
-			case workUnitTypeProject:
-				_ = tx.QueryRow(`SELECT identifier FROM projects WHERE id = ?`, depID).Scan(&depIdentifier)
-			}
-			if depIdentifier != "" {
-				wu.Dependencies = append(wu.Dependencies, depIdentifier)
-			}
-		}
-		if err := depRows.Err(); err != nil {
-			return err
-		}
-
 		result = wu
 		return nil
 	})
 	return result, err
+}
+
+// claimTicketRow selects the first claimable ticket, marks it claimed by pid,
+// and returns its row id and a partially-populated WorkUnit.
+func claimTicketRow(tx *sql.Tx, pid int) (int64, *models.WorkUnit, error) {
+	var id int64
+	var identifier, description, phase, status string
+	var lastUpdated int64
+	var projectID sql.NullInt64
+	err := tx.QueryRow(`
+		SELECT id, identifier, description, phase, status, last_updated, project_id
+		FROM tickets
+		WHERE phase NOT IN ('blocked', 'done')
+		  AND status = 'idle'
+		  AND claimed_by IS NULL
+		LIMIT 1
+	`).Scan(&id, &identifier, &description, &phase, &status, &lastUpdated, &projectID)
+	if err == sql.ErrNoRows {
+		return 0, nil, fmt.Errorf("no claimable ticket available")
+	}
+	if err != nil {
+		return 0, nil, err
+	}
+
+	now := time.Now().Unix()
+	if _, err := tx.Exec(
+		`UPDATE tickets SET claimed_by = ?, last_updated = ? WHERE id = ?`,
+		pid, now, id,
+	); err != nil {
+		return 0, nil, err
+	}
+
+	wu := &models.WorkUnit{
+		Identifier:   identifier,
+		Description:  description,
+		Phase:        models.TicketPhase(phase),
+		Status:       models.TicketStatus(status),
+		ClaimedBy:    strconv.Itoa(pid),
+		LastUpdated:  time.Unix(now, 0).UTC(),
+		IsProject:    false,
+		Dependencies: []string{},
+		Parent:       projectIdentifierByID(tx, projectID),
+	}
+	return id, wu, nil
+}
+
+// projectIdentifierByID resolves an optional project row ID to its identifier string.
+func projectIdentifierByID(tx *sql.Tx, projectID sql.NullInt64) string {
+	if !projectID.Valid {
+		return ""
+	}
+	var identifier string
+	_ = tx.QueryRow(`SELECT identifier FROM projects WHERE id = ?`, projectID.Int64).Scan(&identifier)
+	return identifier
+}
+
+// loadTicketDeps appends dependency identifiers to wu.Dependencies.
+func loadTicketDeps(tx *sql.Tx, ticketID int64, wu *models.WorkUnit) error {
+	rows, err := tx.Query(`
+		SELECT dependency_type, dependency_id FROM dependencies
+		WHERE work_unit_type = ? AND work_unit_id = ?
+	`, workUnitTypeTicket, ticketID)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var depType int
+		var depID int64
+		if err := rows.Scan(&depType, &depID); err != nil {
+			return err
+		}
+		var depIdentifier string
+		switch depType {
+		case workUnitTypeTicket:
+			_ = tx.QueryRow(`SELECT identifier FROM tickets WHERE id = ?`, depID).Scan(&depIdentifier)
+		case workUnitTypeProject:
+			_ = tx.QueryRow(`SELECT identifier FROM projects WHERE id = ?`, depID).Scan(&depIdentifier)
+		}
+		if depIdentifier != "" {
+			wu.Dependencies = append(wu.Dependencies, depIdentifier)
+		}
+	}
+	return rows.Err()
 }
 
 // Release clears the claim on the given ticket.

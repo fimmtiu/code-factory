@@ -10,6 +10,8 @@ import (
 	"sync"
 
 	acp "github.com/coder/acp-go-sdk"
+
+	"github.com/fimmtiu/tickets/internal/models"
 )
 
 // acpWorkerClient implements acp.Client on behalf of a worker goroutine.
@@ -43,7 +45,6 @@ func (c *acpWorkerClient) appendOutput(text string) {
 		_, _ = fmt.Fprint(c.logFile, text)
 	}
 
-	// Maintain the last three non-empty lines.
 	current := c.w.GetLastOutput()
 	for _, line := range strings.Split(text, "\n") {
 		if line == "" {
@@ -90,7 +91,6 @@ func (c *acpWorkerClient) SessionUpdate(_ context.Context, params acp.SessionNot
 //  3. Sends a MsgPermissionRequest to the main goroutine.
 //  4. Blocks until the main goroutine sends back a MsgPermission response.
 func (c *acpWorkerClient) RequestPermission(ctx context.Context, params acp.RequestPermissionRequest) (acp.RequestPermissionResponse, error) {
-	// Build a human-readable description of the request.
 	title := ""
 	if params.ToolCall.Title != nil {
 		title = *params.ToolCall.Title
@@ -104,23 +104,20 @@ func (c *acpWorkerClient) RequestPermission(ctx context.Context, params acp.Requ
 		payload += "\nOptions: " + strings.Join(optionNames, ", ")
 	}
 
-	// Update worker and ticket state.
 	c.w.Status = StatusAwaitingResponse
-	_ = c.database.SetStatus(c.identifier, c.phase, "needs-attention")
+	_ = c.database.SetStatus(c.identifier, c.phase, models.StatusNeedsAttention)
 	c.logCh <- NewLogMessage(c.w.Number, fmt.Sprintf("permission request for %s: %s", c.identifier, title))
 
-	// Send the request to the main goroutine.
 	c.w.FromWorker <- WorkerToMainMessage{
 		WorkerNumber: c.w.Number,
 		Kind:         MsgPermissionRequest,
 		Payload:      payload,
 	}
 
-	// Block until the main goroutine responds or the context is cancelled.
 	select {
 	case <-ctx.Done():
 		c.w.Status = StatusBusy
-		_ = c.database.SetStatus(c.identifier, c.phase, "in-progress")
+		_ = c.database.SetStatus(c.identifier, c.phase, models.StatusInProgress)
 		return acp.RequestPermissionResponse{
 			Outcome: acp.RequestPermissionOutcome{
 				Cancelled: &acp.RequestPermissionOutcomeCancelled{},
@@ -129,10 +126,9 @@ func (c *acpWorkerClient) RequestPermission(ctx context.Context, params acp.Requ
 
 	case msg := <-c.w.ToWorker:
 		c.w.Status = StatusBusy
-		_ = c.database.SetStatus(c.identifier, c.phase, "in-progress")
+		_ = c.database.SetStatus(c.identifier, c.phase, models.StatusInProgress)
 		c.logCh <- NewLogMessage(c.w.Number, fmt.Sprintf("permission response for %s: %s", c.identifier, msg.Payload))
 
-		// Try to match the response payload to one of the options.
 		for _, o := range params.Options {
 			if strings.EqualFold(msg.Payload, string(o.Kind)) ||
 				strings.EqualFold(msg.Payload, o.Name) {
@@ -141,7 +137,6 @@ func (c *acpWorkerClient) RequestPermission(ctx context.Context, params acp.Requ
 				}, nil
 			}
 		}
-		// Default: pick the first allow-once option, or the first option.
 		for _, o := range params.Options {
 			if o.Kind == acp.PermissionOptionKindAllowOnce {
 				return acp.RequestPermissionResponse{
@@ -219,17 +214,14 @@ func (w *Worker) runACP(
 	prompt string,
 	logfilePath string,
 ) error {
-	// Open (or create) the logfile.
 	logFile, err := os.Create(logfilePath)
 	if err != nil {
 		return fmt.Errorf("create logfile %s: %w", logfilePath, err)
 	}
 	defer logFile.Close()
 
-	// Write the prompt at the top of the logfile.
 	_, _ = fmt.Fprintf(logFile, "=== PROMPT ===\n%s\n=== OUTPUT ===\n", prompt)
 
-	// Start Claude Code subprocess in ACP mode.
 	cmd := exec.CommandContext(ctx, "npx", "-y", "@zed-industries/claude-code-acp@latest")
 	cmd.Dir = worktreePath
 	cmd.Stderr = newPrefixWriter(logFile, "[stderr] ")
@@ -263,7 +255,6 @@ func (w *Worker) runACP(
 
 	conn := acp.NewClientSideConnection(client, stdin, stdout)
 
-	// Initialize
 	_, err = conn.Initialize(ctx, acp.InitializeRequest{
 		ProtocolVersion: acp.ProtocolVersionNumber,
 		ClientCapabilities: acp.ClientCapabilities{
@@ -274,7 +265,6 @@ func (w *Worker) runACP(
 		return fmt.Errorf("ACP initialize: %w", err)
 	}
 
-	// Create a new session with the worktree as the working directory.
 	sessResp, err := conn.NewSession(ctx, acp.NewSessionRequest{
 		Cwd:        worktreePath,
 		McpServers: []acp.McpServer{},
@@ -283,7 +273,6 @@ func (w *Worker) runACP(
 		return fmt.Errorf("ACP new session: %w", err)
 	}
 
-	// Send the prompt and wait for completion.
 	_, err = conn.Prompt(ctx, acp.PromptRequest{
 		SessionId: sessResp.SessionId,
 		Prompt:    []acp.ContentBlock{acp.TextBlock(prompt)},
