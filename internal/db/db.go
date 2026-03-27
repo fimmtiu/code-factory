@@ -141,10 +141,20 @@ var schemaStatements = []string{
 	`CREATE INDEX IF NOT EXISTS "idx_logs_timestamp" ON "logs"("timestamp")`,
 }
 
+// migrations are ALTER TABLE statements run after the schema is created to
+// handle columns added after initial deployment. Each entry is idempotent:
+// we ignore "duplicate column name" errors so they are safe to re-run.
+var migrations = []string{}
+
 func (d *DB) createSchema() error {
 	return d.withTx(func(tx *sql.Tx) error {
 		for _, stmt := range schemaStatements {
 			if _, err := tx.Exec(stmt); err != nil {
+				return err
+			}
+		}
+		for _, stmt := range migrations {
+			if _, err := tx.Exec(stmt); err != nil && !strings.Contains(err.Error(), "duplicate column name") {
 				return err
 			}
 		}
