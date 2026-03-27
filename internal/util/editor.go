@@ -12,25 +12,37 @@ import (
 // waits for the editor to exit, reads back the file contents, deletes the
 // temp file, and returns the contents.
 func EditText(existingContent string) (string, error) {
+	content, _, err := editTextImpl(existingContent, true)
+	return content, err
+}
+
+// EditTextKeepFile is like EditText but does not delete the temporary file.
+// It returns both the file contents and the path to the temp file. The caller
+// is responsible for the file's lifetime.
+func EditTextKeepFile(existingContent string) (content, path string, err error) {
+	return editTextImpl(existingContent, false)
+}
+
+func editTextImpl(existingContent string, deleteAfter bool) (string, string, error) {
 	editor := os.Getenv("EDITOR")
 	if editor == "" {
-		return "", fmt.Errorf("EditText: $EDITOR is not set")
+		return "", "", fmt.Errorf("EditText: $EDITOR is not set")
 	}
 
 	tmpFile, err := os.CreateTemp("", "code-factory-edit-*.txt")
 	if err != nil {
-		return "", fmt.Errorf("EditText: create temp file: %w", err)
+		return "", "", fmt.Errorf("EditText: create temp file: %w", err)
 	}
 	tmpPath := tmpFile.Name()
 
 	if _, err := tmpFile.WriteString(existingContent); err != nil {
 		tmpFile.Close()
 		os.Remove(tmpPath)
-		return "", fmt.Errorf("EditText: write temp file: %w", err)
+		return "", "", fmt.Errorf("EditText: write temp file: %w", err)
 	}
 	if err := tmpFile.Close(); err != nil {
 		os.Remove(tmpPath)
-		return "", fmt.Errorf("EditText: close temp file: %w", err)
+		return "", "", fmt.Errorf("EditText: close temp file: %w", err)
 	}
 
 	// $EDITOR may contain arguments (e.g. "vim -u NONE"), so split on spaces.
@@ -42,14 +54,16 @@ func EditText(existingContent string) (string, error) {
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
 		os.Remove(tmpPath)
-		return "", fmt.Errorf("EditText: editor exited with error: %w", err)
+		return "", "", fmt.Errorf("EditText: editor exited with error: %w", err)
 	}
 
 	data, err := os.ReadFile(tmpPath)
-	os.Remove(tmpPath)
+	if deleteAfter {
+		os.Remove(tmpPath)
+	}
 	if err != nil {
-		return "", fmt.Errorf("EditText: read temp file: %w", err)
+		return "", "", fmt.Errorf("EditText: read temp file: %w", err)
 	}
 
-	return string(data), nil
+	return string(data), tmpPath, nil
 }

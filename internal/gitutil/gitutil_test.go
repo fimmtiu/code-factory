@@ -89,7 +89,9 @@ func TestCreateWorktreeWithSlashIdentifier(t *testing.T) {
 	dir := initTestRepo(t)
 	client := gitutil.NewRealGitClient()
 
+	// CreateWorktree sanitises "/" to "_" in branch names so git accepts them.
 	branchName := "project/fix-bug"
+	safeBranch := "project_fix-bug"
 	worktreePath := filepath.Join(dir, ".tickets", "project", "fix-bug", "worktree")
 	err := client.CreateWorktree(dir, worktreePath, branchName)
 	if err != nil {
@@ -100,8 +102,8 @@ func TestCreateWorktreeWithSlashIdentifier(t *testing.T) {
 		t.Fatalf("worktree directory %q was not created", worktreePath)
 	}
 
-	if !branchExists(t, dir, branchName) {
-		t.Fatalf("branch %q was not created", branchName)
+	if !branchExists(t, dir, safeBranch) {
+		t.Fatalf("branch %q was not created", safeBranch)
 	}
 }
 

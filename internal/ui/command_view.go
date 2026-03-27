@@ -187,6 +187,8 @@ func (v CommandView) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return v.openCursor()
 	case "a", "A":
 		return v.approveTicket()
+	case "d", "D":
+		return v.debugTicket()
 	}
 	return v, nil
 }
@@ -493,6 +495,80 @@ func (v CommandView) renderRow(wu *models.WorkUnit, selected bool) string {
 	return line
 }
 
+func (v CommandView) debugTicket() (tea.Model, tea.Cmd) {
+	wu := v.selectedTicket()
+	if wu == nil {
+		return v, nil
+	}
+
+	repoRoot, err := storage.FindRepoRoot(".")
+	if err != nil {
+		return v, nil
+	}
+	ticketsDir := storage.TicketsDirPath(repoRoot)
+	worktreePath := storage.TicketWorktreePathIn(ticketsDir, wu.Identifier)
+	logfilePath := worker.LatestLogfilePath(ticketsDir, wu.Identifier, string(wu.Phase))
+
+	template := buildDebugTemplate(wu, worktreePath, logfilePath)
+
+	_, tmpPath, err := util.EditTextKeepFile(template)
+	if err != nil || strings.TrimSpace(tmpPath) == "" {
+		return v, nil
+	}
+
+	script := fmt.Sprintf(`tell application "iTerm2"
+	tell current window
+		set myNewTab to create tab with default profile
+		tell current session of myNewTab
+			write text "claude %s"
+		end tell
+	end tell
+end tell`, tmpPath)
+	cmd := exec.Command("osascript")
+	cmd.Stdin = strings.NewReader(script)
+	_ = cmd.Start()
+
+	return v, nil
+}
+
+// buildDebugTemplate returns a pre-filled debug prompt for the given ticket.
+func buildDebugTemplate(wu *models.WorkUnit, worktreePath, logfilePath string) string {
+	type phaseInfo struct {
+		intro  string
+		adjust string
+	}
+	info := map[models.TicketPhase]phaseInfo{
+		models.PhaseImplement: {
+			intro:  "a prompt to implement this ticket",
+			adjust: "either the prompt or the ticket description",
+		},
+		models.PhaseRefactor: {
+			intro:  "the /cf-refactor skill to refactor the recent changes on this ticket",
+			adjust: "either the skill or the ticket description",
+		},
+		models.PhaseReview: {
+			intro:  "the /cf-review skill to review the recent changes on this ticket",
+			adjust: "either the skill or the ticket description",
+		},
+		models.PhaseRespond: {
+			intro:  "the /cf-respond skill to apply change requests to this ticket",
+			adjust: "either the skill or the ticket description",
+		},
+	}
+	pi, ok := info[wu.Phase]
+	if !ok {
+		pi = info[models.PhaseImplement]
+	}
+
+	logRef := "(no logfile found)"
+	if logfilePath != "" {
+		logRef = "`" + logfilePath + "`"
+	}
+
+	return fmt.Sprintf("I ran %s:\n\nName: %s\nGit worktree: %s\nDescription:\n%s\n\nWhat I expected was ...\n\nWhat I got was ...\n\nRead the full prompt and agent output from %s, then tell me how I could adjust %s to make an agent more likely to do what I expect.\n",
+		pi.intro, wu.Identifier, worktreePath, wu.Description, logRef, pi.adjust)
+}
+
 // ── KeyBindings ───────────────────────────────────────────────────────────────
 
 func (v CommandView) KeyBindings() []KeyBinding {
@@ -504,5 +580,6 @@ func (v CommandView) KeyBindings() []KeyBinding {
 		{Key: "T", Description: "Open terminal in worktree"},
 		{Key: "E", Description: "Open worktree in Cursor"},
 		{Key: "A", Description: "Approve ticket (user-review tickets)"},
+		{Key: "D", Description: "Debug prompt: open template in $EDITOR then launch claude"},
 	}
 }
