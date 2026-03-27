@@ -3,6 +3,7 @@ package ui
 import (
 	"strings"
 
+	lipglossv2 "charm.land/lipgloss/v2"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
@@ -183,8 +184,20 @@ func (m Model) View() string {
 	full := lipgloss.JoinVertical(lipgloss.Left, header, body, hint)
 
 	if m.dialog != nil {
-		overlayStr := m.dialog.View()
-		full = lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, overlayStr)
+		dialogStr := m.dialog.View()
+		dialogW := lipgloss.Width(dialogStr)
+		dialogH := strings.Count(dialogStr, "\n") + 1
+		x := (m.width - dialogW) / 2
+		y := (m.height - dialogH) / 2
+		if x < 0 {
+			x = 0
+		}
+		if y < 0 {
+			y = 0
+		}
+		bg := lipglossv2.NewLayer(full)
+		fg := lipglossv2.NewLayer(dialogStr).X(x).Y(y).Z(1)
+		full = lipglossv2.NewCompositor(bg, fg).Render()
 	}
 
 	return full
