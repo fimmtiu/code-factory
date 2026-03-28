@@ -56,7 +56,6 @@ func (g *RealGitClient) CreateWorktree(repoRoot, worktreePath, branchName string
 	}
 	safeBranchName := strings.ReplaceAll(branchName, "/", "_")
 
-	// git worktree add <path> -b <branch>
 	if err := runGit("-C", repoRoot, "worktree", "add", worktreePath, "-b", safeBranchName); err != nil {
 		return fmt.Errorf("CreateWorktree(%q, %q): %w", repoRoot, worktreePath, err)
 	}

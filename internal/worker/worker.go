@@ -42,7 +42,7 @@ type Worker struct {
 	database   *db.DB
 	logCh      chan<- LogMessage
 	ticketsDir string
-	workFn     WorkFn // nil = real ACP subprocess
+	workFn     WorkFn
 }
 
 // NewWorker creates a new Worker with the given 1-based number. The worker

@@ -304,9 +304,6 @@ func (d *ChangeRequestDialog) editDescription() tea.Cmd {
 }
 
 // ── Handle internal messages ───────────────────────────────────────────────────
-// The root model passes messages through to the dialog's Update, but we need
-// to handle our own typed messages here. This is called from the standard
-// Update path since all messages route to the dialog when it's open.
 
 func (d *ChangeRequestDialog) handleStatusChanged(msg crStatusChangedMsg) {
 	if msg.idx >= 0 && msg.idx < len(d.changeRequests) {
@@ -346,9 +343,8 @@ func (d *ChangeRequestDialog) View() string {
 		panes,
 		hint,
 	)
-	// Width(n) sets the content area; total rendered width = n + 6 (border+padding overhead).
-	// Width(n) = frame width including padding(4) but excluding border(2).
-	// Total rendered = n + 2. To get total = d.width, use Width(d.width - 2).
+	// dialogBoxStyle adds a 1-cell border on each side, so Width(d.width-2) produces
+	// a total rendered width of d.width.
 	return dialogBoxStyle.Width(d.width - 2).Render(body)
 }
 
@@ -361,7 +357,6 @@ func (d *ChangeRequestDialog) renderListPane() string {
 	for i := d.offset; i < end; i++ {
 		cr := d.changeRequests[i]
 		label := cr.Date.Local().Format("01/02 15:04") + " " + cr.Author
-		// Truncate to pane width
 		runes := []rune(label)
 		if len(runes) > d.listW {
 			if d.listW > 1 {
@@ -445,7 +440,6 @@ func (d *ChangeRequestDialog) fetchCodeContext(commitHash, filename string, line
 		return "(Code context unavailable)"
 	}
 
-	// Run git show <hash>:<filename> in the worktree directory
 	cmd := exec.Command("git", "show", commitHash+":"+filename)
 	cmd.Dir = d.worktree
 	out, err := cmd.Output()
@@ -454,8 +448,7 @@ func (d *ChangeRequestDialog) fetchCodeContext(commitHash, filename string, line
 	}
 
 	lines := strings.Split(string(out), "\n")
-	// lineNumber is 1-based
-	targetIdx := lineNumber - 1
+	targetIdx := lineNumber - 1 // lineNumber is 1-based
 	if targetIdx < 0 {
 		targetIdx = 0
 	}

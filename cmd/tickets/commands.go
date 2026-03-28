@@ -12,7 +12,6 @@ import (
 	"github.com/fimmtiu/tickets/internal/storage"
 )
 
-// openDB finds the repo root and opens the SQLite database.
 func openDB() (*db.DB, error) {
 	repoRoot, err := storage.FindRepoRoot(".")
 	if err != nil {
@@ -21,7 +20,6 @@ func openDB() (*db.DB, error) {
 	return db.Open(storage.TicketsDirPath(repoRoot), repoRoot)
 }
 
-// runCommand dispatches to the appropriate subcommand handler.
 func runCommand(subcommand string, args []string) error {
 	if subcommand == "init" {
 		return runInit()
@@ -59,7 +57,6 @@ func runCommand(subcommand string, args []string) error {
 	}
 }
 
-// runInit finds the repo root, initialises .tickets/, and prints a message.
 func runInit() error {
 	repoRoot, err := storage.FindRepoRoot(".")
 	if err != nil {
@@ -72,7 +69,6 @@ func runInit() error {
 	return nil
 }
 
-// runStatus prints all work units as pretty-printed JSON.
 func runStatus(d *db.DB) error {
 	units, err := d.Status()
 	if err != nil {
@@ -86,13 +82,11 @@ func runStatus(d *db.DB) error {
 	return nil
 }
 
-// stdinInput holds the parsed fields from the stdin JSON for create-project/create-ticket.
 type stdinInput struct {
 	Description  string   `json:"description"`
 	Dependencies []string `json:"dependencies"`
 }
 
-// parseStdinInput reads and parses a stdinInput from r.
 func parseStdinInput(cmdName string, r io.Reader) (stdinInput, error) {
 	data, err := io.ReadAll(r)
 	if err != nil {
@@ -108,7 +102,6 @@ func parseStdinInput(cmdName string, r io.Reader) (stdinInput, error) {
 	return input, nil
 }
 
-// runCreateProject creates a new project with identifier and description from stdin.
 func runCreateProject(d *db.DB, args []string, stdin io.Reader) error {
 	if len(args) < 1 {
 		return fmt.Errorf("usage: tickets create-project <identifier>")
@@ -120,8 +113,6 @@ func runCreateProject(d *db.DB, args []string, stdin io.Reader) error {
 	return d.CreateProject(args[0], input.Description, input.Dependencies)
 }
 
-// runCreateTicket creates a new ticket with identifier, description, and
-// optional dependencies from stdin.
 func runCreateTicket(d *db.DB, args []string, stdin io.Reader) error {
 	if len(args) < 1 {
 		return fmt.Errorf("usage: tickets create-ticket <identifier>")
@@ -133,7 +124,6 @@ func runCreateTicket(d *db.DB, args []string, stdin io.Reader) error {
 	return d.CreateTicket(args[0], input.Description, input.Dependencies)
 }
 
-// runSetStatus updates a ticket's phase and optional status.
 func runSetStatus(d *db.DB, args []string) error {
 	if len(args) < 2 {
 		return fmt.Errorf("usage: tickets set-status <identifier> <phase> [<status>]")
@@ -145,7 +135,6 @@ func runSetStatus(d *db.DB, args []string) error {
 	return d.SetStatus(args[0], args[1], status)
 }
 
-// runClaim claims the next available ticket for the given PID and prints it.
 func runClaim(d *db.DB, args []string) error {
 	if len(args) < 1 {
 		return fmt.Errorf("usage: tickets claim <pid>")
@@ -166,7 +155,6 @@ func runClaim(d *db.DB, args []string) error {
 	return nil
 }
 
-// runRelease releases the claim on a ticket.
 func runRelease(d *db.DB, args []string) error {
 	if len(args) < 1 {
 		return fmt.Errorf("usage: tickets release <identifier>")
@@ -174,7 +162,6 @@ func runRelease(d *db.DB, args []string) error {
 	return d.Release(args[0])
 }
 
-// runAddChangeRequest adds a change request to a ticket.
 func runAddChangeRequest(d *db.DB, args []string, stdin io.Reader) error {
 	if len(args) < 3 {
 		return fmt.Errorf("usage: tickets add-change-request <identifier> <code-location> <author>")
@@ -186,7 +173,6 @@ func runAddChangeRequest(d *db.DB, args []string, stdin io.Reader) error {
 	return d.AddChangeRequest(args[0], args[1], args[2], string(text))
 }
 
-// runCloseChangeRequest closes the change request with the given ID.
 func runCloseChangeRequest(d *db.DB, args []string) error {
 	if len(args) < 1 {
 		return fmt.Errorf("usage: tickets close-change-request <id>")
@@ -198,7 +184,6 @@ func runCloseChangeRequest(d *db.DB, args []string) error {
 	return d.CloseChangeRequest(id)
 }
 
-// runOpenChangeRequests prints all open change requests for a ticket as JSON.
 func runOpenChangeRequests(d *db.DB, args []string) error {
 	if len(args) < 1 {
 		return fmt.Errorf("usage: tickets open-change-requests <identifier>")
@@ -218,7 +203,6 @@ func runOpenChangeRequests(d *db.DB, args []string) error {
 	return nil
 }
 
-// runDismissChangeRequest dismisses the change request with the given ID.
 func runDismissChangeRequest(d *db.DB, args []string) error {
 	if len(args) < 1 {
 		return fmt.Errorf("usage: tickets dismiss-change-request <id>")

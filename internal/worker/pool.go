@@ -68,7 +68,7 @@ func (p *Pool) Start(database *db.DB, ticketsDir string) {
 		w.database = database
 		w.logCh = p.LogChannel
 		w.ticketsDir = ticketsDir
-		w.workFn = p.WorkFn // nil = real ACP
+		w.workFn = p.WorkFn
 		p.wg.Add(1)
 		go func(w *Worker) {
 			defer p.wg.Done()

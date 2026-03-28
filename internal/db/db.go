@@ -60,7 +60,7 @@ func (d *DB) SetGitClient(gc gitutil.GitClient) {
 	d.git = gc
 }
 
-// Close closes the underlying database connection.
+// Close closes the database connection.
 func (d *DB) Close() error {
 	return d.db.Close()
 }
@@ -162,8 +162,6 @@ func (d *DB) createSchema() error {
 	})
 }
 
-// --- Helper functions ---
-
 // worktreePath returns the git worktree path for a ticket identifier.
 func (d *DB) worktreePath(identifier string) string {
 	return storage.TicketWorktreePathIn(d.ticketsDir, identifier)
@@ -226,8 +224,6 @@ func resolveDependencyID(tx *sql.Tx, identifier string) (int, int64, error) {
 	}
 	return 0, 0, fmt.Errorf("work unit %q not found", identifier)
 }
-
-// --- Public operations ---
 
 // Status returns all work units (projects and tickets) with their dependencies
 // and comment threads populated.

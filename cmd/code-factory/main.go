@@ -53,7 +53,6 @@ Options:
 		os.Exit(1)
 	}
 
-	// Validate startup preconditions
 	cwd, err := os.Getwd()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "error: cannot determine current directory:", err)
@@ -73,13 +72,11 @@ Options:
 		os.Exit(1)
 	}
 
-	// Load settings into config.Current (falls back to defaults if missing/partial).
 	if err := config.Init(ticketsDir); err != nil {
 		fmt.Fprintln(os.Stderr, "error: loading settings:", err)
 		os.Exit(1)
 	}
 
-	// Open the database.
 	database, err := db.Open(ticketsDir, repoRoot)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "error: opening database:", err)
@@ -87,7 +84,6 @@ Options:
 	}
 	defer database.Close()
 
-	// Create the pool, start workers and housekeeping.
 	// NewPool defaults WorkFn to the real ACP subprocess; --mock overrides it.
 	pool := worker.NewPool(*poolSize, *waitSecs)
 	if *mock {
@@ -104,13 +100,11 @@ Options:
 		defer logFile.Close()
 	}
 
-	// Start the TUI; it blocks until the user quits.
 	model := ui.NewModel(pool, database, *waitSecs)
 	prog := tea.NewProgram(model, tea.WithAltScreen())
 	if _, err := prog.Run(); err != nil {
 		fmt.Fprintln(os.Stderr, "error: TUI exited with error:", err)
 	}
 
-	// Graceful shutdown: wait for all goroutines to exit.
 	pool.Stop()
 }

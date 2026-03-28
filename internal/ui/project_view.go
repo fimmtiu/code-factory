@@ -152,8 +152,6 @@ func (v ProjectView) tickCmd() tea.Cmd {
 	})
 }
 
-// refreshAfterTick is a two-step approach: on the tick, we fetch; on fetch
-// result, we update state. We use fetchCmd directly.
 func (v ProjectView) scheduledRefreshCmd() tea.Cmd {
 	d := time.Duration(v.waitSecs) * time.Second
 	if d <= 0 {
@@ -173,13 +171,12 @@ func buildTree(units []*models.WorkUnit) []treeNode {
 		return nil
 	}
 
-	// Build a map from identifier to work unit.
 	byID := make(map[string]*models.WorkUnit, len(units))
 	for _, wu := range units {
 		byID[wu.Identifier] = wu
 	}
 
-	// Find roots (work units with no parent in our set).
+	// Roots are work units with no parent present in the set.
 	var roots []*models.WorkUnit
 	for _, wu := range units {
 		if wu.Parent == "" || byID[wu.Parent] == nil {
@@ -187,7 +184,6 @@ func buildTree(units []*models.WorkUnit) []treeNode {
 		}
 	}
 
-	// Sort roots by identifier.
 	sort.Slice(roots, func(i, j int) bool {
 		return roots[i].Identifier < roots[j].Identifier
 	})
@@ -197,7 +193,6 @@ func buildTree(units []*models.WorkUnit) []treeNode {
 	walk = func(wu *models.WorkUnit, depth int) {
 		result = append(result, treeNode{wu: wu, depth: depth})
 
-		// Collect children sorted by identifier.
 		var children []*models.WorkUnit
 		for _, u := range units {
 			if u.Parent == wu.Identifier {
@@ -242,7 +237,6 @@ func (v ProjectView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		v.width = msg.Width
 		v.height = msg.Height
-		// Clamp scroll offsets
 		v.clampScroll()
 		return v, nil
 
@@ -254,7 +248,6 @@ func (v ProjectView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		v.units = msg.units
 		v.stats = msg.stats
 		v.treeNodes = buildTree(v.units)
-		// Clamp selection
 		if v.treeSelected >= len(v.treeNodes) {
 			v.treeSelected = max(0, len(v.treeNodes)-1)
 		}
@@ -262,7 +255,6 @@ func (v ProjectView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return v, v.scheduledRefreshCmd()
 
 	case projectDescriptionSavedMsg:
-		// Refresh data after a successful description save.
 		return v, v.fetchCmd()
 
 	case tea.KeyMsg:
@@ -452,7 +444,6 @@ func (v ProjectView) topHalfHeight() int {
 
 // treeHeight returns the number of visible rows in the tree pane (inner content).
 func (v ProjectView) treeHeight() int {
-	// top half minus 2 border lines
 	h := v.topHalfHeight() - 2
 	if h < 1 {
 		h = 1
@@ -462,7 +453,6 @@ func (v ProjectView) treeHeight() int {
 
 // detailHeight returns the number of visible lines in the detail pane (inner).
 func (v ProjectView) detailHeight() int {
-	// Body area minus top half, minus 2 border lines for the detail pane.
 	body := v.height - chromeHeight
 	if body < 2 {
 		body = 2
@@ -475,9 +465,8 @@ func (v ProjectView) detailHeight() int {
 }
 
 // treeWidth returns the inner content width for the tree pane.
+// statusPaneWidth already includes its borders; the -2 accounts for the tree pane's borders.
 func (v ProjectView) treeWidth() int {
-	// total width minus status pane minus 2 borders for status pane (already in statusPaneWidth)
-	// minus 2 borders for tree pane
 	w := v.width - statusPaneWidth - 2
 	if w < 1 {
 		w = 1
@@ -578,7 +567,6 @@ func (v ProjectView) renderTreeContent() string {
 		isLast := node.wu.IsProject || i+1 >= total || v.treeNodes[i+1].depth < node.depth
 		label := treeLabel(node, isLast)
 
-		// Truncate to pane width
 		if lipgloss.Width(label) > w {
 			runes := []rune(label)
 			if w > 1 {
@@ -639,13 +627,11 @@ func buildDetailLines(wu *models.WorkUnit, width int) []string {
 		addLabel("Status", string(wu.Status))
 	}
 
-	// Description (word-wrapped)
 	lines = append(lines, "")
 	lines = append(lines, detailLabelStyle.Render("Description:"))
 	descLines := wordWrap(wu.Description, width-2)
 	lines = append(lines, descLines...)
 
-	// Change requests (tickets only)
 	if !wu.IsProject && len(wu.ChangeRequests) > 0 {
 		lines = append(lines, "")
 		lines = append(lines, detailLabelStyle.Render("Change Requests:"))
