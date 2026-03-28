@@ -1,6 +1,6 @@
 package db
 
-import "github.com/fimmtiu/tickets/internal/models"
+import "github.com/fimmtiu/code-factory/internal/models"
 
 // ProjectContext holds the identifier and description of a project in the
 // hierarchy above a ticket.

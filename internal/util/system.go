@@ -6,7 +6,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/fimmtiu/tickets/internal/config"
+	"github.com/fimmtiu/code-factory/internal/config"
 )
 
 // OpenTerminal opens a terminal window in dir using the command from

@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/fimmtiu/tickets/internal/config"
+	"github.com/fimmtiu/code-factory/internal/config"
 )
 
 func TestDefault(t *testing.T) {

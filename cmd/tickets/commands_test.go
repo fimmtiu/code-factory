@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/fimmtiu/tickets/internal/db"
+	"github.com/fimmtiu/code-factory/internal/db"
 )
 
 // noopGitClient implements gitutil.GitClient without invoking real git.

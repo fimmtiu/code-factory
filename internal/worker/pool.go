@@ -4,7 +4,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/fimmtiu/tickets/internal/db"
+	"github.com/fimmtiu/code-factory/internal/db"
 )
 
 // logChannelBuffer is the buffer size for the shared log channel. It is kept

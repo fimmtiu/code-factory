@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/fimmtiu/tickets/internal/db"
-	"github.com/fimmtiu/tickets/internal/gitutil"
+	"github.com/fimmtiu/code-factory/internal/db"
+	"github.com/fimmtiu/code-factory/internal/gitutil"
 )
 
 // fakeGitClient implements gitutil.GitClient without invoking real git.

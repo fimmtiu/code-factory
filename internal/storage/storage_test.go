@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/fimmtiu/tickets/internal/config"
-	"github.com/fimmtiu/tickets/internal/storage"
+	"github.com/fimmtiu/code-factory/internal/config"
+	"github.com/fimmtiu/code-factory/internal/storage"
 )
 
 // makeTempRepo creates a temp dir with a .git subdirectory to simulate a git repo root.

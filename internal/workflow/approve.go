@@ -4,8 +4,8 @@ package workflow
 import (
 	"fmt"
 
-	"github.com/fimmtiu/tickets/internal/db"
-	"github.com/fimmtiu/tickets/internal/models"
+	"github.com/fimmtiu/code-factory/internal/db"
+	"github.com/fimmtiu/code-factory/internal/models"
 )
 
 // Approve advances the given ticket to its next phase. The transitions are:

@@ -3,9 +3,9 @@ package worker
 import (
 	"fmt"
 
-	"github.com/fimmtiu/tickets/internal/db"
-	"github.com/fimmtiu/tickets/internal/models"
-	"github.com/fimmtiu/tickets/internal/storage"
+	"github.com/fimmtiu/code-factory/internal/db"
+	"github.com/fimmtiu/code-factory/internal/models"
+	"github.com/fimmtiu/code-factory/internal/storage"
 )
 
 // BuildPrompt generates the appropriate prompt for the Claude agent based on

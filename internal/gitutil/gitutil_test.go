@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/fimmtiu/tickets/internal/gitutil"
+	"github.com/fimmtiu/code-factory/internal/gitutil"
 )
 
 // initTestRepo creates an isolated git repo in a temp directory with an initial commit.

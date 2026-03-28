@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/fimmtiu/tickets/internal/worker"
+	"github.com/fimmtiu/code-factory/internal/worker"
 )
 
 func TestNextLogfilePath_FirstRun(t *testing.T) {

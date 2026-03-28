@@ -3,7 +3,7 @@ package worker
 import (
 	"sync"
 
-	"github.com/fimmtiu/tickets/internal/db"
+	"github.com/fimmtiu/code-factory/internal/db"
 )
 
 // workerChannelBuffer is the buffer size for the worker communication channels.

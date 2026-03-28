@@ -10,13 +10,13 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/fimmtiu/tickets/internal/config"
-	"github.com/fimmtiu/tickets/internal/db"
-	"github.com/fimmtiu/tickets/internal/models"
-	"github.com/fimmtiu/tickets/internal/storage"
-	"github.com/fimmtiu/tickets/internal/util"
-	"github.com/fimmtiu/tickets/internal/worker"
-	"github.com/fimmtiu/tickets/internal/workflow"
+	"github.com/fimmtiu/code-factory/internal/config"
+	"github.com/fimmtiu/code-factory/internal/db"
+	"github.com/fimmtiu/code-factory/internal/models"
+	"github.com/fimmtiu/code-factory/internal/storage"
+	"github.com/fimmtiu/code-factory/internal/util"
+	"github.com/fimmtiu/code-factory/internal/worker"
+	"github.com/fimmtiu/code-factory/internal/workflow"
 )
 
 // ── Styles ───────────────────────────────────────────────────────────────────

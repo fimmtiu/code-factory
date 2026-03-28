@@ -1,6 +1,6 @@
 build:
 	go build ./cmd/tickets
-	go build ./cmd/tickets-testdata
+	go build ./cmd/cf-testdata
 	go build ./cmd/code-factory
 
 test:
@@ -11,13 +11,13 @@ lint:
 	gofmt -w .
 
 clean:
-	rm -f tickets tickets-testdata code-factory
+	rm -f tickets cf-testdata code-factory
 
 clean-data:
 	rm -rf .tickets
 
 install: build
-	GOBIN=$(HOME)/bin go install ./cmd/tickets ./cmd/tickets-testdata ./cmd/code-factory
+	GOBIN=$(HOME)/bin go install ./cmd/tickets ./cmd/cf-testdata ./cmd/code-factory
 	for skill in skills/*; do \
 		cp -rf $$skill $(HOME)/.claude/skills/; \
 	done

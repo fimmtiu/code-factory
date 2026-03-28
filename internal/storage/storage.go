@@ -8,7 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/fimmtiu/tickets/internal/config"
+	"github.com/fimmtiu/code-factory/internal/config"
 )
 
 // FindRepoRoot walks up from startDir looking for a .git directory.

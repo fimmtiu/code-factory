@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/fimmtiu/tickets/internal/models"
-	"github.com/fimmtiu/tickets/internal/storage"
+	"github.com/fimmtiu/code-factory/internal/models"
+	"github.com/fimmtiu/code-factory/internal/storage"
 )
 
 // run is the main loop for a worker goroutine. It claims tickets, processes

@@ -1,4 +1,4 @@
-module github.com/fimmtiu/tickets
+module github.com/fimmtiu/code-factory
 
 go 1.26.1
 

@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/fimmtiu/tickets/internal/storage"
+	"github.com/fimmtiu/code-factory/internal/storage"
 )
 
 // LatestLogfilePath returns the path of the most recently written logfile for

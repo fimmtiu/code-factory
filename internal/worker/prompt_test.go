@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/fimmtiu/tickets/internal/models"
-	"github.com/fimmtiu/tickets/internal/worker"
+	"github.com/fimmtiu/code-factory/internal/models"
+	"github.com/fimmtiu/code-factory/internal/worker"
 )
 
 // buildPromptTicket creates a ticket work unit for prompt tests.

@@ -7,7 +7,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/fimmtiu/tickets/internal/config"
+	"github.com/fimmtiu/code-factory/internal/config"
 )
 
 // EditText writes existingContent to a temporary file, opens the blocking

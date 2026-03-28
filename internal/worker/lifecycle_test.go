@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/fimmtiu/tickets/internal/db"
-	"github.com/fimmtiu/tickets/internal/gitutil"
-	"github.com/fimmtiu/tickets/internal/worker"
+	"github.com/fimmtiu/code-factory/internal/db"
+	"github.com/fimmtiu/code-factory/internal/gitutil"
+	"github.com/fimmtiu/code-factory/internal/worker"
 )
 
 // --- Test DB helpers ---

@@ -9,11 +9,11 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/fimmtiu/tickets/internal/config"
-	"github.com/fimmtiu/tickets/internal/db"
-	"github.com/fimmtiu/tickets/internal/storage"
-	"github.com/fimmtiu/tickets/internal/ui"
-	"github.com/fimmtiu/tickets/internal/worker"
+	"github.com/fimmtiu/code-factory/internal/config"
+	"github.com/fimmtiu/code-factory/internal/db"
+	"github.com/fimmtiu/code-factory/internal/storage"
+	"github.com/fimmtiu/code-factory/internal/ui"
+	"github.com/fimmtiu/code-factory/internal/worker"
 )
 
 func main() {

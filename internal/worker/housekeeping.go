@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/fimmtiu/tickets/internal/db"
+	"github.com/fimmtiu/code-factory/internal/db"
 )
 
 // housekeepingInterval is how often the housekeeping goroutine wakes up to

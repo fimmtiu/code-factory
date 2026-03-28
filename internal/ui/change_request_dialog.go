@@ -11,10 +11,10 @@ import (
 
 	"os/exec"
 
-	"github.com/fimmtiu/tickets/internal/db"
-	"github.com/fimmtiu/tickets/internal/models"
-	"github.com/fimmtiu/tickets/internal/storage"
-	"github.com/fimmtiu/tickets/internal/util"
+	"github.com/fimmtiu/code-factory/internal/db"
+	"github.com/fimmtiu/code-factory/internal/models"
+	"github.com/fimmtiu/code-factory/internal/storage"
+	"github.com/fimmtiu/code-factory/internal/util"
 )
 
 // ── Styles ────────────────────────────────────────────────────────────────────

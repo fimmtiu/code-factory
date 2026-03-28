@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/fimmtiu/tickets/internal/models"
+	"github.com/fimmtiu/code-factory/internal/models"
 )
 
 // mockScript is the sequence of output lines the mock worker emits.

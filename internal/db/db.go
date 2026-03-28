@@ -12,9 +12,9 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 
-	"github.com/fimmtiu/tickets/internal/gitutil"
-	"github.com/fimmtiu/tickets/internal/models"
-	"github.com/fimmtiu/tickets/internal/storage"
+	"github.com/fimmtiu/code-factory/internal/gitutil"
+	"github.com/fimmtiu/code-factory/internal/models"
+	"github.com/fimmtiu/code-factory/internal/storage"
 )
 
 const (

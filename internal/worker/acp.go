@@ -11,7 +11,7 @@ import (
 
 	acp "github.com/coder/acp-go-sdk"
 
-	"github.com/fimmtiu/tickets/internal/models"
+	"github.com/fimmtiu/code-factory/internal/models"
 )
 
 // acpWorkerClient implements acp.Client on behalf of a worker goroutine.

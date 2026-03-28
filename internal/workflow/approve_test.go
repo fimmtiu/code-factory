@@ -3,10 +3,10 @@ package workflow_test
 import (
 	"testing"
 
-	"github.com/fimmtiu/tickets/internal/db"
-	"github.com/fimmtiu/tickets/internal/gitutil"
-	"github.com/fimmtiu/tickets/internal/models"
-	"github.com/fimmtiu/tickets/internal/workflow"
+	"github.com/fimmtiu/code-factory/internal/db"
+	"github.com/fimmtiu/code-factory/internal/gitutil"
+	"github.com/fimmtiu/code-factory/internal/models"
+	"github.com/fimmtiu/code-factory/internal/workflow"
 )
 
 // fakeGitClient implements gitutil.GitClient without invoking real git.

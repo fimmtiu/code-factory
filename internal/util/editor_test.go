@@ -4,8 +4,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/fimmtiu/tickets/internal/config"
-	"github.com/fimmtiu/tickets/internal/util"
+	"github.com/fimmtiu/code-factory/internal/config"
+	"github.com/fimmtiu/code-factory/internal/util"
 )
 
 func init() {
