@@ -343,8 +343,7 @@ func (v ProjectView) openChangeRequestDialog() (tea.Model, tea.Cmd) {
 		return v, nil
 	}
 	wu := v.treeNodes[v.treeSelected].wu
-	// Projects don't have change requests: no-op
-	if wu.IsProject {
+	if wu.IsProject || len(wu.ChangeRequests) == 0 {
 		return v, nil
 	}
 	return v, func() tea.Msg {

@@ -360,7 +360,8 @@ func (v CommandView) openChangeRequestDialog() (tea.Model, tea.Cmd) {
 	if wu == nil {
 		return v, nil
 	}
-	// Fetch fresh work units to get change requests populated
+	// Fetch fresh data to get change requests populated, then only open the
+	// dialog if there is at least one change request.
 	database := v.database
 	identifier := wu.Identifier
 	return v, func() tea.Msg {
@@ -369,7 +370,7 @@ func (v CommandView) openChangeRequestDialog() (tea.Model, tea.Cmd) {
 			return nil
 		}
 		for _, u := range units {
-			if u.Identifier == identifier && !u.IsProject {
+			if u.Identifier == identifier && !u.IsProject && len(u.ChangeRequests) > 0 {
 				return openChangeRequestDialogMsg{wu: u}
 			}
 		}
