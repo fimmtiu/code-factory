@@ -768,6 +768,51 @@ func (d *DB) ReopenChangeRequest(id int64) error {
 	return d.setChangeRequestStatus(id, models.ChangeRequestOpen)
 }
 
+// OpenChangeRequests returns all change requests with status "open" for the
+// ticket with the given identifier, ordered by date ascending.
+func (d *DB) OpenChangeRequests(identifier string) ([]models.ChangeRequest, error) {
+	var ticketID int64
+	err := d.db.QueryRow(`SELECT id FROM tickets WHERE identifier = ?`, identifier).Scan(&ticketID)
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("ticket %q not found", identifier)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := d.db.Query(`
+		SELECT id, filename, line_number, commit_hash, status, date, author, description
+		FROM change_requests
+		WHERE ticket_id = ? AND status = ?
+		ORDER BY date ASC
+	`, ticketID, models.ChangeRequestOpen)
+	if err != nil {
+		return nil, fmt.Errorf("query open change requests: %w", err)
+	}
+	defer rows.Close()
+
+	var results []models.ChangeRequest
+	for rows.Next() {
+		var id int64
+		var filename, commitHash, status, author, description string
+		var lineNumber int
+		var date int64
+		if err := rows.Scan(&id, &filename, &lineNumber, &commitHash, &status, &date, &author, &description); err != nil {
+			return nil, fmt.Errorf("scan change request: %w", err)
+		}
+		results = append(results, models.ChangeRequest{
+			ID:           strconv.FormatInt(id, 10),
+			CommitHash:   commitHash,
+			CodeLocation: fmt.Sprintf("%s:%d", filename, lineNumber),
+			Status:       status,
+			Date:         time.Unix(date, 0).UTC(),
+			Author:       author,
+			Description:  description,
+		})
+	}
+	return results, rows.Err()
+}
+
 // UpdateChangeRequestDescription updates the description of the change request with the given id.
 func (d *DB) UpdateChangeRequestDescription(id int64, description string) error {
 	return d.withTx(func(tx *sql.Tx) error {

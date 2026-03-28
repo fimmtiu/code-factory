@@ -52,6 +52,8 @@ func runCommand(subcommand string, args []string) error {
 		return runCloseChangeRequest(d, args)
 	case "dismiss-change-request":
 		return runDismissChangeRequest(d, args)
+	case "open-change-requests":
+		return runOpenChangeRequests(d, args)
 	default:
 		return fmt.Errorf("unknown subcommand %q; run 'tickets' for usage", subcommand)
 	}
@@ -194,6 +196,26 @@ func runCloseChangeRequest(d *db.DB, args []string) error {
 		return fmt.Errorf("close-change-request: invalid id %q: %w", args[0], err)
 	}
 	return d.CloseChangeRequest(id)
+}
+
+// runOpenChangeRequests prints all open change requests for a ticket as JSON.
+func runOpenChangeRequests(d *db.DB, args []string) error {
+	if len(args) < 1 {
+		return fmt.Errorf("usage: tickets open-change-requests <identifier>")
+	}
+	crs, err := d.OpenChangeRequests(args[0])
+	if err != nil {
+		return err
+	}
+	if crs == nil {
+		crs = []models.ChangeRequest{}
+	}
+	out, err := json.MarshalIndent(crs, "", "  ")
+	if err != nil {
+		return err
+	}
+	fmt.Println(string(out))
+	return nil
 }
 
 // runDismissChangeRequest dismisses the change request with the given ID.
