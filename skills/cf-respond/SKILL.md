@@ -1,6 +1,6 @@
 ---
 name: cf-respond
-description: Implement change requests on a branch from a variety of different perspectives. Trigger on `/respond` or `/cf-respond`.
+description: Implement change requests on a ticket. Trigger on `/respond` or `/cf-respond`.
 user-invocable: true
 ---
 
@@ -25,7 +25,7 @@ For each open change request, in order:
 
 1. Read the `code_location` and `description` fields to understand what needs to change.
 2. Write or update tests first to cover the requested change, then modify the implementation code.
-3. Run the project's lint and build commands. Check `CLAUDE.md` or the project's Makefile for the correct commands. If you don't find them there, consult project conventions or infer the correct commands from the language.
+3. Run the project's lint and test commands. Check `CLAUDE.md` or the project's Makefile for the correct commands. If you don't find them there, consult project conventions or infer the correct commands from the language.
 4. Commit the changes in a single commit. The commit message must include:
    - A summary of what was changed and why.
    - The change request ID (the `id` field from the JSON) and ticket identifier, e.g. `"Addresses change request #42 on my-project/my-ticket"`.
