@@ -21,5 +21,6 @@ install: build
 	for skill in skills/*; do \
 		cp -rf $$skill $(HOME)/.claude/skills/; \
 	done
+	cp rules/* $(HOME)/.cursor/rules/
 
 .PHONY: build test lint clean clean-data install
