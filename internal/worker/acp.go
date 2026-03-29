@@ -221,8 +221,6 @@ func runACP(
 	}
 	defer logFile.Close()
 
-	_, _ = fmt.Fprintf(logFile, "=== PROMPT ===\n%s\n=== OUTPUT ===\n", prompt)
-
 	cmd := exec.CommandContext(ctx, "npx", "-y", "@zed-industries/claude-code-acp@latest")
 	cmd.Dir = worktreePath
 	cmd.Stderr = newPrefixWriter(logFile, "[stderr] ")
@@ -273,6 +271,9 @@ func runACP(
 	if err != nil {
 		return fmt.Errorf("ACP new session: %w", err)
 	}
+
+	_, _ = fmt.Fprintf(logFile, "=== SESSION ===\n%s\n\n=== PROMPT ===\n%s\n\n=== OUTPUT ===\n",
+		sessResp.SessionId, prompt)
 
 	_, err = conn.Prompt(ctx, acp.PromptRequest{
 		SessionId: sessResp.SessionId,
