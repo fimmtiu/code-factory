@@ -250,7 +250,10 @@ func (d *TicketDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case crStatusChangedMsg:
 		if msg.idx >= 0 && msg.idx < len(d.changeRequests) {
 			d.changeRequests[msg.idx].Status = msg.status
-			d.buildItems() // refresh labels
+			prev := d.selectedIdx
+			d.buildItems()
+			d.selectedIdx = prev // restore position after rebuild
+			d.clampListScroll()
 		}
 		return d, nil
 
