@@ -177,7 +177,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m Model) View() string {
 	header := m.renderHeader()
 	content := m.views[m.activeView].View()
-	hint := helpHintStyle.Render("? help  Q quit")
+	hintText := "? help  Q quit"
+	if m.dialog != nil {
+		hintText = "? help"
+	}
+	hint := helpHintStyle.Render(hintText)
 
 	// Compute the body area height.
 	bodyHeight := m.height - lipgloss.Height(header) - lipgloss.Height(hint)
