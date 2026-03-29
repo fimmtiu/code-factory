@@ -460,7 +460,7 @@ func (d *DB) CreateProject(identifier, description string, deps []string) error 
 }
 
 // CreateTicket inserts a new ticket (and its dependencies) in a single
-// transaction and creates its directory under .tickets/.
+// transaction, then creates a git worktree for it immediately.
 func (d *DB) CreateTicket(identifier, description string, deps []string) error {
 	if err := models.ValidateIdentifier(identifier); err != nil {
 		return err
@@ -495,13 +495,14 @@ func (d *DB) CreateTicket(identifier, description string, deps []string) error {
 	}); err != nil {
 		return err
 	}
-	return os.MkdirAll(storage.TicketDirPath(d.ticketsDir, identifier), 0755)
+	if err := os.MkdirAll(storage.TicketDirPath(d.ticketsDir, identifier), 0755); err != nil {
+		return err
+	}
+	return d.git.CreateWorktree(d.repoRoot, d.worktreePath(identifier), identifier)
 }
 
 // SetStatus updates the phase (and optionally status) of a ticket. When phase
-// is "done", the ticket's branch is merged and its worktree is removed. When
-// phase is "implement" and status is "in-progress", a git worktree is created
-// if one does not already exist.
+// is "done", the ticket's branch is merged and its worktree is removed.
 func (d *DB) SetStatus(identifier, phase, status string) error {
 	if !models.IsValidTicketPhase(phase) {
 		return fmt.Errorf("invalid ticket phase %q", phase)
@@ -528,15 +529,6 @@ func (d *DB) SetStatus(identifier, phase, status string) error {
 
 	if phase == string(models.PhaseDone) {
 		return d.markTicketDone(ticketID, identifier, projectID)
-	}
-
-	if phase == string(models.PhaseImplement) && status == string(models.StatusInProgress) {
-		wtp := d.worktreePath(identifier)
-		if _, err := d.git.GetHeadCommit(wtp); err != nil {
-			if err := d.git.CreateWorktree(d.repoRoot, wtp, identifier); err != nil {
-				return fmt.Errorf("create worktree: %w", err)
-			}
-		}
 	}
 
 	return d.withTx(func(tx *sql.Tx) error {
