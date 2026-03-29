@@ -177,7 +177,23 @@ func (m Model) View() string {
 	if m.dialog != nil {
 		hintText = "? help"
 	}
-	hint := helpHintStyle.Render(hintText)
+	left := helpHintStyle.Render(hintText)
+	hint := left
+	if m.dialog == nil {
+		viewHints := map[ViewID]string{
+			ViewProject: "E edit  T open terminal  Tab switch  Enter view",
+			ViewCommand: "E open worktree  T open terminal  Tab switch  Enter view",
+			ViewLog:     "E open in editor  C copy path",
+		}
+		if rightText, ok := viewHints[m.activeView]; ok {
+			right := helpHintStyle.Render(rightText)
+			spacer := m.width - lipgloss.Width(left) - lipgloss.Width(right)
+			if spacer < 2 {
+				spacer = 2
+			}
+			hint = left + strings.Repeat(" ", spacer) + right
+		}
+	}
 
 	// Compute the body area height.
 	bodyHeight := m.height - lipgloss.Height(header) - lipgloss.Height(hint)

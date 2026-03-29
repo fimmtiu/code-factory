@@ -596,6 +596,5 @@ func (v CommandView) KeyBindings() []KeyBinding {
 		{Key: "T", Description: "Open terminal in worktree"},
 		{Key: "E", Description: "Open worktree in Cursor"},
 		{Key: "A", Description: "Approve ticket (user-review tickets)"},
-		{Key: "D", Description: "Debug prompt: open template in $EDITOR then launch claude"},
 	}
 }

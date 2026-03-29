@@ -262,9 +262,11 @@ func (v LogView) messageWidth() int {
 // ── View ──────────────────────────────────────────────────────────────────────
 
 func (v LogView) View() string {
+	paneW := v.width - viewBorderOverhead
+
 	if len(v.entries) == 0 {
-		return viewPaneStyle.Width(v.width - viewBorderOverhead).Height(v.listHeight()).
-			Render(lipgloss.Place(v.width-viewBorderOverhead, v.listHeight(), lipgloss.Center, lipgloss.Center, "No log entries"))
+		return viewPaneStyle.Width(paneW).Height(v.listHeight()).
+			Render(lipgloss.Place(paneW, v.listHeight(), lipgloss.Center, lipgloss.Center, "No log entries"))
 	}
 
 	h := v.listHeight()
@@ -281,7 +283,7 @@ func (v LogView) View() string {
 			sb.WriteString("\n")
 		}
 	}
-	return viewPaneStyle.Width(v.width - viewBorderOverhead).Height(v.listHeight()).Render(sb.String())
+	return viewPaneStyle.Width(paneW).Height(v.listHeight()).Render(sb.String())
 }
 
 // renderRow formats one log entry as a three-column row.
