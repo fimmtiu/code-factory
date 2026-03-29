@@ -299,6 +299,8 @@ func (v ProjectView) updateTreeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		v.focus = focusDetail
 	case "enter":
 		return v.openChangeRequestDialog()
+	case "l", "L":
+		return v.openLogfileDialog()
 	case "t", "T":
 		return v.openTerminal()
 	case "e", "E":
@@ -330,6 +332,8 @@ func (v ProjectView) updateDetailKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		v.focus = focusTree
 	case "enter":
 		return v.openChangeRequestDialog()
+	case "l", "L":
+		return v.openLogfileDialog()
 	case "t", "T":
 		return v.openTerminal()
 	case "e", "E":
@@ -349,6 +353,17 @@ func (v ProjectView) openChangeRequestDialog() (tea.Model, tea.Cmd) {
 	return v, func() tea.Msg {
 		return openChangeRequestDialogMsg{wu: wu}
 	}
+}
+
+func (v ProjectView) openLogfileDialog() (tea.Model, tea.Cmd) {
+	if len(v.treeNodes) == 0 {
+		return v, nil
+	}
+	wu := v.treeNodes[v.treeSelected].wu
+	if wu.IsProject {
+		return v, nil
+	}
+	return v, func() tea.Msg { return openLogfileDialogMsg{wu: wu} }
 }
 
 func (v ProjectView) openTerminal() (tea.Model, tea.Cmd) {
@@ -697,6 +712,7 @@ func (v ProjectView) KeyBindings() []KeyBinding {
 		{Key: "PgUp/PgDn", Description: "Page navigate / scroll"},
 		{Key: "Tab", Description: "Switch focus between tree and detail pane"},
 		{Key: "Enter", Description: "Open change request dialog (tickets only)"},
+		{Key: "L", Description: "Open logfile viewer (tickets only)"},
 		{Key: "T", Description: "Open terminal in work unit worktree"},
 		{Key: "E", Description: "Edit work unit description"},
 	}

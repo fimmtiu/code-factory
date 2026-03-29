@@ -104,6 +104,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.dialog = NewChangeRequestDialog(m.db, msg.wu, m.width, m.height)
 		return m, nil
 
+	case openLogfileDialogMsg:
+		m.dialog = NewLogfileDialog(msg.wu, m.width, m.height)
+		return m, nil
+
 	case tea.KeyMsg:
 		// If a dialog is open, route all keys to it.
 		if m.dialog != nil {

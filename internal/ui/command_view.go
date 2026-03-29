@@ -189,7 +189,9 @@ func (v CommandView) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "a", "A":
 		return v.approveTicket()
 	case "d", "D":
-		return v.debugTicket()
+		return v.debugPrompt()
+	case "l", "L":
+		return v.openLogfileDialog()
 	}
 	return v, nil
 }
@@ -497,28 +499,41 @@ func (v CommandView) renderRow(wu *models.WorkUnit, selected bool) string {
 	return line
 }
 
-func (v CommandView) debugTicket() (tea.Model, tea.Cmd) {
+func (v CommandView) debugPrompt() (tea.Model, tea.Cmd) {
 	wu := v.selectedTicket()
 	if wu == nil {
 		return v, nil
 	}
-
 	repoRoot, err := storage.FindRepoRoot(".")
 	if err != nil {
 		return v, nil
 	}
 	ticketsDir := storage.TicketsDirPath(repoRoot)
-	worktreePath := storage.TicketWorktreePathIn(ticketsDir, wu.Identifier)
-	logfilePath := worker.LatestLogfilePath(ticketsDir, wu.Identifier, string(wu.Phase))
+	logfilePath := worker.LatestLogfilePath(ticketsDir, wu.Identifier, wu.Phase)
+	return v, debugPromptCmd(wu, wu.Phase, logfilePath)
+}
 
-	template := buildDebugTemplate(wu, worktreePath, logfilePath)
+// debugPromptCmd returns a tea.Cmd that opens a pre-filled debug template in
+// the blocking editor, then launches claude on the resulting file in a new
+// iTerm2 tab. phase controls which template variant is used (the logfile
+// dialog passes the phase of the selected logfile, which may differ from the
+// ticket's current phase).
+func debugPromptCmd(wu *models.WorkUnit, phase models.TicketPhase, logfilePath string) tea.Cmd {
+	return func() tea.Msg {
+		repoRoot, err := storage.FindRepoRoot(".")
+		if err != nil {
+			return nil
+		}
+		ticketsDir := storage.TicketsDirPath(repoRoot)
+		worktreePath := storage.TicketWorktreePathIn(ticketsDir, wu.Identifier)
 
-	_, tmpPath, err := util.EditTextKeepFile(template)
-	if err != nil || strings.TrimSpace(tmpPath) == "" {
-		return v, nil
-	}
+		template := buildDebugTemplate(wu, phase, worktreePath, logfilePath)
+		_, tmpPath, err := util.EditTextKeepFile(template)
+		if err != nil || strings.TrimSpace(tmpPath) == "" {
+			return nil
+		}
 
-	script := fmt.Sprintf(`tell application "iTerm2"
+		script := fmt.Sprintf(`tell application "iTerm2"
 	tell current window
 		set myNewTab to create tab with default profile
 		tell current session of myNewTab
@@ -526,15 +541,17 @@ func (v CommandView) debugTicket() (tea.Model, tea.Cmd) {
 		end tell
 	end tell
 end tell`, tmpPath)
-	cmd := exec.Command("osascript")
-	cmd.Stdin = strings.NewReader(script)
-	_ = cmd.Start()
-
-	return v, nil
+		cmd := exec.Command("osascript")
+		cmd.Stdin = strings.NewReader(script)
+		_ = cmd.Start()
+		return nil
+	}
 }
 
-// buildDebugTemplate returns a pre-filled debug prompt for the given ticket.
-func buildDebugTemplate(wu *models.WorkUnit, worktreePath, logfilePath string) string {
+// buildDebugTemplate returns a pre-filled debug prompt for the given ticket
+// and phase. phase may differ from wu.Phase when called from the logfile
+// dialog (the selected logfile's phase is used rather than the current phase).
+func buildDebugTemplate(wu *models.WorkUnit, phase models.TicketPhase, worktreePath, logfilePath string) string {
 	type phaseInfo struct {
 		intro  string
 		adjust string
@@ -557,7 +574,7 @@ func buildDebugTemplate(wu *models.WorkUnit, worktreePath, logfilePath string) s
 			adjust: "either the skill or the ticket description",
 		},
 	}
-	pi, ok := info[wu.Phase]
+	pi, ok := info[phase]
 	if !ok {
 		pi = info[models.PhaseImplement]
 	}
@@ -571,6 +588,14 @@ func buildDebugTemplate(wu *models.WorkUnit, worktreePath, logfilePath string) s
 		pi.intro, wu.Identifier, worktreePath, wu.Description, logRef, pi.adjust)
 }
 
+func (v CommandView) openLogfileDialog() (tea.Model, tea.Cmd) {
+	wu := v.selectedTicket()
+	if wu == nil {
+		return v, nil
+	}
+	return v, func() tea.Msg { return openLogfileDialogMsg{wu: wu} }
+}
+
 // ── KeyBindings ───────────────────────────────────────────────────────────────
 
 func (v CommandView) KeyBindings() []KeyBinding {
@@ -578,6 +603,7 @@ func (v CommandView) KeyBindings() []KeyBinding {
 		{Key: "↑/↓", Description: "Navigate list"},
 		{Key: "PgUp/PgDn", Description: "Page navigate"},
 		{Key: "Enter", Description: "Open change request dialog"},
+		{Key: "L", Description: "Open logfile viewer"},
 		{Key: "R", Description: "Respond to agent (needs-attention tickets)"},
 		{Key: "T", Description: "Open terminal in worktree"},
 		{Key: "E", Description: "Open worktree in Cursor"},
