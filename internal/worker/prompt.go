@@ -36,7 +36,7 @@ func BuildPrompt(ticket *models.WorkUnit, database *db.DB, ticketsDir string) (s
 		}
 		for _, ctx := range contexts {
 			prompt += fmt.Sprintf(
-				"\n\n### Additional context from `%s`\n\n%s",
+				"\n\n### Additional context from project `%s`\n\n%s",
 				ctx.Identifier, ctx.Description,
 			)
 		}

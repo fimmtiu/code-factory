@@ -63,7 +63,7 @@ func TestBuildPrompt_ImplementWithParentContext(t *testing.T) {
 		t.Fatalf("BuildPrompt: %v", err)
 	}
 
-	if !strings.Contains(prompt, "Additional context from `proj`") {
+	if !strings.Contains(prompt, "Additional context from project `proj`") {
 		t.Error("expected parent context heading")
 	}
 	if !strings.Contains(prompt, "Parent project description") {
@@ -88,13 +88,13 @@ func TestBuildPrompt_ImplementWithNestedProjectContext(t *testing.T) {
 	}
 
 	// Both parent and grandparent contexts should appear.
-	if !strings.Contains(prompt, "Additional context from `grandparent/parent`") {
+	if !strings.Contains(prompt, "Additional context from project `grandparent/parent`") {
 		t.Error("expected direct parent context")
 	}
 	if !strings.Contains(prompt, "Mid-level project") {
 		t.Error("expected parent description")
 	}
-	if !strings.Contains(prompt, "Additional context from `grandparent`") {
+	if !strings.Contains(prompt, "Additional context from project `grandparent`") {
 		t.Error("expected grandparent context")
 	}
 	if !strings.Contains(prompt, "Top-level project") {
