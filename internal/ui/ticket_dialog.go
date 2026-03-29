@@ -333,12 +333,18 @@ func (d *TicketDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "x", "X":
 			if item := d.currentItem(); item != nil && item.kind == tdItemCR {
-				return d, d.dismissCR(item.dataIdx)
+				cr := d.changeRequests[item.dataIdx]
+				if cr.Status != models.ChangeRequestDismissed {
+					return d, d.dismissCR(item.dataIdx)
+				}
 			}
 
 		case "o", "O":
 			if item := d.currentItem(); item != nil && item.kind == tdItemCR {
-				return d, d.reopenCR(item.dataIdx)
+				cr := d.changeRequests[item.dataIdx]
+				if cr.Status != models.ChangeRequestOpen {
+					return d, d.reopenCR(item.dataIdx)
+				}
 			}
 
 		case "e", "E":
@@ -541,7 +547,7 @@ func (d *TicketDialog) View() string {
 		contentBorderStyle = focusedBorderStyle
 	}
 
-	hint := lipgloss.NewStyle().Foreground(lipgloss.Color("240")).Render(d.hintText())
+	hint := d.renderHint()
 
 	body := lipgloss.JoinVertical(lipgloss.Left,
 		title,
@@ -554,19 +560,37 @@ func (d *TicketDialog) View() string {
 	return dialogBoxStyle.Width(d.width - 2).Render(body)
 }
 
-func (d *TicketDialog) hintText() string {
+var (
+	hintActiveStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+	hintInactiveStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("250"))
+)
+
+func (d *TicketDialog) renderHint() string {
 	item := d.currentItem()
-	base := "  Tab switch  Esc close"
+	base := hintActiveStyle.Render("  Tab switch  Esc close")
 	if item == nil {
-		return "Tab switch  Esc close"
+		return hintActiveStyle.Render("Tab switch  Esc close")
 	}
 	switch item.kind {
 	case tdItemCR:
-		return "X dismiss  O reopen  E edit" + base
+		cr := d.changeRequests[item.dataIdx]
+		xStyle := hintActiveStyle
+		if cr.Status == models.ChangeRequestDismissed {
+			xStyle = hintInactiveStyle
+		}
+		oStyle := hintActiveStyle
+		if cr.Status == models.ChangeRequestOpen {
+			oStyle = hintInactiveStyle
+		}
+		return xStyle.Render("X dismiss") +
+			hintActiveStyle.Render("  ") +
+			oStyle.Render("O reopen") +
+			hintActiveStyle.Render("  E edit") +
+			base
 	case tdItemLog:
-		return "D debug prompt" + base
+		return hintActiveStyle.Render("D debug prompt") + base
 	}
-	return "Tab switch  Esc close"
+	return hintActiveStyle.Render("Tab switch  Esc close")
 }
 
 func (d *TicketDialog) renderListPane(borderStyle lipgloss.Style) string {
