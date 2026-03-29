@@ -44,7 +44,7 @@ func MockWorkFn(ctx context.Context, w *Worker, database dbInterface, logCh chan
 		if f, err := os.Create(logfilePath); err == nil {
 			logFile = f
 			defer logFile.Close()
-			fmt.Fprintf(logFile, "=== MOCK PROMPT ===\n%s\n=== MOCK OUTPUT ===\n", prompt)
+			fmt.Fprintf(logFile, "=== MOCK PROMPT ===\n%s\n\n=== MOCK OUTPUT ===\n", prompt)
 		}
 	}
 
