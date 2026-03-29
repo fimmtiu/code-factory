@@ -40,10 +40,10 @@ var (
 
 // Model is the root bubbletea model for the code-factory TUI.
 type Model struct {
-	pool     *worker.Pool
-	db       *db.DB
-	width    int
-	height   int
+	pool   *worker.Pool
+	db     *db.DB
+	width  int
+	height int
 
 	activeView ViewID
 	views      [4]viewModel
