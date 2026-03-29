@@ -179,7 +179,7 @@ func (v CommandView) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "pgdown":
 		v.moveDown(v.listHeight())
 	case "enter":
-		return v.openChangeRequestDialog()
+		return v.openTicketDialog()
 	case "r", "R":
 		return v.respondToAgent()
 	case "t", "T":
@@ -190,8 +190,6 @@ func (v CommandView) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return v.approveTicket()
 	case "d", "D":
 		return v.debugPrompt()
-	case "l", "L":
-		return v.openLogfileDialog()
 	}
 	return v, nil
 }
@@ -357,13 +355,12 @@ func (v CommandView) openEditorNonblocking() (tea.Model, tea.Cmd) {
 	return v, nil
 }
 
-func (v CommandView) openChangeRequestDialog() (tea.Model, tea.Cmd) {
+func (v CommandView) openTicketDialog() (tea.Model, tea.Cmd) {
 	wu := v.selectedTicket()
 	if wu == nil {
 		return v, nil
 	}
-	// Fetch fresh data to get change requests populated, then only open the
-	// dialog if there is at least one change request.
+	// Fetch fresh data so change requests are populated.
 	database := v.database
 	identifier := wu.Identifier
 	return v, func() tea.Msg {
@@ -372,8 +369,8 @@ func (v CommandView) openChangeRequestDialog() (tea.Model, tea.Cmd) {
 			return nil
 		}
 		for _, u := range units {
-			if u.Identifier == identifier && !u.IsProject && len(u.ChangeRequests) > 0 {
-				return openChangeRequestDialogMsg{wu: u}
+			if u.Identifier == identifier && !u.IsProject {
+				return openTicketDialogMsg{wu: u}
 			}
 		}
 		return nil
@@ -588,22 +585,13 @@ func buildDebugTemplate(wu *models.WorkUnit, phase models.TicketPhase, worktreeP
 		pi.intro, wu.Identifier, worktreePath, wu.Description, logRef, pi.adjust)
 }
 
-func (v CommandView) openLogfileDialog() (tea.Model, tea.Cmd) {
-	wu := v.selectedTicket()
-	if wu == nil {
-		return v, nil
-	}
-	return v, func() tea.Msg { return openLogfileDialogMsg{wu: wu} }
-}
-
 // ── KeyBindings ───────────────────────────────────────────────────────────────
 
 func (v CommandView) KeyBindings() []KeyBinding {
 	return []KeyBinding{
 		{Key: "↑/↓", Description: "Navigate list"},
 		{Key: "PgUp/PgDn", Description: "Page navigate"},
-		{Key: "Enter", Description: "Open change request dialog"},
-		{Key: "L", Description: "Open logfile viewer"},
+		{Key: "Enter", Description: "Open ticket dialog"},
 		{Key: "R", Description: "Respond to agent (needs-attention tickets)"},
 		{Key: "T", Description: "Open terminal in worktree"},
 		{Key: "E", Description: "Open worktree in Cursor"},

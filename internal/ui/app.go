@@ -100,12 +100,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.dialog = nil
 		return m, nil
 
-	case openChangeRequestDialogMsg:
-		m.dialog = NewChangeRequestDialog(m.db, msg.wu, m.width, m.height)
-		return m, nil
-
-	case openLogfileDialogMsg:
-		m.dialog = NewLogfileDialog(msg.wu, m.width, m.height)
+	case openTicketDialogMsg:
+		m.dialog = NewTicketDialog(m.db, msg.wu, m.width, m.height)
 		return m, nil
 
 	case tea.KeyMsg:
