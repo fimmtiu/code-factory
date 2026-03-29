@@ -15,6 +15,9 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/fimmtiu/code-factory/internal/db"
@@ -45,33 +48,6 @@ var nouns = []string{
 	"outpost", "parapet", "pinnacle", "portal", "prism", "relay", "ridge",
 	"ripple", "signal", "spire", "summit", "tempest", "threshold", "tower",
 	"vault", "vein", "vessel",
-}
-
-// fake Go source file paths for code location generation
-var fakeFilePaths = []string{
-	"cmd/server/main.go",
-	"cmd/worker/main.go",
-	"internal/auth/handler.go",
-	"internal/auth/middleware.go",
-	"internal/cache/store.go",
-	"internal/config/loader.go",
-	"internal/db/migrations.go",
-	"internal/db/queries.go",
-	"internal/export/csv.go",
-	"internal/export/json.go",
-	"internal/ingestion/parser.go",
-	"internal/ingestion/worker.go",
-	"internal/metrics/collector.go",
-	"internal/notify/dispatcher.go",
-	"internal/ratelimit/limiter.go",
-	"internal/scheduler/cron.go",
-	"internal/search/index.go",
-	"internal/session/manager.go",
-	"internal/storage/reader.go",
-	"internal/storage/writer.go",
-	"pkg/retry/backoff.go",
-	"pkg/util/slices.go",
-	"pkg/util/strings.go",
 }
 
 // fake author names for comment generation
@@ -192,13 +168,57 @@ func (p *projectNode) depIdentifier(spec ticketSpec) string {
 }
 
 type generator struct {
-	rng  *rand.Rand
-	db   *db.DB
-	used map[string]bool // prevent identifier collisions
+	rng          *rand.Rand
+	db           *db.DB
+	used         map[string]bool
+	repoRoot     string
+	sourceFiles  []string // tracked source files in the repo
+	commitHashes []string // recent commit hashes
 }
 
-func newGenerator(rng *rand.Rand, d *db.DB) *generator {
-	return &generator{rng: rng, db: d, used: map[string]bool{}}
+func newGenerator(rng *rand.Rand, d *db.DB, repoRoot string) *generator {
+	g := &generator{
+		rng:      rng,
+		db:       d,
+		used:     map[string]bool{},
+		repoRoot: repoRoot,
+	}
+	g.sourceFiles = discoverSourceFiles(repoRoot)
+	g.commitHashes = discoverCommitHashes(repoRoot)
+	return g
+}
+
+var sourceGlobs = []string{
+	"*.go", "*.rb", "*.py", "*.rs", "*.c", "*.cpp", "*.h", "*.ts", "*.js",
+}
+
+func discoverSourceFiles(repoRoot string) []string {
+	args := append([]string{"-C", repoRoot, "ls-files", "--"}, sourceGlobs...)
+	out, err := exec.Command("git", args...).Output()
+	if err != nil {
+		return nil
+	}
+	var files []string
+	for _, f := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if f != "" {
+			files = append(files, f)
+		}
+	}
+	return files
+}
+
+func discoverCommitHashes(repoRoot string) []string {
+	out, err := exec.Command("git", "-C", repoRoot, "log", "--format=%H", "-n", "100").Output()
+	if err != nil {
+		return nil
+	}
+	var hashes []string
+	for _, h := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if h != "" {
+			hashes = append(hashes, h)
+		}
+	}
+	return hashes
 }
 
 func (g *generator) slug() string {
@@ -382,20 +402,40 @@ func (g *generator) writeTickets(p *projectNode) error {
 	return nil
 }
 
-// fakeCommitHash returns a short fake commit hash using the generator's rng.
-func (g *generator) fakeCommitHash() string {
-	b := make([]byte, 4)
+// commitHash returns a real commit hash from the repo's recent history.
+func (g *generator) commitHash() string {
+	if len(g.commitHashes) > 0 {
+		return g.commitHashes[g.rng.Intn(len(g.commitHashes))]
+	}
+	// Fallback: generate a plausible-looking fake hash.
+	b := make([]byte, 20)
 	for i := range b {
 		b[i] = byte(g.rng.Intn(256))
 	}
 	return fmt.Sprintf("%x", b)
 }
 
-// codeLocation returns a random "file:line" string.
+// codeLocation returns a "file:line" string referencing a real tracked file
+// and a line number within that file's actual length.
 func (g *generator) codeLocation() string {
-	file := fakeFilePaths[g.rng.Intn(len(fakeFilePaths))]
-	line := 1 + g.rng.Intn(300)
-	return fmt.Sprintf("%s:%d", file, line)
+	if len(g.sourceFiles) == 0 {
+		return fmt.Sprintf("internal/unknown.go:%d", 1+g.rng.Intn(100))
+	}
+	file := g.sourceFiles[g.rng.Intn(len(g.sourceFiles))]
+	lineCount := g.fileLineCount(filepath.Join(g.repoRoot, file))
+	if lineCount < 1 {
+		lineCount = 1
+	}
+	return fmt.Sprintf("%s:%d", file, 1+g.rng.Intn(lineCount))
+}
+
+// fileLineCount returns the number of lines in path.
+func (g *generator) fileLineCount(path string) int {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return 0
+	}
+	return strings.Count(string(data), "\n") + 1
 }
 
 // generateChangeRequests returns a random set of change requests for a ticket,
@@ -425,7 +465,7 @@ func (g *generator) generateChangeRequests() []models.ChangeRequest {
 		}
 
 		crs[i] = models.ChangeRequest{
-			CommitHash:   g.fakeCommitHash(),
+			CommitHash:   g.commitHash(),
 			CodeLocation: loc,
 			Status:       status,
 			Author:       fakeAuthors[g.rng.Intn(len(fakeAuthors))],
@@ -506,7 +546,7 @@ func run(seed int64, target string, reset bool) error {
 	}
 	defer d.Close()
 
-	gen := newGenerator(rand.New(rand.NewSource(seed)), d)
+	gen := newGenerator(rand.New(rand.NewSource(seed)), d, repoRoot)
 	roots := gen.buildTree()
 
 	if err := gen.write(roots); err != nil {
