@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -301,14 +302,23 @@ func (v CommandView) selectedTicket() *models.WorkUnit {
 	return row.wu
 }
 
+const responseTemplateSep = "=== YOUR RESPONSE ==="
+
 func (v CommandView) respondToAgent() (tea.Model, tea.Cmd) {
 	wu := v.selectedTicket()
 	if wu == nil || wu.Status != models.StatusNeedsAttention {
 		return v, nil
 	}
 
-	response, err := util.EditText("")
-	if err != nil || strings.TrimSpace(response) == "" {
+	template := v.buildResponseTemplate(wu)
+	raw, err := util.EditText(template)
+	if err != nil {
+		return v, nil
+	}
+
+	// Extract only the text the user wrote below the separator.
+	response := extractResponseText(raw)
+	if strings.TrimSpace(response) == "" {
 		return v, nil
 	}
 
@@ -327,6 +337,43 @@ func (v CommandView) respondToAgent() (tea.Model, tea.Cmd) {
 	}
 
 	return v, v.fetchCmd()
+}
+
+// buildResponseTemplate creates the pre-filled editor content for R, showing
+// the last 30 lines of the ticket's most recent logfile above the separator.
+func (v CommandView) buildResponseTemplate(wu *models.WorkUnit) string {
+	agentOutput := "(no logfile found)"
+	if repoRoot, err := storage.FindRepoRoot("."); err == nil {
+		ticketsDir := storage.TicketsDirPath(repoRoot)
+		if logPath := worker.LatestLogfilePath(ticketsDir, wu.Identifier, wu.Phase); logPath != "" {
+			agentOutput = lastNLines(logPath, 30)
+		}
+	}
+	return "=== AGENT OUTPUT ===\n" + agentOutput + "\n\n" + responseTemplateSep + "\n\n"
+}
+
+// lastNLines reads path and returns the last n lines joined by newlines.
+func lastNLines(path string, n int) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	lines := strings.Split(strings.TrimRight(string(data), "\n"), "\n")
+	if len(lines) > n {
+		lines = lines[len(lines)-n:]
+	}
+	return strings.Join(lines, "\n")
+}
+
+// extractResponseText returns only the text below responseTemplateSep,
+// stripping the template header the user was not meant to edit.
+func extractResponseText(raw string) string {
+	idx := strings.Index(raw, responseTemplateSep)
+	if idx < 0 {
+		return raw // separator missing; send the whole content
+	}
+	after := raw[idx+len(responseTemplateSep):]
+	return strings.TrimLeft(after, "\n")
 }
 
 func (v CommandView) openTerminal() (tea.Model, tea.Cmd) {
