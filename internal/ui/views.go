@@ -7,7 +7,7 @@ import (
 
 // viewPaneStyle is the blue single-line border applied to Command, Worker, and Log views.
 var viewPaneStyle = lipgloss.NewStyle().
-	Border(lipgloss.NormalBorder()).
+	Border(lipgloss.RoundedBorder()).
 	BorderForeground(lipgloss.Color("12")) // blue
 
 // viewBorderOverhead is the number of rows (and columns) consumed by viewPaneStyle.
