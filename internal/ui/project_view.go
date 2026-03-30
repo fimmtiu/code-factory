@@ -45,18 +45,18 @@ var (
 
 	unfocusedBorderStyle = lipgloss.NewStyle().
 				Border(lipgloss.NormalBorder()).
-				BorderForeground(lipgloss.Color("240")) // grey
+				BorderForeground(colourMuted) // grey
 
 	// Status pane always unfocused
 	statusPaneStyle = unfocusedBorderStyle
 
 	// Tree item styles
-	treeBlockedStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+	treeBlockedStyle  = lipgloss.NewStyle().Foreground(colourMuted)
 	treeDoneStyle     = lipgloss.NewStyle().Underline(true)
 	treeDefaultStyle  = lipgloss.NewStyle()
 	treeSelectedStyle = lipgloss.NewStyle().
-				Background(lipgloss.Color("62")).
-				Foreground(lipgloss.Color("230"))
+				Background(colourPrimary).
+				Foreground(colourOnPrimary)
 
 	// Phase badge styles (keyed by phase string)
 	phaseBadgeStyles = map[string]lipgloss.Style{
@@ -72,7 +72,7 @@ var (
 	detailLabelStyle = lipgloss.NewStyle().Bold(true)
 
 	// Progress bar segment styles
-	progressFilledStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("28"))
+	progressFilledStyle = lipgloss.NewStyle().Foreground(colourSuccess)
 	progressEmptyStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("238"))
 )
 

@@ -16,10 +16,10 @@ import (
 var (
 	workerStatusStyle = lipgloss.NewStyle().Bold(true)
 
-	workerIdleStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("240")).Inherit(workerStatusStyle) // grey
-	workerAwaitingStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Inherit(workerStatusStyle)   // red
-	workerBusyStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("22")).Inherit(workerStatusStyle)  // dark green
-	workerPausedStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("3")).Inherit(workerStatusStyle)   // yellow
+	workerIdleStyle     = lipgloss.NewStyle().Foreground(colourMuted).Inherit(workerStatusStyle)          // grey
+	workerAwaitingStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Inherit(workerStatusStyle)  // red
+	workerBusyStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("22")).Inherit(workerStatusStyle) // dark green
+	workerPausedStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("3")).Inherit(workerStatusStyle)  // yellow
 
 	workerOutputStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("245")) // dim grey for output lines

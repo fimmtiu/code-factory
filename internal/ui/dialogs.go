@@ -17,12 +17,12 @@ type dialog interface {
 var (
 	dialogBoxStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("62")).
+			BorderForeground(colourPrimary).
 			Padding(1, 2)
 
 	dialogTitleStyle = lipgloss.NewStyle().
 				Bold(true).
-				Foreground(lipgloss.Color("230")).
+				Foreground(colourOnPrimary).
 				MarginBottom(1)
 
 	buttonBaseStyle = lipgloss.NewStyle().Padding(0, 2)
@@ -33,8 +33,8 @@ var (
 				Inherit(buttonBaseStyle)
 
 	buttonFocusedStyle = lipgloss.NewStyle().
-				Background(lipgloss.Color("62")).
-				Foreground(lipgloss.Color("230")).
+				Background(colourPrimary).
+				Foreground(colourOnPrimary).
 				Inherit(buttonBaseStyle)
 )
 

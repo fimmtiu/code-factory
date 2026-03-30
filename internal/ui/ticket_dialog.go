@@ -101,8 +101,8 @@ func (it tdItem) selectable() bool {
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 var (
-	tdSelectedStyle  = lipgloss.NewStyle().Background(lipgloss.Color("62")).Foreground(lipgloss.Color("230"))
-	tdDismissedStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+	tdSelectedStyle  = lipgloss.NewStyle().Background(colourPrimary).Foreground(colourOnPrimary)
+	tdDismissedStyle = lipgloss.NewStyle().Foreground(colourMuted)
 	tdClosedStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("22"))
 	tdSectionStyle   = lipgloss.NewStyle().Bold(true)
 )
@@ -564,7 +564,7 @@ func (d *TicketDialog) View() string {
 }
 
 var (
-	hintActiveStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+	hintActiveStyle   = lipgloss.NewStyle().Foreground(colourMuted)
 	hintInactiveStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("250"))
 )
 

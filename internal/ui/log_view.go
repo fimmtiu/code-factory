@@ -17,8 +17,8 @@ import (
 
 var (
 	logSelectedStyle = lipgloss.NewStyle().
-				Background(lipgloss.Color("62")).
-				Foreground(lipgloss.Color("230"))
+				Background(colourPrimary).
+				Foreground(colourOnPrimary)
 
 	logWorkerStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("33"))
@@ -26,7 +26,7 @@ var (
 	logMessageStyle = lipgloss.NewStyle()
 
 	logFileIndicatorStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("214")) // orange — indicates logfile is present
+				Foreground(colourWarning) // orange — indicates logfile is present
 )
 
 // logTimestampStyle returns a style that fades the timestamp colour based on

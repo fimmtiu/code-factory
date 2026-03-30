@@ -23,11 +23,11 @@ import (
 
 var (
 	cmdSelectedStyle = lipgloss.NewStyle().
-				Background(lipgloss.Color("62")).
-				Foreground(lipgloss.Color("230"))
+				Background(colourPrimary).
+				Foreground(colourOnPrimary)
 
 	cmdNeedsAttentionStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("214")) // orange
+				Foreground(colourWarning) // orange
 
 	cmdUserReviewStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("22")) // dark green
@@ -466,7 +466,7 @@ func (v CommandView) listHeight() int {
 
 // ── View ──────────────────────────────────────────────────────────────────────
 
-var cmdErrorStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("196")) // bright red
+var cmdErrorStyle = lipgloss.NewStyle().Foreground(colourDanger) // bright red
 
 func (v CommandView) View() string {
 	var sb strings.Builder

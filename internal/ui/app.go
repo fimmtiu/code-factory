@@ -23,16 +23,16 @@ var (
 			Padding(0, 1)
 
 	activeTabStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("230")).
-			Background(lipgloss.Color("62")).
+			Foreground(colourOnPrimary).
+			Background(colourPrimary).
 			Inherit(tabBaseStyle)
 
 	inactiveTabStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("67")).
+				Foreground(colourAccent).
 				Inherit(tabBaseStyle)
 
 	helpHintStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("240")).
+			Foreground(colourMuted).
 			Padding(0, 1)
 )
 
