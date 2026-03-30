@@ -3,6 +3,6 @@
 tmp/
 design.md
 
-code-factory
-tickets
-cf-testdata
+/code-factory
+/tickets
+/cf-testdata

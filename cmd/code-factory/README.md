@@ -1,0 +1,64 @@
+# code-factory
+
+A terminal UI application that manages a pool of Claude Code agents to automatically work through the tickets in a repository's `.tickets/` directory. Workers claim tickets, run the appropriate agent prompt for each phase, and advance tickets through the implement → refactor → review → respond → done pipeline.
+
+## Prerequisites
+
+- Run `tickets init` in the repository first to create `.tickets/`.
+- Set `editor` in `.tickets/settings.json` to `"cursor"` or `"vscode"` (default: `"cursor"`).
+
+## Usage
+
+```
+code-factory [-p <pool>] [-w <wait>] [--mock]
+```
+
+Must be run from inside a git repository containing a `.tickets/` directory.
+
+### Options
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-p`, `--pool` | `4` | Number of parallel agent workers |
+| `-w`, `--wait` | `5` | Seconds between polls for available tickets |
+| `--mock` | off | Use fake workers instead of real Claude subprocesses (useful for UI testing) |
+
+## Views
+
+The TUI has four views, switched with F1–F4 or Shift-Tab / Ctrl-Tab:
+
+| Key | View | Description |
+|-----|------|-------------|
+| F1 | Projects | Hierarchical tree of all projects and tickets with a status pane and detail pane |
+| F2 | Commands | Actionable tickets (`needs-attention` and `user-review`), with controls to respond, approve, and debug |
+| F3 | Workers | Real-time view of each worker's status and recent agent output |
+| F4 | Log | Timestamped log of all worker actions, with access to raw logfiles |
+
+## Key bindings (Commands view)
+
+| Key | Action |
+|-----|--------|
+| R | Respond to an agent's question (pre-fills a template with recent output) |
+| A | Approve a `user-review` ticket (advances it to the next phase) |
+| D | Open a debug prompt template in the editor and launch `claude` on it |
+| E | Open the ticket's worktree in the configured non-blocking editor |
+| T | Open a terminal window in the ticket's worktree |
+| Enter | Open the ticket dialog (change requests and logfiles) |
+
+## Worker lifecycle
+
+Each worker continuously:
+1. Claims the next available `idle` ticket from the database.
+2. Sets the ticket to `in-progress` and runs the phase-appropriate agent prompt via Claude Code ACP.
+3. On completion, sets the ticket to `user-review` and releases it.
+4. Waits for the user to approve via `A` before advancing to the next phase.
+
+If an agent asks a question or requests a permission, the ticket becomes `needs-attention` and the worker pauses until the user responds with `R`.
+
+## Configuration
+
+Settings are read from `.tickets/settings.json` at startup. An unknown `editor` value causes an immediate exit with a clear error message. See `internal/config` for all available settings.
+
+## Logfiles
+
+Each agent run produces a logfile at `.tickets/<identifier>/<phase>.log`. Multiple runs produce `.log.1`, `.log.2`, etc. Logfiles include the session ID (for `--resume`), the full prompt, and all agent output.
