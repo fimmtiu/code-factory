@@ -10,6 +10,12 @@ var viewPaneStyle = lipgloss.NewStyle().
 	Border(lipgloss.RoundedBorder()).
 	BorderForeground(lipgloss.Color("12")) // blue
 
+// emptyStateStyle is applied to placeholder messages such as "No actionable tickets"
+// so they read as secondary/hint text rather than content.
+var emptyStateStyle = lipgloss.NewStyle().
+	Foreground(lipgloss.Color("242")).
+	Italic(true)
+
 // viewBorderOverhead is the number of rows (and columns) consumed by viewPaneStyle.
 const viewBorderOverhead = 2
 

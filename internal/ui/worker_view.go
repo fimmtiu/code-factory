@@ -170,7 +170,7 @@ func (v WorkerView) totalLines() int {
 
 func (v WorkerView) View() string {
 	if v.pool == nil || len(v.pool.Workers) == 0 {
-		return viewPaneStyle.Width(v.width - viewBorderOverhead).Height(v.viewHeight()).Render("(no workers)")
+		return viewPaneStyle.Width(v.width - viewBorderOverhead).Height(v.viewHeight()).Render(emptyStateStyle.Render("(no workers)"))
 	}
 
 	// Build all lines for all workers.

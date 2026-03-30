@@ -478,7 +478,7 @@ func (v CommandView) View() string {
 
 	if len(v.rows) == 0 {
 		return viewPaneStyle.Width(v.width - viewBorderOverhead).Height(v.listHeight()).
-			Render(lipgloss.Place(v.width-viewBorderOverhead, v.listHeight(), lipgloss.Center, lipgloss.Center, "No actionable tickets"))
+			Render(lipgloss.Place(v.width-viewBorderOverhead, v.listHeight(), lipgloss.Center, lipgloss.Center, emptyStateStyle.Render("No actionable tickets")))
 	}
 
 	h := v.listHeight()

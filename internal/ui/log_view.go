@@ -283,7 +283,7 @@ func (v LogView) View() string {
 
 	if len(v.entries) == 0 {
 		return viewPaneStyle.Width(paneW).Height(v.listHeight()).
-			Render(lipgloss.Place(paneW, v.listHeight(), lipgloss.Center, lipgloss.Center, "No log entries"))
+			Render(lipgloss.Place(paneW, v.listHeight(), lipgloss.Center, lipgloss.Center, emptyStateStyle.Render("No log entries")))
 	}
 
 	h := v.listHeight()
