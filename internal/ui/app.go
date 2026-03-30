@@ -28,7 +28,7 @@ var (
 			Inherit(tabBaseStyle)
 
 	inactiveTabStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("245")).
+				Foreground(lipgloss.Color("67")).
 				Inherit(tabBaseStyle)
 
 	helpHintStyle = lipgloss.NewStyle().
