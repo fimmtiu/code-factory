@@ -310,23 +310,28 @@ func (v CommandView) respondToAgent() (tea.Model, tea.Cmd) {
 	}
 
 	template := v.buildResponseTemplate(wu)
-	raw, err := util.EditTextAtLine(template, responseSeparatorLine(template))
+	// Use EditText (plain cursor --wait) rather than EditTextAtLine because
+	// cursor --wait --goto does not reliably block when a window is already open.
+	raw, err := util.EditText(template)
 	if err != nil {
+		v.errorMsg = fmt.Sprintf("editor error: %s", err)
 		return v, nil
 	}
 
 	// Extract only the text the user wrote below the separator.
-	response := extractResponseText(raw)
-	if strings.TrimSpace(response) == "" {
+	response := strings.TrimSpace(extractResponseText(raw))
+	if response == "" {
 		return v, nil
 	}
 
 	workerNum, err := strconv.Atoi(wu.ClaimedBy)
 	if err != nil {
+		v.errorMsg = fmt.Sprintf("response error: invalid worker number %q", wu.ClaimedBy)
 		return v, nil
 	}
 	w := v.pool.GetWorker(workerNum)
 	if w == nil {
+		v.errorMsg = fmt.Sprintf("response error: worker %d not found", workerNum)
 		return v, nil
 	}
 
@@ -334,6 +339,10 @@ func (v CommandView) respondToAgent() (tea.Model, tea.Cmd) {
 		Kind:    worker.MsgResponse,
 		Payload: response,
 	}
+
+	// Immediately reflect the resumed state so the UI doesn't lag behind.
+	w.Status = worker.StatusBusy
+	_ = v.database.SetStatus(wu.Identifier, wu.Phase, models.StatusInProgress)
 
 	return v, v.fetchCmd()
 }
@@ -357,7 +366,16 @@ func lastNLines(path string, n int) string {
 	if err != nil {
 		return ""
 	}
-	lines := strings.Split(strings.TrimRight(string(data), "\n"), "\n")
+	content := strings.TrimRight(string(data), "\n")
+
+	// Only consider lines below the "=== OUTPUT ===" marker so the prompt
+	// text is never included in the response template.
+	const outputMarker = "=== OUTPUT ==="
+	if idx := strings.Index(content, outputMarker); idx >= 0 {
+		content = strings.TrimLeft(content[idx+len(outputMarker):], "\n")
+	}
+
+	lines := strings.Split(content, "\n")
 	if len(lines) > n {
 		lines = lines[len(lines)-n:]
 	}
