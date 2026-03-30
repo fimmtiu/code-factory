@@ -58,6 +58,16 @@ var (
 				Background(lipgloss.Color("62")).
 				Foreground(lipgloss.Color("230"))
 
+	// Phase badge styles (keyed by phase string)
+	phaseBadgeStyles = map[string]lipgloss.Style{
+		models.PhaseImplement: lipgloss.NewStyle().Foreground(lipgloss.Color("37")),
+		models.PhaseRefactor:  lipgloss.NewStyle().Foreground(lipgloss.Color("214")),
+		models.PhaseReview:    lipgloss.NewStyle().Foreground(lipgloss.Color("69")),
+		models.PhaseRespond:   lipgloss.NewStyle().Foreground(lipgloss.Color("135")),
+		models.PhaseBlocked:   lipgloss.NewStyle().Foreground(lipgloss.Color("124")),
+		models.PhaseDone:      lipgloss.NewStyle().Foreground(lipgloss.Color("28")),
+	}
+
 	// Detail pane label
 	detailLabelStyle = lipgloss.NewStyle().Bold(true)
 )
@@ -568,18 +578,41 @@ func (v ProjectView) renderTreeContent() string {
 		isLast := node.wu.IsProject || i+1 >= total || v.treeNodes[i+1].depth < node.depth
 		label := treeLabel(node, isLast)
 
-		if lipgloss.Width(label) > w {
-			runes := []rune(label)
-			if w > 1 {
-				label = string(runes[:w-1]) + "…"
+		// Build phase badge for tickets only.
+		badge := ""
+		styledBadge := ""
+		if !node.wu.IsProject {
+			badge = "[" + node.wu.Phase + "]"
+			if bs, ok := phaseBadgeStyles[node.wu.Phase]; ok {
+				styledBadge = bs.Render(badge)
 			} else {
-				label = string(runes[:w])
+				styledBadge = badge
+			}
+		}
+
+		// Determine available width for the identifier portion.
+		badgeWidth := lipgloss.Width(badge) // plain badge width (no ANSI)
+		identW := w
+		if badge != "" {
+			identW = w - badgeWidth - 1 // 1 space separator
+			if identW < 1 {
+				identW = 1
+			}
+		}
+
+		// Truncate label to fit identifier width.
+		if lipgloss.Width(label) > identW {
+			runes := []rune(label)
+			if identW > 1 {
+				label = string(runes[:identW-1]) + "…"
+			} else {
+				label = string(runes[:identW])
 			}
 		}
 
 		var baseStyle lipgloss.Style
 		if i == v.treeSelected {
-			baseStyle = treeSelectedStyle.Width(w)
+			baseStyle = treeSelectedStyle
 		} else if node.wu.Phase == models.PhaseBlocked {
 			baseStyle = treeBlockedStyle
 		} else if node.wu.Phase == models.PhaseDone || (node.wu.IsProject && node.wu.Phase == models.ProjectPhaseDone) {
@@ -590,9 +623,29 @@ func (v ProjectView) renderTreeContent() string {
 		if node.wu.IsProject {
 			baseStyle = baseStyle.Bold(true)
 		}
-		styled := baseStyle.Render(label)
 
-		sb.WriteString(styled)
+		var row string
+		if badge == "" {
+			// Project row: render full-width as before.
+			row = baseStyle.Width(w).Render(label)
+		} else {
+			// Ticket row: render identifier portion, pad to fill, append badge.
+			styledLabel := baseStyle.Render(label)
+			labelRenderedW := lipgloss.Width(styledLabel)
+			// Padding fills the gap between rendered label and badge.
+			padLen := w - labelRenderedW - badgeWidth
+			if padLen < 1 {
+				padLen = 1
+			}
+			pad := strings.Repeat(" ", padLen)
+			if i == v.treeSelected {
+				// For selected rows, colour the padding with the selection background.
+				pad = treeSelectedStyle.Render(pad)
+			}
+			row = styledLabel + pad + styledBadge
+		}
+
+		sb.WriteString(row)
 		if i < end-1 {
 			sb.WriteString("\n")
 		}
