@@ -509,13 +509,31 @@ func (v CommandView) View() string {
 //
 // The identifier expands to fill available width; status and time are
 // right-aligned.
-func (v CommandView) renderRow(wu *models.WorkUnit, selected bool) string {
-	// Right-hand side: "  <status>  <N>m"
-	mins := int(time.Since(wu.LastUpdated).Minutes())
-	if mins < 0 {
-		mins = 0
+// formatAge converts a duration into a human-readable age string such as
+// "just now", "45m ago", "3h 20m ago", or "1d 13h 20m ago".
+func formatAge(d time.Duration) string {
+	if d < 0 {
+		d = 0
 	}
-	right := fmt.Sprintf("  %-15s  %4dm ago", wu.Status, mins)
+	if d < time.Minute {
+		return "just now"
+	}
+	days := int(d.Hours()) / 24
+	hours := int(d.Hours()) % 24
+	mins := int(d.Minutes()) % 60
+	if days > 0 {
+		return fmt.Sprintf("%dd %dh ago", days, hours)
+	}
+	if hours > 0 {
+		return fmt.Sprintf("%dh %dm ago", hours, mins)
+	}
+	return fmt.Sprintf("%dm ago", mins)
+}
+
+func (v CommandView) renderRow(wu *models.WorkUnit, selected bool) string {
+	age := formatAge(time.Since(wu.LastUpdated))
+	// Fixed-width right column: 2 + 15 (status) + 2 + 12 (age) = 34 chars.
+	right := fmt.Sprintf("  %-15s  %12s", wu.Status, age)
 
 	// Available width for identifier (subtract border overhead).
 	availW := v.width - viewBorderOverhead - lipgloss.Width(right)

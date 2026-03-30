@@ -4,4 +4,8 @@ TO DO
 
 - Ephemeral pop-ups that show current view name when you switch, and tell you when you copy stuff &c.
 
-- Make the editor use `--goto` to start at the bottom of response buffers
+- Reponse command didn't seem to do anything?
+
+- Response command shouldn't do all last 30 lines; only the last 30 lines of the `=== OUTPUT ===` section. Don't include the prompt.
+
+- Ensure that response ends up in logfile.
