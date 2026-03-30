@@ -19,9 +19,9 @@ Each ticket moves through four phases before it is done:
 | Phase | What the agent does |
 |-------|-------------------|
 | `implement` | Writes specs first, then implements the ticket |
-| `refactor` | Runs the `/cf-refactor` skill to clean up the implementation |
-| `review` | Runs the `/cf-review` skill to review the changes |
-| `respond` | Runs the `/cf-respond` skill to apply any change requests |
+| `refactor` | Refactors and cleans up the resulting code |
+| `review` | Reviews the refactored changes and makes change requests |
+| `respond` | Applies any open change requests |
 
 You approve each phase transition. When all phases are done, the ticket's branch is merged into its parent project's worktree (or the repo's default branch) and the worktree is removed.
 
@@ -64,7 +64,7 @@ Supported editors: `cursor`, `vscode`.
 
 ### Create some work
 
-Write a specification, then run the `/cf-project` skill on it to decompose it into projects, subprojects, and tickets.
+Write a specification, then run the `/cf-project` skill on it to decompose it into projects, subprojects, and tickets. (This is temporary; eventually we'll want to fold a more powerful project-decomposer into code-factory itself.)
 
 ### Start the agent manager
 
@@ -78,12 +78,22 @@ Workers will immediately start claiming and working on idle tickets. See `cmd/co
 
 ## Terminal UI
 
-The TUI has four views (switch with F1–F4):
+The TUI has four views (switch with F1–F4 or Shift+Tab):
 
-- **F1 Projects** — Hierarchical tree of all work units, with a status pane and detail view. Press Enter on a ticket to see its change requests and logfiles.
-- **F2 Commands** — Actionable tickets waiting for your input (`needs-attention`) or review (`user-review`). Press A to approve, R to respond to an agent question, D to open a debug prompt.
-- **F3 Workers** — Live view of each agent worker: status, current output, and activity.
-- **F4 Log** — Timestamped history of all worker actions with access to raw agent logfiles.
+- **F1: Projects** — Hierarchical tree of all work units, with a status pane and detail view. Press Enter on a ticket to see its change requests and logfiles.
+- **F2: Commands** — Actionable tickets waiting for your input (`needs-attention`) or review (`user-review`). Press A to approve, R to respond to an agent question, D to open a debug prompt.
+- **F3: Workers** — Live view of each agent worker: status, current output, and activity.
+- **F4: Log** — Timestamped history of all worker actions with access to raw agent logfiles.
+
+Here are some screenshots, though the terminal UI is in flux and these will be out of date quickly. (Note that the tickets and comments are all randomly generated placeholders from the `cf-testdata` program and are not expected to make sense.)
+
+| Projects view | Agent logs | Change requests |
+|    :---:      |     :---:  |    :---:        |
+| ![Screenshot of projects view](img/projects_view.png) | ![Screenshot of agent logs dialog](img/agent_logs.png)  | ![Screenshot of change requests dialog](img/change_requests.png) |
+
+| Commands view | Workers view | Log view |
+|    :---:      |     :---:  |    :---:        |
+| ![Screenshot of commands view](img/commands_view.png) | ![Screenshot of workers view](img/workers_view.png)  | ![Screenshot of log view](img/log_view.png) |
 
 ---
 
