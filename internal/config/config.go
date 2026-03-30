@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	defaultEditor             = "cursor"
+	defaultEditor              = "cursor"
 	defaultOpenTerminalCommand = "open -a iTerm ."
 )
 
