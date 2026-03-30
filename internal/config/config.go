@@ -26,10 +26,6 @@ type Settings struct {
 	// ticket is abandoned. Defaults to 30.
 	StaleThresholdMinutes int `json:"stale_threshold_minutes"`
 
-	// ExitAfterMinutes is how many minutes a daemon will sit idle before
-	// exiting. Defaults to 60.
-	ExitAfterMinutes int `json:"exit_after_minutes"`
-
 	// Editor is the name of the editor to use. Supported values: "cursor",
 	// "vscode". Defaults to "cursor".
 	Editor string `json:"editor"`
@@ -49,7 +45,6 @@ func Path(ticketsDir string) string {
 func Default() *Settings {
 	return &Settings{
 		StaleThresholdMinutes: 30,
-		ExitAfterMinutes:      60,
 		Editor:                defaultEditor,
 		OpenTerminalCommand:   defaultOpenTerminalCommand,
 	}

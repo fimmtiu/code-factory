@@ -106,7 +106,7 @@ func TestInitTicketsDir_Idempotent(t *testing.T) {
 		t.Fatalf("first call: %v", err)
 	}
 	settingsPath := config.Path(storage.TicketsDirPath(root))
-	custom := []byte(`{"stale_threshold_minutes":99,"exit_after_minutes":120}`)
+	custom := []byte(`{"stale_threshold_minutes":99}`)
 	if err := os.WriteFile(settingsPath, custom, 0644); err != nil {
 		t.Fatalf("failed to write custom settings: %v", err)
 	}
