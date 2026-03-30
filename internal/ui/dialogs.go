@@ -22,7 +22,9 @@ var (
 
 	dialogTitleStyle = lipgloss.NewStyle().
 				Bold(true).
+				Background(colourPrimary).
 				Foreground(colourOnPrimary).
+				Padding(0, 1).
 				MarginBottom(1)
 
 	buttonBaseStyle = lipgloss.NewStyle().Padding(0, 2)
