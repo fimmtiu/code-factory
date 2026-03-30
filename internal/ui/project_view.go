@@ -70,6 +70,10 @@ var (
 
 	// Detail pane label
 	detailLabelStyle = lipgloss.NewStyle().Bold(true)
+
+	// Progress bar segment styles
+	progressFilledStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("28"))
+	progressEmptyStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("238"))
 )
 
 // Fixed width of the status pane (including border)
@@ -544,6 +548,20 @@ func (v ProjectView) View() string {
 // repoNameStyle renders the repository name bold and underlined.
 var repoNameStyle = lipgloss.NewStyle().Bold(true).Underline(true)
 
+// renderProgressBar returns a 10-cell Unicode block progress bar with coloured
+// segments followed by the percentage value, e.g. "████░░░░░░ 40%".
+func renderProgressBar(pct int) string {
+	const barWidth = 10
+	filled := pct * barWidth / 100
+	if filled > barWidth {
+		filled = barWidth
+	}
+	empty := barWidth - filled
+	bar := progressFilledStyle.Render(strings.Repeat("█", filled)) +
+		progressEmptyStyle.Render(strings.Repeat("░", empty))
+	return fmt.Sprintf("%s %d%%", bar, pct)
+}
+
 // renderStatusContent returns the text content for the status pane.
 func (v ProjectView) renderStatusContent() string {
 	total := v.stats.Total
@@ -553,7 +571,7 @@ func (v ProjectView) renderStatusContent() string {
 	if total > 0 {
 		pct = done * 100 / total
 	}
-	stats := fmt.Sprintf("Tickets: %d\nOpen:    %d\nDone:    %d%%", total, open, pct)
+	stats := fmt.Sprintf("Tickets: %d\nOpen:    %d\n", total, open) + renderProgressBar(pct)
 	return repoNameStyle.Render(v.repoName) + "\n\n" + stats
 }
 
