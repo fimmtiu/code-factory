@@ -9,22 +9,25 @@ import (
 )
 
 func init() {
-	// Provide a minimal config.Current so util functions can read it.
 	config.Current = config.Default()
+	// Register lightweight test profiles that don't require real editors.
+	util.EditorProfiles["test-noop"] = util.EditorProfile{Blocking: "true", Nonblocking: "true"}
+	util.EditorProfiles["test-sh"] = util.EditorProfile{Blocking: "sh -c true", Nonblocking: "sh"}
 }
 
 func TestEditText_NoCommand(t *testing.T) {
-	config.Current.BlockingEditorCommand = ""
-	defer func() { config.Current.BlockingEditorCommand = "true" }()
+	// An unknown editor name produces an empty command → error.
+	config.Current.Editor = "unknown-editor-that-does-not-exist"
+	defer func() { config.Current.Editor = "test-noop" }()
 
 	_, err := util.EditText("some content")
 	if err == nil {
-		t.Fatal("expected error when command is empty, got nil")
+		t.Fatal("expected error when editor is unconfigured, got nil")
 	}
 }
 
 func TestEditText_HappyPath_CatPreservesContent(t *testing.T) {
-	config.Current.BlockingEditorCommand = "true"
+	config.Current.Editor = "test-noop"
 	content := "hello, world!"
 	result, err := util.EditText(content)
 	if err != nil {
@@ -36,7 +39,7 @@ func TestEditText_HappyPath_CatPreservesContent(t *testing.T) {
 }
 
 func TestEditText_WithEditorArguments(t *testing.T) {
-	config.Current.BlockingEditorCommand = "sh -c true"
+	config.Current.Editor = "test-sh"
 	_, err := util.EditText("test content")
 	if err != nil {
 		t.Fatalf("EditText with args: %v", err)
@@ -44,7 +47,7 @@ func TestEditText_WithEditorArguments(t *testing.T) {
 }
 
 func TestEditText_TempFileDeletedAfterSuccess(t *testing.T) {
-	config.Current.BlockingEditorCommand = "true"
+	config.Current.Editor = "test-noop"
 	tmpDir := os.TempDir()
 	beforeEntries, _ := os.ReadDir(tmpDir)
 

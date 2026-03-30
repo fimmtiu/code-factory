@@ -10,9 +10,8 @@ import (
 )
 
 const (
-	defaultBlockingEditorCommand    = "cursor --wait"
-	defaultNonblockingEditorCommand = "cursor"
-	defaultOpenTerminalCommand      = "open -a iTerm ."
+	defaultEditor             = "cursor"
+	defaultOpenTerminalCommand = "open -a iTerm ."
 )
 
 // Current holds the active settings for the running process. It is set once
@@ -31,15 +30,9 @@ type Settings struct {
 	// exiting. Defaults to 60.
 	ExitAfterMinutes int `json:"exit_after_minutes"`
 
-	// BlockingEditorCommand is the command used to open an editor that blocks
-	// until the user closes it (e.g. for composing responses). Defaults to the
-	// value of $EDITOR, or "cursor --wait" if $EDITOR is not set.
-	BlockingEditorCommand string `json:"blocking_editor_command"`
-
-	// NonblockingEditorCommand is the command used to open an editor in the
-	// background without waiting (e.g. to browse a worktree). Defaults to
-	// "cursor".
-	NonblockingEditorCommand string `json:"nonblocking_editor_command"`
+	// Editor is the name of the editor to use. Supported values: "cursor",
+	// "vscode". Defaults to "cursor".
+	Editor string `json:"editor"`
 
 	// OpenTerminalCommand is the command used to open a terminal window in a
 	// given directory. It is run with the working directory set to the target
@@ -54,16 +47,11 @@ func Path(ticketsDir string) string {
 
 // Default returns a Settings struct populated with default values.
 func Default() *Settings {
-	blockingEditor := os.Getenv("EDITOR")
-	if blockingEditor == "" {
-		blockingEditor = defaultBlockingEditorCommand
-	}
 	return &Settings{
-		StaleThresholdMinutes:    30,
-		ExitAfterMinutes:         60,
-		BlockingEditorCommand:    blockingEditor,
-		NonblockingEditorCommand: defaultNonblockingEditorCommand,
-		OpenTerminalCommand:      defaultOpenTerminalCommand,
+		StaleThresholdMinutes: 30,
+		ExitAfterMinutes:      60,
+		Editor:                defaultEditor,
+		OpenTerminalCommand:   defaultOpenTerminalCommand,
 	}
 }
 

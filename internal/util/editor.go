@@ -10,6 +10,50 @@ import (
 	"github.com/fimmtiu/code-factory/internal/config"
 )
 
+// EditorProfile holds the blocking and nonblocking shell commands for a
+// named editor.
+type EditorProfile struct {
+	Blocking    string // waits for the editor to close, e.g. "cursor --wait"
+	Nonblocking string // opens in the background, e.g. "cursor"
+}
+
+// EditorProfiles maps the supported editor names to their shell commands.
+var EditorProfiles = map[string]EditorProfile{
+	"cursor": {"cursor --wait", "cursor"},
+	"vscode": {"code --wait", "code"},
+}
+
+// ValidateEditor returns an error if name is not a supported editor.
+// Call this at startup after config.Init so the program exits cleanly on
+// an invalid setting.
+func ValidateEditor(name string) error {
+	if _, ok := EditorProfiles[name]; !ok {
+		supported := make([]string, 0, len(EditorProfiles))
+		for k := range EditorProfiles {
+			supported = append(supported, k)
+		}
+		return fmt.Errorf("unknown editor %q in settings.json; supported values: %s",
+			name, strings.Join(supported, ", "))
+	}
+	return nil
+}
+
+// NonblockingEditorCommand returns the nonblocking editor command for the
+// currently configured editor (e.g. "cursor" or "code").
+func NonblockingEditorCommand() string {
+	if p, ok := EditorProfiles[config.Current.Editor]; ok {
+		return p.Nonblocking
+	}
+	return ""
+}
+
+func blockingEditorCommand() string {
+	if p, ok := EditorProfiles[config.Current.Editor]; ok {
+		return p.Blocking
+	}
+	return ""
+}
+
 // EditText writes existingContent to a temporary file, opens the blocking
 // editor from config.Current, waits for it to exit, reads back the file
 // contents, deletes the temp file, and returns the contents.
@@ -29,7 +73,7 @@ func EditTextKeepFile(existingContent string) (content, path string, err error) 
 // config.Current and waits for the editor to exit. The file is not modified
 // or deleted by this function.
 func OpenFileInEditor(path string) error {
-	command := config.Current.BlockingEditorCommand
+	command := blockingEditorCommand()
 	if command == "" {
 		return fmt.Errorf("OpenFileInEditor: no editor command configured")
 	}
@@ -43,7 +87,7 @@ func OpenFileInEditor(path string) error {
 }
 
 func editTextImpl(existingContent string, deleteAfter bool) (string, string, error) {
-	command := config.Current.BlockingEditorCommand
+	command := blockingEditorCommand()
 	if command == "" {
 		return "", "", fmt.Errorf("EditText: no editor command configured")
 	}

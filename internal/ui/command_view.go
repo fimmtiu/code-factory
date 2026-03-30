@@ -11,7 +11,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/fimmtiu/code-factory/internal/config"
 	"github.com/fimmtiu/code-factory/internal/db"
 	"github.com/fimmtiu/code-factory/internal/models"
 	"github.com/fimmtiu/code-factory/internal/storage"
@@ -398,7 +397,7 @@ func (v CommandView) openEditorNonblocking() (tea.Model, tea.Cmd) {
 	if err != nil {
 		return v, nil
 	}
-	_ = exec.Command(config.Current.NonblockingEditorCommand, dir).Start()
+	_ = exec.Command(util.NonblockingEditorCommand(), dir).Start()
 	return v, nil
 }
 

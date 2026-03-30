@@ -13,6 +13,7 @@ import (
 	"github.com/fimmtiu/code-factory/internal/db"
 	"github.com/fimmtiu/code-factory/internal/storage"
 	"github.com/fimmtiu/code-factory/internal/ui"
+	"github.com/fimmtiu/code-factory/internal/util"
 	"github.com/fimmtiu/code-factory/internal/worker"
 )
 
@@ -74,6 +75,10 @@ Options:
 
 	if err := config.Init(ticketsDir); err != nil {
 		fmt.Fprintln(os.Stderr, "error: loading settings:", err)
+		os.Exit(1)
+	}
+	if err := util.ValidateEditor(config.Current.Editor); err != nil {
+		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}
 
