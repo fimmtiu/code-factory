@@ -106,7 +106,11 @@ func MockWorkFn(ctx context.Context, w *Worker, database dbInterface, logCh chan
 		if err := database.SetStatus(identifier, phase, models.StatusInProgress); err != nil {
 			logCh <- NewLogMessage(w.Number, fmt.Sprintf("[mock] error restoring in-progress: %v", err))
 		}
-		writeLog("[mock] response: " + msg.Payload)
+		writeLog("\n=== USER RESPONSE ===")
+		for _, line := range strings.Split(msg.Payload, "\n") {
+			writeLog(">>> " + line)
+		}
+		writeLog("\n")
 		logCh <- NewLogMessage(w.Number, fmt.Sprintf("[mock] received response: %s", msg.Payload))
 	}
 

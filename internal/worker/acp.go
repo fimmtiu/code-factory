@@ -128,6 +128,11 @@ func (c *acpWorkerClient) RequestPermission(ctx context.Context, params acp.Requ
 		c.w.Status = StatusBusy
 		_ = c.database.SetStatus(c.identifier, c.phase, models.StatusInProgress)
 		c.logCh <- NewLogMessage(c.w.Number, fmt.Sprintf("permission response for %s: %s", c.identifier, msg.Payload))
+		c.appendOutput("\n=== USER RESPONSE ===\n")
+		for _, line := range strings.Split(msg.Payload, "\n") {
+			c.appendOutput(">>> " + line + "\n")
+		}
+		c.appendOutput("\n")
 
 		for _, o := range params.Options {
 			if strings.EqualFold(msg.Payload, string(o.Kind)) ||

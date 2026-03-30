@@ -335,9 +335,6 @@ func (v CommandView) respondToAgent() (tea.Model, tea.Cmd) {
 		return v, nil
 	}
 
-	// Append the user's response to the phase logfile, prefixed with ">>> ".
-	appendResponseToLogfile(wu, response)
-
 	w.ToWorker <- worker.MainToWorkerMessage{
 		Kind:    worker.MsgResponse,
 		Payload: response,
@@ -408,30 +405,6 @@ func extractResponseText(raw string) string {
 	return strings.TrimLeft(after, "\n")
 }
 
-// appendResponseToLogfile appends the user's response to the most recent
-// logfile for the ticket's current phase. Each line is prefixed with ">>> "
-// so it's visually distinct from agent output.
-func appendResponseToLogfile(wu *models.WorkUnit, response string) {
-	repoRoot, err := storage.FindRepoRoot(".")
-	if err != nil {
-		return
-	}
-	ticketsDir := storage.TicketsDirPath(repoRoot)
-	logPath := worker.LatestLogfilePath(ticketsDir, wu.Identifier, wu.Phase)
-	if logPath == "" {
-		return
-	}
-	f, err := os.OpenFile(logPath, os.O_APPEND|os.O_WRONLY, 0644)
-	if err != nil {
-		return
-	}
-	defer f.Close()
-
-	fmt.Fprintln(f, "\n=== USER RESPONSE ===")
-	for _, line := range strings.Split(response, "\n") {
-		fmt.Fprintf(f, ">>> %s\n", line)
-	}
-}
 
 func (v CommandView) openTerminal() (tea.Model, tea.Cmd) {
 	wu := v.selectedTicket()
