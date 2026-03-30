@@ -26,6 +26,9 @@ var (
 
 	workerNoOutputStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("250")) // light grey
+
+	workerNewLineStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("255")).Bold(true) // bright white for newly arrived lines
 )
 
 // linesPerWorker is the number of rendered lines each worker section occupies:
@@ -42,15 +45,21 @@ type workerTickMsg struct{}
 // and the last three lines of agent output. It supports scrolling but has no
 // selectable item.
 type WorkerView struct {
-	pool   *worker.Pool
-	width  int
-	height int
-	offset int // first visible line (scroll offset)
+	pool            *worker.Pool
+	width           int
+	height          int
+	offset          int               // first visible line (scroll offset)
+	prevOutput      map[int][]string  // last-seen output slice per worker number
+	outputChangedAt map[int]time.Time // when each worker's output last changed
 }
 
 // NewWorkerView creates a WorkerView backed by the given worker pool.
 func NewWorkerView(pool *worker.Pool) WorkerView {
-	return WorkerView{pool: pool}
+	return WorkerView{
+		pool:            pool,
+		prevOutput:      make(map[int][]string),
+		outputChangedAt: make(map[int]time.Time),
+	}
 }
 
 // Init schedules the first periodic refresh tick.
@@ -77,6 +86,23 @@ func (v WorkerView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return v, nil
 
 	case workerTickMsg:
+		// Detect output changes and record timestamps for highlight flash.
+		if v.pool != nil {
+			for _, w := range v.pool.Workers {
+				current := w.GetLastOutput()
+				prev := v.prevOutput[w.Number]
+				changed := len(current) != len(prev)
+				if !changed && len(current) > 0 {
+					changed = current[len(current)-1] != prev[len(prev)-1]
+				}
+				if changed {
+					v.outputChangedAt[w.Number] = time.Now()
+					snapshot := make([]string, len(current))
+					copy(snapshot, current)
+					v.prevOutput[w.Number] = snapshot
+				}
+			}
+		}
 		// Re-render on each tick; schedule the next tick.
 		return v, v.tickCmd()
 
@@ -183,10 +209,15 @@ func (v WorkerView) renderAllLines() []string {
 		// Last three lines of agent output. When there is no output at all,
 		// show "(no output)" in light grey on the middle line only.
 		output := w.GetLastOutput()
+		highlight := time.Since(v.outputChangedAt[w.Number]) < 600*time.Millisecond
 		for i := 0; i < 3; i++ {
 			if i < len(output) {
 				line := truncateLine(output[i], innerW)
-				lines = append(lines, workerOutputStyle.Render(line))
+				if highlight && i == len(output)-1 {
+					lines = append(lines, workerNewLineStyle.Render(line))
+				} else {
+					lines = append(lines, workerOutputStyle.Render(line))
+				}
 			} else if len(output) == 0 && i == 1 {
 				lines = append(lines, workerNoOutputStyle.Render("(no output)"))
 			} else {
