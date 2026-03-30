@@ -226,9 +226,16 @@ func (m Model) View() string {
 		if y < 0 {
 			y = 0
 		}
+		shadowLine := lipgloss.NewStyle().Background(lipgloss.Color("236")).Render(strings.Repeat(" ", dialogW))
+		shadowLines := make([]string, dialogH)
+		for i := range shadowLines {
+			shadowLines[i] = shadowLine
+		}
+		shadowStr := strings.Join(shadowLines, "\n")
 		bg := lipglossv2.NewLayer(full)
-		fg := lipglossv2.NewLayer(dialogStr).X(x).Y(y).Z(1)
-		full = lipglossv2.NewCompositor(bg, fg).Render()
+		shadow := lipglossv2.NewLayer(shadowStr).X(x + 1).Y(y + 1).Z(1)
+		fg := lipglossv2.NewLayer(dialogStr).X(x).Y(y).Z(2)
+		full = lipglossv2.NewCompositor(bg, shadow, fg).Render()
 	}
 
 	return full
