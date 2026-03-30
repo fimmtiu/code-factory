@@ -198,7 +198,7 @@ func (v WorkerView) renderAllLines() []string {
 	if innerW <= 0 {
 		innerW = 1
 	}
-	separator := strings.Repeat("─", innerW)
+	separator := lipgloss.NewStyle().Foreground(colourMuted).Render(strings.Repeat("╌", innerW))
 
 	var lines []string
 	for _, w := range v.pool.Workers {
