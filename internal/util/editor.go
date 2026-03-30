@@ -10,17 +10,17 @@ import (
 	"github.com/fimmtiu/code-factory/internal/config"
 )
 
-// EditorProfile holds the blocking and nonblocking shell commands for a
-// named editor.
+// EditorProfile holds the shell commands for a named editor.
 type EditorProfile struct {
-	Blocking    string // waits for the editor to close, e.g. "cursor --wait"
-	Nonblocking string // opens in the background, e.g. "cursor"
+	Blocking           string // waits for the editor to close, e.g. "cursor --wait"
+	Nonblocking        string // opens in the background, e.g. "cursor"
+	BlockingAtLocation string // blocking open at a file:line, e.g. "cursor --wait --goto"
 }
 
 // EditorProfiles maps the supported editor names to their shell commands.
 var EditorProfiles = map[string]EditorProfile{
-	"cursor": {"cursor --wait", "cursor"},
-	"vscode": {"code --wait", "code"},
+	"cursor": {"cursor --wait", "cursor", "cursor --wait --goto"},
+	"vscode": {"code --wait", "code", "code --wait --goto"},
 }
 
 // ValidateEditor returns an error if name is not a supported editor.
@@ -54,12 +54,71 @@ func blockingEditorCommand() string {
 	return ""
 }
 
+// blockingEditorAtLocationCommand returns the full command string that opens
+// the blocking editor at filename:lineNo. For example:
+// "cursor --wait --goto internal/db/db.go:42".
+func blockingEditorAtLocationCommand(filename string, lineNo int) string {
+	if p, ok := EditorProfiles[config.Current.Editor]; ok {
+		return fmt.Sprintf("%s %s:%d", p.BlockingAtLocation, filename, lineNo)
+	}
+	return ""
+}
+
+// OpenEditorAtLocation opens filename at lineNo in the blocking editor and
+// waits for the editor to close. The file is opened directly — no temp file
+// is created.
+func OpenEditorAtLocation(filename string, lineNo int) error {
+	command := blockingEditorAtLocationCommand(filename, lineNo)
+	if command == "" {
+		return fmt.Errorf("OpenEditorAtLocation: no editor command configured")
+	}
+	parts := strings.Fields(command)
+	cmd := exec.Command(parts[0], parts[1:]...)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
 // EditText writes existingContent to a temporary file, opens the blocking
 // editor from config.Current, waits for it to exit, reads back the file
 // contents, deletes the temp file, and returns the contents.
 func EditText(existingContent string) (string, error) {
 	content, _, err := editTextImpl(existingContent, true)
 	return content, err
+}
+
+// EditTextAtLine is like EditText but opens the editor positioned at lineNo
+// (1-based) using the BlockingAtLocation command, so the cursor lands on the
+// correct line rather than at the top of the file.
+func EditTextAtLine(existingContent string, lineNo int) (string, error) {
+	tmpFile, err := os.CreateTemp("", "code-factory-edit-*.txt")
+	if err != nil {
+		return "", fmt.Errorf("EditTextAtLine: create temp file: %w", err)
+	}
+	tmpPath := tmpFile.Name()
+
+	if _, err := tmpFile.WriteString(existingContent); err != nil {
+		tmpFile.Close()
+		os.Remove(tmpPath)
+		return "", fmt.Errorf("EditTextAtLine: write temp file: %w", err)
+	}
+	if err := tmpFile.Close(); err != nil {
+		os.Remove(tmpPath)
+		return "", fmt.Errorf("EditTextAtLine: close temp file: %w", err)
+	}
+
+	if err := OpenEditorAtLocation(tmpPath, lineNo); err != nil {
+		os.Remove(tmpPath)
+		return "", fmt.Errorf("EditTextAtLine: editor exited with error: %w", err)
+	}
+
+	data, err := os.ReadFile(tmpPath)
+	os.Remove(tmpPath)
+	if err != nil {
+		return "", fmt.Errorf("EditTextAtLine: read temp file: %w", err)
+	}
+	return string(data), nil
 }
 
 // EditTextKeepFile is like EditText but does not delete the temporary file.

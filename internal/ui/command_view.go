@@ -310,7 +310,7 @@ func (v CommandView) respondToAgent() (tea.Model, tea.Cmd) {
 	}
 
 	template := v.buildResponseTemplate(wu)
-	raw, err := util.EditText(template)
+	raw, err := util.EditTextAtLine(template, responseSeparatorLine(template))
 	if err != nil {
 		return v, nil
 	}
@@ -362,6 +362,18 @@ func lastNLines(path string, n int) string {
 		lines = lines[len(lines)-n:]
 	}
 	return strings.Join(lines, "\n")
+}
+
+// responseSeparatorLine returns the 1-based line number of the line
+// immediately after responseTemplateSep in template, i.e. where the user
+// should start typing. Falls back to 1 if the separator is not found.
+func responseSeparatorLine(template string) int {
+	for i, line := range strings.Split(template, "\n") {
+		if line == responseTemplateSep {
+			return i + 2 // 1-based; +1 for separator line itself, +1 for the line after
+		}
+	}
+	return 1
 }
 
 // extractResponseText returns only the text below responseTemplateSep,
