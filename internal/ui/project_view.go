@@ -32,8 +32,8 @@ const (
 var accentBorder = func() lipgloss.Border {
 	b := lipgloss.DoubleBorder()
 	b.Left = "▌"
-	b.TopLeft = "▌"
-	b.BottomLeft = "▌"
+	b.TopLeft = "╭"
+	b.BottomLeft = "╰"
 	return b
 }()
 

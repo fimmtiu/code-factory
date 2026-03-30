@@ -39,13 +39,13 @@ var (
 func logTimestampStyle(age time.Duration) lipgloss.Style {
 	switch {
 	case age < time.Minute:
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("255"))
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("236"))
 	case age < 5*time.Minute:
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("252"))
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("239"))
 	case age < 30*time.Minute:
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("242"))
 	default:
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("238"))
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
 	}
 }
 
