@@ -515,7 +515,7 @@ func (v CommandView) renderRow(wu *models.WorkUnit, selected bool) string {
 	if mins < 0 {
 		mins = 0
 	}
-	right := fmt.Sprintf("  %s  %dm", wu.Status, mins)
+	right := fmt.Sprintf("  %s  %dm ago", wu.Status, mins)
 
 	// Available width for identifier (subtract border overhead).
 	availW := v.width - viewBorderOverhead - lipgloss.Width(right)

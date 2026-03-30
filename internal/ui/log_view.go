@@ -20,9 +20,6 @@ var (
 				Background(lipgloss.Color("62")).
 				Foreground(lipgloss.Color("230"))
 
-	logTimestampStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("245"))
-
 	logWorkerStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("33"))
 
@@ -31,6 +28,26 @@ var (
 	logFileIndicatorStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("214")) // orange — indicates logfile is present
 )
+
+// logTimestampStyle returns a style that fades the timestamp colour based on
+// how long ago the entry was created:
+//
+//	< 1 min  → bright white ("255")
+//	1–5 min  → normal grey  ("252")
+//	5–30 min → dimmer grey  ("245")
+//	> 30 min → very dim grey ("238")
+func logTimestampStyle(age time.Duration) lipgloss.Style {
+	switch {
+	case age < time.Minute:
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("255"))
+	case age < 5*time.Minute:
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("252"))
+	case age < 30*time.Minute:
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
+	default:
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("238"))
+	}
+}
 
 // Column widths for the three-column layout.
 const (
@@ -316,10 +333,16 @@ func (v LogView) renderRow(e *models.LogEntry, selected bool) string {
 	if selected {
 		return logSelectedStyle.Width(v.width - viewBorderOverhead).Render(line)
 	}
+
+	// For non-selected rows, colour the timestamp by age and compose with the
+	// rest of the line (which may carry the logfile indicator style).
+	age := now.Sub(e.Timestamp)
+	tsStyled := logTimestampStyle(age).Render(fmt.Sprintf("%-*s", logTimestampWidth, ts))
+	rest := fmt.Sprintf(" %s %s", workerStr, msg)
 	if e.Logfile != "" {
-		return logFileIndicatorStyle.Render(line)
+		return tsStyled + logFileIndicatorStyle.Render(rest)
 	}
-	return line
+	return tsStyled + rest
 }
 
 // formatLogTimestamp formats a timestamp compactly: "15:04:05" for today,
