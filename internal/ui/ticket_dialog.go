@@ -646,7 +646,12 @@ func (d *TicketDialog) renderListPane(borderStyle lipgloss.Style) string {
 			sb.WriteString("\n")
 		}
 	}
-	return borderStyle.Width(d.listW).Height(d.listH).Render(sb.String())
+	rendered := borderStyle.Width(d.listW).Height(d.listH).Render(sb.String())
+	rightChar := "│"
+	if d.focus == tdListFocus {
+		rightChar = "║"
+	}
+	return injectScrollbar(rendered, rightChar, "█", d.listOffset, len(d.items), d.listH)
 }
 
 func (d *TicketDialog) renderContentPane(borderStyle lipgloss.Style) string {
@@ -662,7 +667,12 @@ func (d *TicketDialog) renderContentPane(borderStyle lipgloss.Style) string {
 			sb.WriteString("\n")
 		}
 	}
-	return borderStyle.Width(d.contentW).Height(d.contentH).Render(sb.String())
+	rendered := borderStyle.Width(d.contentW).Height(d.contentH).Render(sb.String())
+	rightChar := "│"
+	if d.focus == tdContentFocus {
+		rightChar = "║"
+	}
+	return injectScrollbar(rendered, rightChar, "█", d.contentOffset, len(lines), d.contentH)
 }
 
 // ── Code context ──────────────────────────────────────────────────────────────

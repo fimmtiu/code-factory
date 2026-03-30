@@ -9,3 +9,12 @@ TO DO
 - Response command shouldn't do all last 30 lines; only the last 30 lines of the `=== OUTPUT ===` section. Don't include the prompt.
 
 - Ensure that response ends up in logfile.
+
+
+
+To do today (personal):
+
+- Vet
+- LT
+- Seaside
+- ??? swear I'm forgetting something...

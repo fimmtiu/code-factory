@@ -516,6 +516,11 @@ func (v ProjectView) View() string {
 		Width(treeInnerW).
 		Height(topH - 2).
 		Render(treeContent)
+	treeRightChar := "│"
+	if v.focus == focusTree {
+		treeRightChar = "║"
+	}
+	treePane = injectScrollbar(treePane, treeRightChar, "█", v.treeOffset, len(v.treeNodes), topH-2)
 
 	topRow := lipgloss.JoinHorizontal(lipgloss.Top, statusPane, treePane)
 
