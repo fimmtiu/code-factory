@@ -27,10 +27,20 @@ const (
 
 // ── Styles ───────────────────────────────────────────────────────────────────
 
+// accentBorder is a DoubleBorder variant that replaces the left edge with a
+// solid half-block character (▌) to draw a coloured accent bar on the focused pane.
+var accentBorder = func() lipgloss.Border {
+	b := lipgloss.DoubleBorder()
+	b.Left = "▌"
+	b.TopLeft = "▌"
+	b.BottomLeft = "▌"
+	return b
+}()
+
 var (
 	// Pane borders
 	focusedBorderStyle = lipgloss.NewStyle().
-				Border(lipgloss.DoubleBorder()).
+				Border(accentBorder).
 				BorderForeground(lipgloss.Color("12")) // blue
 
 	unfocusedBorderStyle = lipgloss.NewStyle().
