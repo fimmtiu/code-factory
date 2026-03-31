@@ -63,6 +63,16 @@ func (w *Worker) processTicket(ctx context.Context, ticket *models.WorkUnit) {
 
 	acpErr := w.workFn(ctx, w, w.database, w.logCh, worktreePath, identifier, string(ticket.Phase), prompt, logfilePath)
 
+	// On graceful shutdown the context is cancelled before the work finishes.
+	// Reset the ticket to idle so it is re-processed on the next run rather
+	// than incorrectly advancing to user-review.
+	if ctx.Err() != nil {
+		_ = w.database.SetStatus(identifier, string(ticket.Phase), models.StatusIdle)
+		w.releaseTicket(identifier)
+		w.Status = StatusIdle
+		return
+	}
+
 	if acpErr != nil {
 		w.logCh <- NewLogMessageWithFile(w.Number, fmt.Sprintf("ACP error on %s: %v", identifier, acpErr), logfilePath)
 	}
