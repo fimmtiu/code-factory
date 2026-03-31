@@ -117,6 +117,10 @@ type ProjectView struct {
 	treeSelected int
 	treeOffset   int // first visible row index
 
+	// Filter state
+	filterText string
+	filtering  bool
+
 	// Detail state
 	detailOffset int // first visible line index
 
@@ -247,6 +251,88 @@ func treeLabel(node treeNode, isLast bool) string {
 	return prefix + connector + node.wu.Identifier
 }
 
+// ── Filter ────────────────────────────────────────────────────────────────────
+
+// filteredTreeNodes returns the subset of treeNodes matching filterText.
+// When filterText is empty, the full slice is returned as-is.
+// For non-empty queries, a node matches if its identifier or description
+// contains the query (case-insensitive). Parent nodes of any match are also
+// included so the tree hierarchy is preserved.
+func (v ProjectView) filteredTreeNodes() []treeNode {
+	if v.filterText == "" {
+		return v.treeNodes
+	}
+	query := strings.ToLower(v.filterText)
+	matched := make([]bool, len(v.treeNodes))
+
+	// Mark directly matching nodes.
+	for i, node := range v.treeNodes {
+		id := strings.ToLower(node.wu.Identifier)
+		desc := strings.ToLower(node.wu.Description)
+		if strings.Contains(id, query) || strings.Contains(desc, query) {
+			matched[i] = true
+		}
+	}
+
+	// For each matched node, mark its ancestors.
+	for i := range v.treeNodes {
+		if !matched[i] {
+			continue
+		}
+		depth := v.treeNodes[i].depth
+		for j := i - 1; j >= 0 && depth > 0; j-- {
+			if v.treeNodes[j].depth == depth-1 {
+				matched[j] = true
+				depth--
+			}
+		}
+	}
+
+	result := make([]treeNode, 0, len(v.treeNodes))
+	for i, node := range v.treeNodes {
+		if matched[i] {
+			result = append(result, node)
+		}
+	}
+	return result
+}
+
+// handleFilterInput processes a key press while filtering is active.
+func (v ProjectView) handleFilterInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	hadFilter := v.filterText != ""
+	var cmd tea.Cmd
+
+	switch msg.String() {
+	case "esc":
+		v.filtering = false
+		v.filterText = ""
+		v.treeSelected = 0
+		v.treeOffset = 0
+		if hadFilter {
+			cmd = ShowNotification("Filter cleared")
+		}
+		return v, cmd
+	case "backspace":
+		runes := []rune(v.filterText)
+		if len(runes) > 0 {
+			v.filterText = string(runes[:len(runes)-1])
+		}
+	default:
+		r := []rune(msg.String())
+		if len(r) == 1 && r[0] >= 32 {
+			v.filterText += string(r)
+		}
+	}
+
+	v.treeSelected = 0
+	v.treeOffset = 0
+
+	if v.filterText != "" {
+		cmd = ShowNotification(`Filtering to "` + v.filterText + `"`)
+	}
+	return v, cmd
+}
+
 // ── Update ────────────────────────────────────────────────────────────────────
 
 func (v ProjectView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -288,6 +374,10 @@ func (v ProjectView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (v ProjectView) updateTreeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if v.filtering {
+		return v.handleFilterInput(msg)
+	}
+
 	treeH := v.treeHeight()
 
 	switch msg.String() {
@@ -297,7 +387,7 @@ func (v ProjectView) updateTreeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			v.clampScroll()
 		}
 	case "down":
-		if v.treeSelected < len(v.treeNodes)-1 {
+		if v.treeSelected < len(v.filteredTreeNodes())-1 {
 			v.treeSelected++
 			v.clampScroll()
 		}
@@ -309,8 +399,8 @@ func (v ProjectView) updateTreeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		v.clampScroll()
 	case "pgdown":
 		v.treeSelected += treeH
-		if v.treeSelected >= len(v.treeNodes) {
-			v.treeSelected = max(0, len(v.treeNodes)-1)
+		if v.treeSelected >= len(v.filteredTreeNodes()) {
+			v.treeSelected = max(0, len(v.filteredTreeNodes())-1)
 		}
 		v.clampScroll()
 	case "tab":
@@ -321,6 +411,9 @@ func (v ProjectView) updateTreeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return v.openTerminal()
 	case "e", "E":
 		return v.openEditor()
+	case "/":
+		v.filtering = true
+		return v, nil
 	}
 	return v, nil
 }
@@ -357,10 +450,11 @@ func (v ProjectView) updateDetailKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (v ProjectView) openTicketDialog() (tea.Model, tea.Cmd) {
-	if len(v.treeNodes) == 0 {
+	nodes := v.filteredTreeNodes()
+	if len(nodes) == 0 {
 		return v, nil
 	}
-	wu := v.treeNodes[v.treeSelected].wu
+	wu := nodes[v.treeSelected].wu
 	if wu.IsProject {
 		return v, nil
 	}
@@ -368,10 +462,11 @@ func (v ProjectView) openTicketDialog() (tea.Model, tea.Cmd) {
 }
 
 func (v ProjectView) openTerminal() (tea.Model, tea.Cmd) {
-	if len(v.treeNodes) == 0 {
+	nodes := v.filteredTreeNodes()
+	if len(nodes) == 0 {
 		return v, nil
 	}
-	wu := v.treeNodes[v.treeSelected].wu
+	wu := nodes[v.treeSelected].wu
 	dir, err := storage.WorktreePathForIdentifier(wu.Identifier)
 	if err != nil {
 		return v, nil
@@ -381,10 +476,11 @@ func (v ProjectView) openTerminal() (tea.Model, tea.Cmd) {
 }
 
 func (v ProjectView) openEditor() (tea.Model, tea.Cmd) {
-	if len(v.treeNodes) == 0 {
+	nodes := v.filteredTreeNodes()
+	if len(nodes) == 0 {
 		return v, nil
 	}
-	wu := v.treeNodes[v.treeSelected].wu
+	wu := nodes[v.treeSelected].wu
 	newDesc, err := util.EditText(wu.Description)
 	if err != nil {
 		return v, nil
@@ -414,7 +510,7 @@ func (v *ProjectView) clampScroll() {
 		v.treeOffset = v.treeSelected - h + 1
 	}
 	// Clamp offset to valid range.
-	maxOffset := len(v.treeNodes) - h
+	maxOffset := len(v.filteredTreeNodes()) - h
 	if maxOffset < 0 {
 		maxOffset = 0
 	}
@@ -520,7 +616,7 @@ func (v ProjectView) View() string {
 	if v.focus == focusTree {
 		treeRightChar = "║"
 	}
-	treePane = injectScrollbar(treePane, treeRightChar, "█", v.treeOffset, len(v.treeNodes), topH-2)
+	treePane = injectScrollbar(treePane, treeRightChar, "█", v.treeOffset, len(v.filteredTreeNodes()), topH-2)
 
 	topRow := lipgloss.JoinHorizontal(lipgloss.Top, statusPane, treePane)
 
@@ -582,13 +678,17 @@ func (v ProjectView) renderStatusContent() string {
 
 // renderTreeContent returns the text content for the tree pane.
 func (v ProjectView) renderTreeContent() string {
-	if len(v.treeNodes) == 0 {
+	nodes := v.filteredTreeNodes()
+	if len(nodes) == 0 {
+		if v.filterText != "" {
+			return "(no matches)"
+		}
 		return "(no work units)"
 	}
 
 	h := v.treeHeight()
 	w := v.treeWidth()
-	total := len(v.treeNodes)
+	total := len(nodes)
 
 	var sb strings.Builder
 	end := v.treeOffset + h
@@ -597,8 +697,8 @@ func (v ProjectView) renderTreeContent() string {
 	}
 
 	for i := v.treeOffset; i < end; i++ {
-		node := v.treeNodes[i]
-		isLast := node.wu.IsProject || i+1 >= total || v.treeNodes[i+1].depth < node.depth
+		node := nodes[i]
+		isLast := node.wu.IsProject || i+1 >= total || nodes[i+1].depth < node.depth
 		label := treeLabel(node, isLast)
 
 		// Build phase badge for tickets only.
@@ -678,10 +778,11 @@ func (v ProjectView) renderTreeContent() string {
 
 // detailLines returns the full content of the detail pane as individual lines.
 func (v ProjectView) detailLines() []string {
-	if len(v.treeNodes) == 0 {
+	nodes := v.filteredTreeNodes()
+	if len(nodes) == 0 {
 		return []string{"(no selection)"}
 	}
-	wu := v.treeNodes[v.treeSelected].wu
+	wu := nodes[v.treeSelected].wu
 	return buildDetailLines(wu, v.width-2)
 }
 
@@ -777,5 +878,6 @@ func (v ProjectView) KeyBindings() []KeyBinding {
 		{Key: "Enter", Description: "Open ticket dialog (tickets only)"},
 		{Key: "T", Description: "Open terminal in work unit worktree"},
 		{Key: "E", Description: "Edit work unit description"},
+		{Key: "/", Description: "Filter tree by substring"},
 	}
 }

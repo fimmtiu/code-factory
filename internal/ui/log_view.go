@@ -76,6 +76,10 @@ type LogView struct {
 	entries  []models.LogEntry
 	selected int // index into entries
 	offset   int // first visible row
+
+	// Filter state
+	filterText string
+	filtering  bool
 }
 
 // NewLogView creates a LogView backed by the given database.
@@ -145,10 +149,20 @@ func (v LogView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // adjustScrollAfterRefresh implements the smart auto-scroll logic. If the user
 // was on the last entry before the refresh, move the selection to the new last
 // entry. Otherwise, preserve selection and scroll position.
+// When filtering is active, smart auto-scroll is skipped; only clamp.
 func (v *LogView) adjustScrollAfterRefresh(oldCount, newCount int, wasOnLast bool) {
 	if newCount == 0 {
 		v.selected = 0
 		v.offset = 0
+		return
+	}
+	if v.filtering {
+		// While filtering, just clamp to avoid out-of-bounds.
+		filtered := v.filteredEntries()
+		if v.selected >= len(filtered) {
+			v.selected = max(0, len(filtered)-1)
+		}
+		v.clampScroll()
 		return
 	}
 	if wasOnLast {
@@ -164,7 +178,63 @@ func (v *LogView) adjustScrollAfterRefresh(oldCount, newCount int, wasOnLast boo
 	}
 }
 
+// filteredEntries returns the subset of entries matching filterText.
+// When filterText is empty, the full slice is returned as-is.
+func (v LogView) filteredEntries() []models.LogEntry {
+	if v.filterText == "" {
+		return v.entries
+	}
+	query := strings.ToLower(v.filterText)
+	result := make([]models.LogEntry, 0, len(v.entries))
+	for _, e := range v.entries {
+		if strings.Contains(strings.ToLower(e.Message), query) {
+			result = append(result, e)
+		}
+	}
+	return result
+}
+
+// handleFilterInput processes a key press while filtering is active.
+func (v LogView) handleFilterInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	hadFilter := v.filterText != ""
+	var cmd tea.Cmd
+
+	switch msg.String() {
+	case "esc":
+		v.filtering = false
+		v.filterText = ""
+		v.selected = 0
+		v.offset = 0
+		if hadFilter {
+			cmd = ShowNotification("Filter cleared")
+		}
+		return v, cmd
+	case "backspace":
+		runes := []rune(v.filterText)
+		if len(runes) > 0 {
+			v.filterText = string(runes[:len(runes)-1])
+		}
+	default:
+		r := []rune(msg.String())
+		if len(r) == 1 && r[0] >= 32 {
+			v.filterText += string(r)
+		}
+	}
+
+	v.selected = 0
+	v.offset = 0
+
+	if v.filterText != "" {
+		cmd = ShowNotification(`Filtering to "` + v.filterText + `"`)
+	}
+	return v, cmd
+}
+
 func (v LogView) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if v.filtering {
+		return v.handleFilterInput(msg)
+	}
+
 	switch msg.String() {
 	case "up":
 		v.moveBy(-1)
@@ -178,6 +248,9 @@ func (v LogView) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return v.openLogfile()
 	case "c", "C":
 		return v.copyLogfilePath()
+	case "/":
+		v.filtering = true
+		return v, nil
 	}
 	return v, nil
 }
@@ -187,7 +260,7 @@ func (v *LogView) moveBy(delta int) {
 	if v.selected < 0 {
 		v.selected = 0
 	}
-	if n := len(v.entries); v.selected >= n && n > 0 {
+	if n := len(v.filteredEntries()); v.selected >= n && n > 0 {
 		v.selected = n - 1
 	}
 	v.clampScroll()
@@ -195,7 +268,8 @@ func (v *LogView) moveBy(delta int) {
 
 func (v *LogView) clampScroll() {
 	h := v.listHeight()
-	if h <= 0 || len(v.entries) == 0 {
+	entries := v.filteredEntries()
+	if h <= 0 || len(entries) == 0 {
 		v.offset = 0
 		return
 	}
@@ -205,7 +279,7 @@ func (v *LogView) clampScroll() {
 	if v.selected >= v.offset+h {
 		v.offset = v.selected - h + 1
 	}
-	maxOffset := len(v.entries) - h
+	maxOffset := len(entries) - h
 	if maxOffset < 0 {
 		maxOffset = 0
 	}
@@ -220,10 +294,11 @@ func (v *LogView) clampScroll() {
 // ── Action handlers ───────────────────────────────────────────────────────────
 
 func (v LogView) selectedEntry() *models.LogEntry {
-	if len(v.entries) == 0 || v.selected < 0 || v.selected >= len(v.entries) {
+	entries := v.filteredEntries()
+	if len(entries) == 0 || v.selected < 0 || v.selected >= len(entries) {
 		return nil
 	}
-	return &v.entries[v.selected]
+	return &entries[v.selected]
 }
 
 // openLogfile opens the selected entry's logfile in the blocking editor. The
@@ -275,21 +350,26 @@ func (v LogView) messageWidth() int {
 
 func (v LogView) View() string {
 	paneW := v.width - viewBorderOverhead
+	entries := v.filteredEntries()
 
-	if len(v.entries) == 0 {
+	if len(entries) == 0 {
+		emptyMsg := "No log entries"
+		if v.filterText != "" {
+			emptyMsg = "No matching entries"
+		}
 		return viewPaneStyle.Width(paneW).Height(v.listHeight()).
-			Render(lipgloss.Place(paneW, v.listHeight(), lipgloss.Center, lipgloss.Center, emptyStateStyle.Render("No log entries")))
+			Render(lipgloss.Place(paneW, v.listHeight(), lipgloss.Center, lipgloss.Center, emptyStateStyle.Render(emptyMsg)))
 	}
 
 	h := v.listHeight()
 	end := v.offset + h
-	if end > len(v.entries) {
-		end = len(v.entries)
+	if end > len(entries) {
+		end = len(entries)
 	}
 
 	var sb strings.Builder
 	for i := v.offset; i < end; i++ {
-		line := v.renderRow(&v.entries[i], i == v.selected)
+		line := v.renderRow(&entries[i], i == v.selected)
 		sb.WriteString(line)
 		if i < end-1 {
 			sb.WriteString("\n")
@@ -386,5 +466,6 @@ func (v LogView) KeyBindings() []KeyBinding {
 		{Key: "PgUp/PgDn", Description: "Page navigate"},
 		{Key: "E", Description: "Open logfile in $EDITOR"},
 		{Key: "C", Description: "Copy logfile path to clipboard"},
+		{Key: "/", Description: "Filter entries by substring"},
 	}
 }
