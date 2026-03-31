@@ -563,37 +563,40 @@ func (d *TicketDialog) View() string {
 	return dialogBoxStyle.Width(d.width - 2).Render(body)
 }
 
-var (
-	hintActiveStyle   = lipgloss.NewStyle().Foreground(colourMuted)
-	hintInactiveStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("250"))
-)
+// hintInactiveStyle renders a hint segment that is currently unavailable
+// (e.g. "X dismiss" when the CR is already dismissed).
+var hintInactiveStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("250"))
 
 func (d *TicketDialog) renderHint() string {
 	item := d.currentItem()
-	base := hintActiveStyle.Render("  Tab switch  Esc close")
+	sep := hintDescStyle.Render("  ")
+	base := sep + hintKeyStyle.Render("Tab") + hintDescStyle.Render(" switch") +
+		sep + hintKeyStyle.Render("Esc") + hintDescStyle.Render(" close")
 	if item == nil {
-		return hintActiveStyle.Render("Tab switch  Esc close")
+		return hintKeyStyle.Render("Tab") + hintDescStyle.Render(" switch") +
+			sep + hintKeyStyle.Render("Esc") + hintDescStyle.Render(" close")
 	}
 	switch item.kind {
 	case tdItemCR:
 		cr := d.changeRequests[item.dataIdx]
-		xStyle := hintActiveStyle
+		var xPart, oPart string
 		if cr.Status == models.ChangeRequestDismissed {
-			xStyle = hintInactiveStyle
+			xPart = hintInactiveStyle.Render("X dismiss")
+		} else {
+			xPart = hintKeyStyle.Render("X") + hintDescStyle.Render(" dismiss")
 		}
-		oStyle := hintActiveStyle
 		if cr.Status == models.ChangeRequestOpen {
-			oStyle = hintInactiveStyle
+			oPart = hintInactiveStyle.Render("O reopen")
+		} else {
+			oPart = hintKeyStyle.Render("O") + hintDescStyle.Render(" reopen")
 		}
-		return xStyle.Render("X dismiss") +
-			hintActiveStyle.Render("  ") +
-			oStyle.Render("O reopen") +
-			hintActiveStyle.Render("  E edit") +
-			base
+		ePart := hintKeyStyle.Render("E") + hintDescStyle.Render(" edit")
+		return xPart + sep + oPart + sep + ePart + base
 	case tdItemLog:
-		return hintActiveStyle.Render("D debug prompt") + base
+		return hintKeyStyle.Render("D") + hintDescStyle.Render(" debug prompt") + base
 	}
-	return hintActiveStyle.Render("Tab switch  Esc close")
+	return hintKeyStyle.Render("Tab") + hintDescStyle.Render(" switch") +
+		sep + hintKeyStyle.Render("Esc") + hintDescStyle.Render(" close")
 }
 
 func (d *TicketDialog) renderListPane(borderStyle lipgloss.Style) string {

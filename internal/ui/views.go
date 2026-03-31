@@ -1,9 +1,31 @@
 package ui
 
 import (
+	"strings"
+
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
+
+// hintKeyStyle renders a keystroke label bold in the muted hint colour.
+var hintKeyStyle = lipgloss.NewStyle().Foreground(colourMuted).Bold(true)
+
+// hintDescStyle renders hint description text in the normal muted colour.
+var hintDescStyle = lipgloss.NewStyle().Foreground(colourMuted)
+
+// buildHint renders alternating key/description pairs with each key bolded.
+// Example: buildHint("Q", "quit", "?", "help") → bold("Q")+" quit  "+bold("?")+" help"
+func buildHint(pairs ...string) string {
+	var sb strings.Builder
+	for i := 0; i+1 < len(pairs); i += 2 {
+		if i > 0 {
+			sb.WriteString(hintDescStyle.Render("  "))
+		}
+		sb.WriteString(hintKeyStyle.Render(pairs[i]))
+		sb.WriteString(hintDescStyle.Render(" " + pairs[i+1]))
+	}
+	return sb.String()
+}
 
 // viewPaneStyle is the blue single-line border applied to Command, Worker, and Log views.
 var viewPaneStyle = lipgloss.NewStyle().

@@ -31,9 +31,9 @@ var (
 				Foreground(colourAccent).
 				Inherit(tabBaseStyle)
 
-	helpHintStyle = lipgloss.NewStyle().
-			Foreground(colourMuted).
-			Padding(0, 1)
+	// helpHintStyle adds padding around hint text; colouring is done by
+	// hintKeyStyle / hintDescStyle (defined in views.go).
+	helpHintStyle = lipgloss.NewStyle().Padding(0, 1)
 )
 
 // ── Model ────────────────────────────────────────────────────────────────────
@@ -173,25 +173,26 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m Model) View() string {
 	header := m.renderHeader()
 	content := m.views[m.activeView].View()
-	hintText := "? help  Q quit"
+	var leftHint string
 	if m.dialog != nil {
-		hintText = "? help"
+		leftHint = helpHintStyle.Render(buildHint("?", "help"))
+	} else {
+		leftHint = helpHintStyle.Render(buildHint("?", "help", "Q", "quit"))
 	}
-	left := helpHintStyle.Render(hintText)
-	hint := left
+	hint := leftHint
 	if m.dialog == nil {
-		viewHints := map[ViewID]string{
-			ViewProject: "E edit  T open terminal  Tab switch  Enter view",
-			ViewCommand: "E open worktree  T open terminal  Tab switch  Enter view",
-			ViewLog:     "E open in editor  C copy path",
+		viewHints := map[ViewID][]string{
+			ViewProject: {"E", "edit", "T", "open terminal", "Tab", "switch", "Enter", "view"},
+			ViewCommand: {"E", "open worktree", "T", "open terminal", "Tab", "switch", "Enter", "view"},
+			ViewLog:     {"E", "open in editor", "C", "copy path"},
 		}
-		if rightText, ok := viewHints[m.activeView]; ok {
-			right := helpHintStyle.Render(rightText)
-			spacer := m.width - lipgloss.Width(left) - lipgloss.Width(right)
+		if pairs, ok := viewHints[m.activeView]; ok {
+			right := helpHintStyle.Render(buildHint(pairs...))
+			spacer := m.width - lipgloss.Width(leftHint) - lipgloss.Width(right)
 			if spacer < 2 {
 				spacer = 2
 			}
-			hint = left + strings.Repeat(" ", spacer) + right
+			hint = leftHint + strings.Repeat(" ", spacer) + right
 		}
 	}
 
