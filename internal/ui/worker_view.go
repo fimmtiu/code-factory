@@ -31,7 +31,6 @@ var (
 				Foreground(lipgloss.Color("255")).Bold(true) // bright white for newly arrived lines
 )
 
-
 // ── Messages ─────────────────────────────────────────────────────────────────
 
 type workerTickMsg struct{}
@@ -260,7 +259,6 @@ func (v WorkerView) renderStatusLine(w *worker.Worker) string {
 		return workerIdleStyle.Render(text)
 	}
 }
-
 
 // ── KeyBindings ───────────────────────────────────────────────────────────────
 
