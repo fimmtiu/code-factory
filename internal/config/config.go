@@ -34,6 +34,34 @@ type Settings struct {
 	// given directory. It is run with the working directory set to the target
 	// path. Defaults to "open -a iTerm .".
 	OpenTerminalCommand string `json:"open_terminal_command"`
+
+	// ModelImplement, ModelRefactor, ModelReview, and ModelRespond set the
+	// Claude model used for each ticket phase independently. Empty string uses
+	// Claude's default model for that phase.
+	ModelImplement string `json:"model_implement"`
+	ModelRefactor  string `json:"model_refactor"`
+	ModelReview    string `json:"model_review"`
+	ModelRespond   string `json:"model_respond"`
+
+	// Effort is the effort level passed to Claude (e.g. "low", "normal",
+	// "high"). Empty string uses Claude's default.
+	Effort string `json:"effort"`
+}
+
+// ModelForPhase returns the configured model for the given ticket phase,
+// or an empty string if none is set (meaning use Claude's default).
+func (s *Settings) ModelForPhase(phase string) string {
+	switch phase {
+	case "implement":
+		return s.ModelImplement
+	case "refactor":
+		return s.ModelRefactor
+	case "review":
+		return s.ModelReview
+	case "respond":
+		return s.ModelRespond
+	}
+	return ""
 }
 
 // Path returns the full path to the settings file within ticketsDir.

@@ -11,6 +11,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/fimmtiu/code-factory/internal/config"
 	"github.com/fimmtiu/code-factory/internal/db"
 	"github.com/fimmtiu/code-factory/internal/models"
 	"github.com/fimmtiu/code-factory/internal/storage"
@@ -625,14 +626,21 @@ func debugPromptCmd(wu *models.WorkUnit, phase models.TicketPhase, logfilePath s
 			return nil
 		}
 
+		claudeCmd := "claude"
+		if model := config.Current.ModelForPhase(string(phase)); model != "" {
+			claudeCmd += " --model " + model
+		}
+		if config.Current.Effort != "" {
+			claudeCmd += " --effort " + config.Current.Effort
+		}
 		script := fmt.Sprintf(`tell application "iTerm2"
 	tell current window
 		set myNewTab to create tab with default profile
 		tell current session of myNewTab
-			write text "claude < %s"
+			write text "%s < %s"
 		end tell
 	end tell
-end tell`, tmpPath)
+end tell`, claudeCmd, tmpPath)
 		cmd := exec.Command("osascript")
 		cmd.Stdin = strings.NewReader(script)
 		_ = cmd.Start()
