@@ -406,7 +406,6 @@ func extractResponseText(raw string) string {
 	return strings.TrimLeft(after, "\n")
 }
 
-
 func (v CommandView) openTerminal() (tea.Model, tea.Cmd) {
 	wu := v.selectedTicket()
 	if wu == nil {
