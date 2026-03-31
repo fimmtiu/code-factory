@@ -108,6 +108,7 @@ func (c *acpWorkerClient) RequestPermission(ctx context.Context, params acp.Requ
 	c.w.Status = StatusAwaitingResponse
 	_ = c.database.SetStatus(c.identifier, c.phase, models.StatusNeedsAttention)
 	c.logCh <- NewLogMessage(c.w.Number, fmt.Sprintf("permission request for %s: %s", c.identifier, title))
+	c.appendOutput(fmt.Sprintf("\n=== PERMISSION REQUEST ===\n%s\n", payload))
 
 	c.w.FromWorker <- WorkerToMainMessage{
 		WorkerNumber: c.w.Number,
