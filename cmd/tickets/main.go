@@ -24,6 +24,8 @@ func printUsage() {
 	fmt.Fprintln(os.Stderr, `Usage: tickets <subcommand> [args]
 
 Subcommands:
+  new                               Interactively create a new ticket
+  new-project                       Interactively create a new project
   init                              Initialize .tickets/ directory in the current repo
   status                            Show all tickets and projects
   create-project <id>               Create a project (reads JSON description from stdin)

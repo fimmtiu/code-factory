@@ -6,6 +6,9 @@ import (
 	"io"
 	"os"
 	"strconv"
+	"strings"
+
+	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/fimmtiu/code-factory/internal/db"
 	"github.com/fimmtiu/code-factory/internal/models"
@@ -52,6 +55,10 @@ func runCommand(subcommand string, args []string) error {
 		return runDismissChangeRequest(d, args)
 	case "open-change-requests":
 		return runOpenChangeRequests(d, args)
+	case "new":
+		return runWizard(d, "ticket")
+	case "new-project":
+		return runWizard(d, "project")
 	default:
 		return fmt.Errorf("unknown subcommand %q; run 'tickets' for usage", subcommand)
 	}
@@ -212,4 +219,41 @@ func runDismissChangeRequest(d *db.DB, args []string) error {
 		return fmt.Errorf("dismiss-change-request: invalid id %q: %w", args[0], err)
 	}
 	return d.DismissChangeRequest(id)
+}
+
+// allProjects returns all work units that are projects.
+func allProjects(d *db.DB) ([]*models.WorkUnit, error) {
+	units, err := d.Status()
+	if err != nil {
+		return nil, err
+	}
+	var projects []*models.WorkUnit
+	for _, u := range units {
+		if u.IsProject {
+			projects = append(projects, u)
+		}
+	}
+	return projects, nil
+}
+
+func runWizard(d *db.DB, kind string) error {
+	projects, err := allProjects(d)
+	if err != nil {
+		return err
+	}
+	prog := tea.NewProgram(newWizard(kind, projects), tea.WithAltScreen())
+	result, err := prog.Run()
+	if err != nil {
+		return err
+	}
+	final := result.(wizardModel)
+	if final.cancelled {
+		fmt.Fprintln(os.Stderr, "Cancelled.")
+		return nil
+	}
+	desc := strings.TrimSpace(final.descText)
+	if kind == "project" {
+		return d.CreateProject(final.fullIdentifier(), desc, []string{})
+	}
+	return d.CreateTicket(final.fullIdentifier(), desc, []string{})
 }
