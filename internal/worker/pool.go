@@ -11,10 +11,19 @@ import (
 // generous to avoid blocking workers during bursts of log activity.
 const logChannelBuffer = 100
 
+// WorkParams bundles the per-ticket arguments passed to WorkFn.
+type WorkParams struct {
+	WorktreePath string
+	Identifier   string
+	Phase        string
+	Prompt       string
+	LogfilePath  string
+}
+
 // WorkFn is the signature for the function that does the actual work on a
 // claimed ticket. The default is runACP; set to MockWorkFn for UI testing
 // without a running Claude process.
-type WorkFn func(ctx context.Context, w *Worker, database dbInterface, logCh chan<- LogMessage, worktreePath, identifier, phase, prompt, logfilePath string) error
+type WorkFn func(ctx context.Context, w *Worker, database dbInterface, logCh chan<- LogMessage, params WorkParams) error
 
 // Pool holds the collection of workers and the shared log channel. It is the
 // single point of management for the main goroutine.

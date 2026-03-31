@@ -37,15 +37,15 @@ var mockScriptAfter = []string{
 // file to the worktree and commits it.
 // The prompt and logfilePath parameters are accepted to satisfy the WorkFn
 // signature; logfilePath is written with the fake output for Log view testing.
-func MockWorkFn(ctx context.Context, w *Worker, database dbInterface, logCh chan<- LogMessage, worktreePath, identifier, phase, prompt, logfilePath string) error {
+func MockWorkFn(ctx context.Context, w *Worker, database dbInterface, logCh chan<- LogMessage, params WorkParams) error {
 	// Open the logfile so the Log view's E/C keys work on mock entries.
 	var logFile *os.File
-	if logfilePath != "" {
-		if f, err := os.Create(logfilePath); err == nil {
+	if params.LogfilePath != "" {
+		if f, err := os.Create(params.LogfilePath); err == nil {
 			logFile = f
 			defer logFile.Close()
 			fmt.Fprintf(logFile, "=== SESSION ===\nmock-session-%s-%d\n\n=== PROMPT ===\n%s\n\n=== OUTPUT ===\n",
-				identifier, time.Now().UnixNano(), prompt)
+				params.Identifier, time.Now().UnixNano(), params.Prompt)
 		}
 	}
 
@@ -85,12 +85,12 @@ func MockWorkFn(ctx context.Context, w *Worker, database dbInterface, logCh chan
 
 	// Phase 2: needs-attention — block until the user sends a response.
 	w.Status = StatusAwaitingResponse
-	if err := database.SetStatus(identifier, phase, models.StatusNeedsAttention); err != nil {
+	if err := database.SetStatus(params.Identifier, params.Phase, models.StatusNeedsAttention); err != nil {
 		logCh <- NewLogMessage(w.Number, fmt.Sprintf("[mock] error setting needs-attention: %v", err))
 	}
 	if w.notifCh != nil {
 		select {
-		case w.notifCh <- identifier + " needs attention":
+		case w.notifCh <- params.Identifier + " needs attention":
 		default:
 		}
 	}
@@ -109,7 +109,7 @@ func MockWorkFn(ctx context.Context, w *Worker, database dbInterface, logCh chan
 		return nil
 	case msg := <-w.ToWorker:
 		w.Status = StatusBusy
-		if err := database.SetStatus(identifier, phase, models.StatusInProgress); err != nil {
+		if err := database.SetStatus(params.Identifier, params.Phase, models.StatusInProgress); err != nil {
 			logCh <- NewLogMessage(w.Number, fmt.Sprintf("[mock] error restoring in-progress: %v", err))
 		}
 		writeLog("\n=== USER RESPONSE ===")
@@ -126,17 +126,17 @@ func MockWorkFn(ctx context.Context, w *Worker, database dbInterface, logCh chan
 	}
 
 	// Phase 4: write a timestamped file to the worktree and commit it.
-	ticketName := filepath.Base(strings.ReplaceAll(identifier, "/", string(filepath.Separator)))
+	ticketName := filepath.Base(strings.ReplaceAll(params.Identifier, "/", string(filepath.Separator)))
 	filename := ticketName + "_mock_work.md"
-	filePath := filepath.Join(worktreePath, filename)
+	filePath := filepath.Join(params.WorktreePath, filename)
 
-	content := fmt.Sprintf("# Mock work for %s\n\nCompleted at: %s\n", identifier, time.Now().Format(time.RFC3339))
+	content := fmt.Sprintf("# Mock work for %s\n\nCompleted at: %s\n", params.Identifier, time.Now().Format(time.RFC3339))
 	if err := os.WriteFile(filePath, []byte(content), 0o644); err != nil {
 		return fmt.Errorf("mock: write %s: %w", filePath, err)
 	}
 
 	gitRun := func(args ...string) error {
-		cmd := exec.Command("git", append([]string{"-C", worktreePath}, args...)...)
+		cmd := exec.Command("git", append([]string{"-C", params.WorktreePath}, args...)...)
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			return fmt.Errorf("git %s: %w\n%s", strings.Join(args, " "), err, strings.TrimSpace(string(out)))
@@ -147,7 +147,7 @@ func MockWorkFn(ctx context.Context, w *Worker, database dbInterface, logCh chan
 	if err := gitRun("add", filename); err != nil {
 		return fmt.Errorf("mock: %w", err)
 	}
-	commitMsg := fmt.Sprintf("mock work: %s at %s", identifier, time.Now().Format("2006-01-02 15:04:05"))
+	commitMsg := fmt.Sprintf("mock work: %s at %s", params.Identifier, time.Now().Format("2006-01-02 15:04:05"))
 	if err := gitRun(
 		"-c", "user.email=mock@code-factory",
 		"-c", "user.name=Code Factory Mock",

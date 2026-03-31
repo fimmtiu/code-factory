@@ -113,7 +113,7 @@ func (c *acpWorkerClient) SessionUpdate(_ context.Context, params acp.SessionNot
 //  1. Sets the worker status to AwaitingResponse.
 //  2. Marks the ticket as needs-attention.
 //  3. Sends a MsgPermissionRequest to the main goroutine.
-//  4. Blocks until the main goroutine sends back a MsgPermission response.
+//  4. Blocks until the main goroutine sends back a MsgResponse.
 func (c *acpWorkerClient) RequestPermission(ctx context.Context, params acp.RequestPermissionRequest) (acp.RequestPermissionResponse, error) {
 	title := ""
 	if params.ToolCall.Title != nil {
@@ -254,21 +254,17 @@ func runACP(
 	w *Worker,
 	database dbInterface,
 	logCh chan<- LogMessage,
-	worktreePath string,
-	identifier string,
-	phase string,
-	prompt string,
-	logfilePath string,
+	params WorkParams,
 ) error {
-	logFile, err := os.Create(logfilePath)
+	logFile, err := os.Create(params.LogfilePath)
 	if err != nil {
-		return fmt.Errorf("create logfile %s: %w", logfilePath, err)
+		return fmt.Errorf("create logfile %s: %w", params.LogfilePath, err)
 	}
 	defer logFile.Close()
 
 	acpArgs := []string{"-y", "@zed-industries/claude-code-acp@latest"}
 	if config.Current != nil {
-		if model := config.Current.ModelForPhase(phase); model != "" {
+		if model := config.Current.ModelForPhase(params.Phase); model != "" {
 			acpArgs = append(acpArgs, "--model", model)
 		}
 		if config.Current.Effort != "" {
@@ -276,7 +272,7 @@ func runACP(
 		}
 	}
 	cmd := exec.CommandContext(ctx, "npx", acpArgs...)
-	cmd.Dir = worktreePath
+	cmd.Dir = params.WorktreePath
 	cmd.Stderr = newPrefixWriter(logFile, "[stderr] ")
 
 	stdin, err := cmd.StdinPipe()
@@ -301,8 +297,8 @@ func runACP(
 		w:          w,
 		logFile:    logFile,
 		database:   database,
-		identifier: identifier,
-		phase:      phase,
+		identifier: params.Identifier,
+		phase:      params.Phase,
 		logCh:      logCh,
 	}
 
@@ -319,7 +315,7 @@ func runACP(
 	}
 
 	sessResp, err := conn.NewSession(ctx, acp.NewSessionRequest{
-		Cwd:        worktreePath,
+		Cwd:        params.WorktreePath,
 		McpServers: []acp.McpServer{},
 	})
 	if err != nil {
@@ -327,11 +323,11 @@ func runACP(
 	}
 
 	_, _ = fmt.Fprintf(logFile, "=== SESSION ===\n%s\n\n=== PROMPT ===\n%s\n\n=== OUTPUT ===\n",
-		sessResp.SessionId, prompt)
+		sessResp.SessionId, params.Prompt)
 
 	_, err = conn.Prompt(ctx, acp.PromptRequest{
 		SessionId: sessResp.SessionId,
-		Prompt:    []acp.ContentBlock{acp.TextBlock(prompt)},
+		Prompt:    []acp.ContentBlock{acp.TextBlock(params.Prompt)},
 	})
 	if err != nil {
 		return fmt.Errorf("ACP prompt: %w", err)

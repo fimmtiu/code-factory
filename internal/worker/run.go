@@ -61,7 +61,13 @@ func (w *Worker) processTicket(ctx context.Context, ticket *models.WorkUnit) {
 		return
 	}
 
-	acpErr := w.workFn(ctx, w, w.database, w.logCh, worktreePath, identifier, string(ticket.Phase), prompt, logfilePath)
+	acpErr := w.workFn(ctx, w, w.database, w.logCh, WorkParams{
+		WorktreePath: worktreePath,
+		Identifier:   identifier,
+		Phase:        string(ticket.Phase),
+		Prompt:       prompt,
+		LogfilePath:  logfilePath,
+	})
 
 	// On graceful shutdown the context is cancelled before the work finishes.
 	// Reset the ticket to idle so it is re-processed on the next run rather
