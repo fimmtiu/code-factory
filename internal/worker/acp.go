@@ -93,17 +93,17 @@ func (c *acpWorkerClient) SessionUpdate(_ context.Context, params acp.SessionNot
 		}
 	case u.AgentThoughtChunk != nil:
 		if u.AgentThoughtChunk.Content.Text != nil {
-			c.appendOutput("[thought] " + u.AgentThoughtChunk.Content.Text.Text)
+			c.appendOutput("\n[thought] " + u.AgentThoughtChunk.Content.Text.Text)
 		}
 	case u.ToolCall != nil:
 		title := u.ToolCall.Title
-		c.appendOutput(fmt.Sprintf("[tool] %s (%s)\n", title, u.ToolCall.Status))
+		c.appendOutput(fmt.Sprintf("\n[tool] %s (%s)\n", title, u.ToolCall.Status))
 	case u.ToolCallUpdate != nil:
 		status := ""
 		if u.ToolCallUpdate.Status != nil {
 			status = string(*u.ToolCallUpdate.Status)
 		}
-		c.appendOutput(fmt.Sprintf("[tool-update] %s: %s\n", u.ToolCallUpdate.ToolCallId, status))
+		c.appendOutput(fmt.Sprintf("\n[tool-update] %s: %s\n", u.ToolCallUpdate.ToolCallId, status))
 	}
 	return nil
 }
@@ -119,14 +119,21 @@ func (c *acpWorkerClient) RequestPermission(ctx context.Context, params acp.Requ
 	if params.ToolCall.Title != nil {
 		title = *params.ToolCall.Title
 	}
-	var optionNames []string
-	for _, o := range params.Options {
-		optionNames = append(optionNames, fmt.Sprintf("%s (%s)", o.Name, o.Kind))
+
+	// Build structured options for the TUI and a text summary for the logfile.
+	opts := make([]PermissionOption, len(params.Options))
+	optionNames := make([]string, len(params.Options))
+	for i, o := range params.Options {
+		opts[i] = PermissionOption{Name: o.Name, Kind: string(o.Kind), OptionID: string(o.OptionId)}
+		optionNames[i] = fmt.Sprintf("%s (%s)", o.Name, o.Kind)
 	}
 	payload := title
 	if len(optionNames) > 0 {
 		payload += "\nOptions: " + strings.Join(optionNames, ", ")
 	}
+
+	// Store structured options so the TUI can display a numbered chooser.
+	c.w.SetPendingPermission(&PendingPermissionRequest{Title: title, Options: opts})
 
 	c.w.Status = StatusAwaitingResponse
 	_ = c.database.SetStatus(c.identifier, c.phase, models.StatusNeedsAttention)
@@ -147,6 +154,7 @@ func (c *acpWorkerClient) RequestPermission(ctx context.Context, params acp.Requ
 
 	select {
 	case <-ctx.Done():
+		c.w.SetPendingPermission(nil)
 		c.w.Status = StatusBusy
 		_ = c.database.SetStatus(c.identifier, c.phase, models.StatusInProgress)
 		return acp.RequestPermissionResponse{
@@ -156,6 +164,7 @@ func (c *acpWorkerClient) RequestPermission(ctx context.Context, params acp.Requ
 		}, nil
 
 	case msg := <-c.w.ToWorker:
+		c.w.SetPendingPermission(nil)
 		c.w.Status = StatusBusy
 		_ = c.database.SetStatus(c.identifier, c.phase, models.StatusInProgress)
 		c.logCh <- NewLogMessage(c.w.Number, fmt.Sprintf("permission response for %s: %s", c.identifier, msg.Payload))

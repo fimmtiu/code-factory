@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"strconv"
 	"strings"
 	"time"
 
@@ -134,6 +135,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case openQuickResponseMsg:
+		// If the worker has a structured permission request pending, show the
+		// options chooser; otherwise fall back to the free-text input.
+		if m.pool != nil && msg.wu.ClaimedBy != "" {
+			if num, err := strconv.Atoi(msg.wu.ClaimedBy); err == nil {
+				if w := m.pool.GetWorker(num); w != nil {
+					if perm := w.GetPendingPermission(); perm != nil {
+						m.dialog = NewPermissionDialog(m.db, m.pool, msg.wu, perm)
+						return m, nil
+					}
+				}
+			}
+		}
 		m.dialog = NewQuickResponseDialog(m.db, m.pool, msg.wu, m.width)
 		return m, nil
 
@@ -196,17 +209,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 
-	// If a dialog is open, route non-key messages to it first.
+	// Broadcast non-key messages to all views so that each view receives its
+	// own async results (e.g. respondToAgentDoneMsg, commandRefreshMsg)
+	// regardless of which view is active or whether a dialog is open.
+	// The dialog also receives the message, but views are never skipped.
+	var cmds []tea.Cmd
 	if m.dialog != nil {
 		updated, cmd := m.dialog.Update(msg)
 		m.dialog = updated.(dialog)
-		return m, cmd
+		if cmd != nil {
+			cmds = append(cmds, cmd)
+		}
 	}
-
-	// Broadcast non-key messages to all views so that each view receives its
-	// own async results (e.g. commandRefreshMsg) regardless of which view is
-	// currently active.
-	var cmds []tea.Cmd
 	for i, v := range m.views {
 		updated, cmd := v.Update(msg)
 		m.views[i] = updated.(viewModel)

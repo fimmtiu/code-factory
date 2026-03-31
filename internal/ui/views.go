@@ -65,6 +65,22 @@ type viewModel interface {
 	KeyBindings() []KeyBinding
 }
 
+// truncateLine truncates s to at most maxWidth visible runes, appending an
+// ellipsis if truncation occurred.
+func truncateLine(s string, maxWidth int) string {
+	if maxWidth <= 0 {
+		return s
+	}
+	runes := []rune(s)
+	if len(runes) <= maxWidth {
+		return s
+	}
+	if maxWidth > 1 {
+		return string(runes[:maxWidth-1]) + "…"
+	}
+	return string(runes[:maxWidth])
+}
+
 // nextView returns the next view in the cycle (project → command → worker → log → project).
 func nextView(current ViewID) ViewID {
 	return (current + 1) % 4

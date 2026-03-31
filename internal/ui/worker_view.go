@@ -31,9 +31,6 @@ var (
 				Foreground(lipgloss.Color("255")).Bold(true) // bright white for newly arrived lines
 )
 
-// linesPerWorker is the number of rendered lines each worker section occupies:
-// 1 status line + 3 output lines + 1 separator.
-const linesPerWorker = 5
 
 // ── Messages ─────────────────────────────────────────────────────────────────
 
@@ -158,12 +155,13 @@ func (v WorkerView) viewHeight() int {
 	return h
 }
 
-// totalLines returns the total rendered line count for all workers.
+// totalLines returns the total rendered line count for all workers, accounting
+// for word-wrapped output lines whose height varies with content and pane width.
 func (v WorkerView) totalLines() int {
 	if v.pool == nil {
 		return 0
 	}
-	return len(v.pool.Workers) * linesPerWorker
+	return len(v.renderAllLines())
 }
 
 // ── View ──────────────────────────────────────────────────────────────────────
@@ -206,22 +204,35 @@ func (v WorkerView) renderAllLines() []string {
 		statusLine := v.renderStatusLine(w)
 		lines = append(lines, statusLine)
 
-		// Last three lines of agent output. When there is no output at all,
-		// show "(no output)" in light grey on the middle line only.
+		// Wrap all raw output lines and take the last 3 display lines so
+		// each worker section is always exactly 3 output lines tall.
 		output := w.GetLastOutput()
 		highlight := time.Since(v.outputChangedAt[w.Number]) < 600*time.Millisecond
-		for i := 0; i < 3; i++ {
-			if i < len(output) {
-				line := truncateLine(output[i], innerW)
-				if highlight && i == len(output)-1 {
-					lines = append(lines, workerNewLineStyle.Render(line))
-				} else {
-					lines = append(lines, workerOutputStyle.Render(line))
-				}
-			} else if len(output) == 0 && i == 1 {
+
+		var displayLines []string
+		for _, rawLine := range output {
+			for _, dl := range wrapLine(rawLine, innerW) {
+				displayLines = append(displayLines, dl)
+			}
+		}
+		if len(displayLines) > 3 {
+			displayLines = displayLines[len(displayLines)-3:]
+		}
+		lastContentIdx := len(displayLines) - 1 // index of last real line; -1 if none
+		for len(displayLines) < 3 {
+			displayLines = append(displayLines, "")
+		}
+
+		for i, dl := range displayLines {
+			switch {
+			case dl == "" && i == 1 && len(output) == 0:
 				lines = append(lines, workerNoOutputStyle.Render("(no output)"))
-			} else {
+			case dl == "":
 				lines = append(lines, "")
+			case highlight && i == lastContentIdx:
+				lines = append(lines, workerNewLineStyle.Render(dl))
+			default:
+				lines = append(lines, workerOutputStyle.Render(dl))
 			}
 		}
 
@@ -250,21 +261,6 @@ func (v WorkerView) renderStatusLine(w *worker.Worker) string {
 	}
 }
 
-// truncateLine truncates a string to at most maxWidth visible characters,
-// appending an ellipsis if truncation occurred.
-func truncateLine(s string, maxWidth int) string {
-	if maxWidth <= 0 {
-		return s
-	}
-	runes := []rune(s)
-	if len(runes) <= maxWidth {
-		return s
-	}
-	if maxWidth > 1 {
-		return string(runes[:maxWidth-1]) + "…"
-	}
-	return string(runes[:maxWidth])
-}
 
 // ── KeyBindings ───────────────────────────────────────────────────────────────
 

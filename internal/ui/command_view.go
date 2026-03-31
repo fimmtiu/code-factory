@@ -39,7 +39,10 @@ type commandRefreshMsg struct {
 	tickets []*models.WorkUnit
 }
 
-type respondToAgentDoneMsg struct{ errMsg string }
+type respondToAgentDoneMsg struct {
+	errMsg     string
+	identifier string // ticket that was responded to; used for optimistic removal
+}
 
 // ── listRow ───────────────────────────────────────────────────────────────────
 
@@ -169,6 +172,20 @@ func (v CommandView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return v, nil
 		}
 		v.errorMsg = ""
+		// Optimistically remove the ticket from the list immediately so the
+		// view updates without waiting for the DB round-trip to complete.
+		if msg.identifier != "" {
+			filtered := v.rows[:0]
+			for _, row := range v.rows {
+				if !row.separator && row.wu.Identifier == msg.identifier {
+					continue
+				}
+				filtered = append(filtered, row)
+			}
+			v.rows = filtered
+			v.clampSelected()
+			v.clampScroll()
+		}
 		return v, v.fetchCmd()
 
 	case tea.KeyMsg:

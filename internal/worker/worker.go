@@ -9,6 +9,20 @@ import (
 // workerChannelBuffer is the buffer size for the worker communication channels.
 const workerChannelBuffer = 16
 
+// PermissionOption is one choice in a pending permission request.
+type PermissionOption struct {
+	Name     string
+	Kind     string
+	OptionID string
+}
+
+// PendingPermissionRequest holds the details of an in-flight permission
+// request that is awaiting a response from the user.
+type PendingPermissionRequest struct {
+	Title   string
+	Options []PermissionOption
+}
+
 // Worker represents a single worker slot in the pool. Each worker has a
 // 1-based identifier number, a current status, a paused flag, and a pair of
 // typed channels for bidirectional communication with the main goroutine.
@@ -33,8 +47,12 @@ type Worker struct {
 	// in the worker status view. Protected by mu.
 	LastOutput []string
 
-	// mu guards LastOutput for concurrent access between the worker goroutine
-	// (writer) and the UI goroutine (reader).
+	// pendingPermission holds the in-flight permission request waiting for a
+	// user response, or nil if none is pending. Protected by mu.
+	pendingPermission *PendingPermissionRequest
+
+	// mu guards LastOutput and pendingPermission for concurrent access between
+	// the worker goroutine (writer) and the UI goroutine (reader).
 	mu sync.RWMutex
 
 	// database, logCh, notifCh, ticketsDir, and workFn are set by Pool.Start
@@ -74,4 +92,20 @@ func (w *Worker) SetLastOutput(lines []string) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.LastOutput = lines
+}
+
+// GetPendingPermission returns a copy of the pending permission request, or
+// nil if none is currently in flight. Safe for concurrent access.
+func (w *Worker) GetPendingPermission() *PendingPermissionRequest {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	return w.pendingPermission
+}
+
+// SetPendingPermission replaces the pending permission request under the write
+// lock. Pass nil to clear it after the user responds.
+func (w *Worker) SetPendingPermission(req *PendingPermissionRequest) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.pendingPermission = req
 }
