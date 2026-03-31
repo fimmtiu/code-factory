@@ -66,7 +66,7 @@ func quickResponseLines(wu *models.WorkUnit) []string {
 		return []string{"(could not find repo root)"}
 	}
 	ticketsDir := storage.TicketsDirPath(repoRoot)
-	logPath := worker.LatestLogfilePath(ticketsDir, wu.Identifier, wu.Phase)
+	logPath := worker.LatestLogfilePath(ticketsDir, wu.Identifier, string(wu.Phase))
 	if logPath == "" {
 		return []string{"(no logfile found)"}
 	}

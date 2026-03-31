@@ -156,7 +156,7 @@ func NewTicketDialog(database *db.DB, wu *models.WorkUnit, width, height int) *T
 	if repoRoot, err := storage.FindRepoRoot("."); err == nil {
 		ticketsDir := storage.TicketsDirPath(repoRoot)
 		for _, p := range phaseOrder {
-			paths := worker.AllLogfilePaths(ticketsDir, wu.Identifier, p.phase)
+			paths := worker.AllLogfilePaths(ticketsDir, wu.Identifier, string(p.phase))
 			for i, path := range paths {
 				label := p.label
 				if len(paths) > 1 {

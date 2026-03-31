@@ -372,7 +372,7 @@ func buildAgentResponseTemplate(wu *models.WorkUnit) string {
 	agentOutput := "(no logfile found)"
 	if repoRoot, err := storage.FindRepoRoot("."); err == nil {
 		ticketsDir := storage.TicketsDirPath(repoRoot)
-		if logPath := worker.LatestLogfilePath(ticketsDir, wu.Identifier, wu.Phase); logPath != "" {
+		if logPath := worker.LatestLogfilePath(ticketsDir, wu.Identifier, string(wu.Phase)); logPath != "" {
 			agentOutput = lastNLines(logPath, 30)
 		}
 	}
@@ -607,7 +607,7 @@ func (v CommandView) debugPrompt() (tea.Model, tea.Cmd) {
 		return v, nil
 	}
 	ticketsDir := storage.TicketsDirPath(repoRoot)
-	logfilePath := worker.LatestLogfilePath(ticketsDir, wu.Identifier, wu.Phase)
+	logfilePath := worker.LatestLogfilePath(ticketsDir, wu.Identifier, string(wu.Phase))
 	return v, debugPromptCmd(wu, wu.Phase, logfilePath)
 }
 

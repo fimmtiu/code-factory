@@ -8,6 +8,7 @@ import (
 
 	"github.com/fimmtiu/code-factory/internal/db"
 	"github.com/fimmtiu/code-factory/internal/gitutil"
+	"github.com/fimmtiu/code-factory/internal/models"
 	"github.com/fimmtiu/code-factory/internal/worker"
 )
 
@@ -354,7 +355,7 @@ func TestFindStaleTickets_FindsOldTickets(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Claim: %v", err)
 	}
-	if err := d.SetStatus(ticket.Identifier, string(ticket.Phase), "in-progress"); err != nil {
+	if err := d.SetStatus(ticket.Identifier, ticket.Phase, models.StatusInProgress); err != nil {
 		t.Fatalf("SetStatus: %v", err)
 	}
 

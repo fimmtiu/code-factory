@@ -42,7 +42,7 @@ func (w *Worker) processTicket(ctx context.Context, ticket *models.WorkUnit) {
 	identifier := ticket.Identifier
 
 	w.Status = StatusBusy
-	if err := w.database.SetStatus(identifier, string(ticket.Phase), models.StatusInProgress); err != nil {
+	if err := w.database.SetStatus(identifier, ticket.Phase, models.StatusInProgress); err != nil {
 		w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("error setting in-progress on %s: %v", identifier, err))
 		w.Status = StatusIdle
 		return
@@ -64,7 +64,7 @@ func (w *Worker) processTicket(ctx context.Context, ticket *models.WorkUnit) {
 	acpErr := w.workFn(ctx, w, w.database, w.logCh, WorkParams{
 		WorktreePath: worktreePath,
 		Identifier:   identifier,
-		Phase:        string(ticket.Phase),
+		Phase:        ticket.Phase,
 		Prompt:       prompt,
 		LogfilePath:  logfilePath,
 	})
@@ -73,7 +73,7 @@ func (w *Worker) processTicket(ctx context.Context, ticket *models.WorkUnit) {
 	// Reset the ticket to idle so it is re-processed on the next run rather
 	// than incorrectly advancing to user-review.
 	if ctx.Err() != nil {
-		_ = w.database.SetStatus(identifier, string(ticket.Phase), models.StatusIdle)
+		_ = w.database.SetStatus(identifier, ticket.Phase, models.StatusIdle)
 		w.releaseTicket(identifier)
 		w.Status = StatusIdle
 		return
@@ -84,7 +84,7 @@ func (w *Worker) processTicket(ctx context.Context, ticket *models.WorkUnit) {
 	}
 	w.logCh <- NewLogMessageWithFile(w.Number, fmt.Sprintf("completed processing ticket %s", identifier), logfilePath)
 
-	if err := w.database.SetStatus(identifier, string(ticket.Phase), models.StatusUserReview); err != nil {
+	if err := w.database.SetStatus(identifier, ticket.Phase, models.StatusUserReview); err != nil {
 		w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("error setting user-review on %s: %v", identifier, err))
 	}
 	w.releaseTicket(identifier)

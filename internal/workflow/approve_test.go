@@ -33,7 +33,7 @@ func openTestDB(t *testing.T) *db.DB {
 }
 
 // ticketPhase returns the current phase of a ticket, failing the test if not found.
-func ticketPhase(t *testing.T, d *db.DB, identifier string) string {
+func ticketPhase(t *testing.T, d *db.DB, identifier string) models.TicketPhase {
 	t.Helper()
 	phase, err := d.GetTicketPhase(identifier)
 	if err != nil {
@@ -43,7 +43,7 @@ func ticketPhase(t *testing.T, d *db.DB, identifier string) string {
 }
 
 // projectPhase returns the current phase of a project by scanning Status().
-func projectPhase(t *testing.T, d *db.DB, identifier string) string {
+func projectPhase(t *testing.T, d *db.DB, identifier string) models.TicketPhase {
 	t.Helper()
 	units, err := d.Status()
 	if err != nil {

@@ -26,7 +26,7 @@ type acpWorkerClient struct {
 	// db and ticket state needed for permission handling.
 	database   dbInterface
 	identifier string
-	phase      string
+	phase      models.TicketPhase
 
 	logCh chan<- LogMessage
 
@@ -39,7 +39,7 @@ type acpWorkerClient struct {
 // dbInterface is the minimal subset of db.DB used by the ACP client.
 // Defined as an interface so tests can substitute a fake.
 type dbInterface interface {
-	SetStatus(identifier, phase, status string) error
+	SetStatus(identifier string, phase models.TicketPhase, status models.TicketStatus) error
 }
 
 // appendOutput writes text to the logfile and updates LastOutput on the worker.
@@ -264,7 +264,7 @@ func runACP(
 
 	acpArgs := []string{"-y", "@zed-industries/claude-code-acp@latest"}
 	if config.Current != nil {
-		if model := config.Current.ModelForPhase(params.Phase); model != "" {
+		if model := config.Current.ModelForPhase(string(params.Phase)); model != "" {
 			acpArgs = append(acpArgs, "--model", model)
 		}
 		if config.Current.Effort != "" {

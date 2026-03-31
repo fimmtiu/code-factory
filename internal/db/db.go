@@ -273,7 +273,7 @@ func (d *DB) loadProjects() (map[int64]*models.WorkUnit, error) {
 		projectByID[id] = &models.WorkUnit{
 			Identifier:   identifier,
 			Description:  description,
-			Phase:        phase,
+			Phase:        models.TicketPhase(phase),
 			IsProject:    true,
 			LastUpdated:  time.Unix(lastUpdated, 0).UTC(),
 			Dependencies: []string{},
@@ -503,11 +503,11 @@ func (d *DB) CreateTicket(identifier, description string, deps []string) error {
 
 // SetStatus updates the phase (and optionally status) of a ticket. When phase
 // is "done", the ticket's branch is merged and its worktree is removed.
-func (d *DB) SetStatus(identifier, phase, status string) error {
-	if !models.IsValidTicketPhase(phase) {
+func (d *DB) SetStatus(identifier string, phase models.TicketPhase, status models.TicketStatus) error {
+	if !models.IsValidTicketPhase(string(phase)) {
 		return fmt.Errorf("invalid ticket phase %q", phase)
 	}
-	if !models.IsValidTicketStatus(status) {
+	if !models.IsValidTicketStatus(string(status)) {
 		return fmt.Errorf("invalid ticket status %q", status)
 	}
 
@@ -527,14 +527,14 @@ func (d *DB) SetStatus(identifier, phase, status string) error {
 		return err
 	}
 
-	if phase == string(models.PhaseDone) {
+	if phase == models.PhaseDone {
 		return d.markTicketDone(ticketID, identifier, projectID)
 	}
 
 	return d.withTx(func(tx *sql.Tx) error {
 		_, err := tx.Exec(
 			`UPDATE tickets SET phase = ?, status = ? WHERE id = ?`,
-			phase, status, ticketID,
+			string(phase), string(status), ticketID,
 		)
 		return err
 	})
@@ -981,7 +981,7 @@ func (d *DB) ActionableTickets() ([]*models.WorkUnit, error) {
 
 // GetTicketPhase returns the current phase of the ticket with the given
 // identifier, or an error if it is not found.
-func (d *DB) GetTicketPhase(identifier string) (string, error) {
+func (d *DB) GetTicketPhase(identifier string) (models.TicketPhase, error) {
 	var phase string
 	err := d.db.QueryRow(`SELECT phase FROM tickets WHERE identifier = ?`, identifier).Scan(&phase)
 	if err == sql.ErrNoRows {
@@ -990,7 +990,7 @@ func (d *DB) GetTicketPhase(identifier string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return phase, nil
+	return models.TicketPhase(phase), nil
 }
 
 // SetProjectPhase updates the phase of the project with the given identifier.

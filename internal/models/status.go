@@ -1,6 +1,6 @@
 package models
 
-type TicketPhase = string
+type TicketPhase string
 
 const (
 	PhaseBlocked   TicketPhase = "blocked"
@@ -11,7 +11,7 @@ const (
 	PhaseDone      TicketPhase = "done"
 )
 
-type TicketStatus = string
+type TicketStatus string
 
 const (
 	StatusIdle           TicketStatus = "idle"
@@ -21,7 +21,7 @@ const (
 )
 
 func IsValidTicketPhase(s string) bool {
-	switch s {
+	switch TicketPhase(s) {
 	case PhaseBlocked, PhaseImplement, PhaseReview, PhaseRespond, PhaseRefactor, PhaseDone:
 		return true
 	}
@@ -38,7 +38,7 @@ func IsValidProjectPhase(s string) bool {
 }
 
 func IsValidTicketStatus(s string) bool {
-	switch s {
+	switch TicketStatus(s) {
 	case StatusIdle, StatusNeedsAttention, StatusInProgress, StatusUserReview:
 		return true
 	}

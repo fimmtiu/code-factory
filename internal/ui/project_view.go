@@ -58,8 +58,8 @@ var (
 				Background(colourPrimary).
 				Foreground(colourOnPrimary)
 
-	// Phase badge styles (keyed by phase string)
-	phaseBadgeStyles = map[string]lipgloss.Style{
+	// Phase badge styles (keyed by ticket phase)
+	phaseBadgeStyles = map[models.TicketPhase]lipgloss.Style{
 		models.PhaseImplement: lipgloss.NewStyle().Foreground(lipgloss.Color("37")),
 		models.PhaseRefactor:  lipgloss.NewStyle().Foreground(lipgloss.Color("214")),
 		models.PhaseReview:    lipgloss.NewStyle().Foreground(lipgloss.Color("69")),
@@ -718,7 +718,7 @@ func (v ProjectView) renderTreeRow(node treeNode, idx int, isLast bool, w int) s
 	badge := ""
 	styledBadge := ""
 	if !node.wu.IsProject {
-		badge = "[" + node.wu.Phase + "]"
+		badge = "[" + string(node.wu.Phase) + "]"
 		if bs, ok := phaseBadgeStyles[node.wu.Phase]; ok {
 			styledBadge = bs.Render(badge)
 		} else {

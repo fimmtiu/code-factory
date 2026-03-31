@@ -8,6 +8,7 @@ import (
 
 	"github.com/fimmtiu/code-factory/internal/db"
 	"github.com/fimmtiu/code-factory/internal/gitutil"
+	"github.com/fimmtiu/code-factory/internal/models"
 )
 
 // fakeGitClient implements gitutil.GitClient without invoking real git.
@@ -64,7 +65,7 @@ func TestSetStatus_UpdatesLastUpdated(t *testing.T) {
 	time.Sleep(time.Second)
 	before := time.Now().Unix()
 
-	if err := d.SetStatus("proj/ticket", "review", "idle"); err != nil {
+	if err := d.SetStatus("proj/ticket", models.PhaseReview, models.StatusIdle); err != nil {
 		t.Fatalf("SetStatus: %v", err)
 	}
 

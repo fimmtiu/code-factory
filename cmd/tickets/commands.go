@@ -137,9 +137,9 @@ func runSetStatus(d *db.DB, args []string) error {
 	}
 	status := models.StatusIdle
 	if len(args) >= 3 {
-		status = args[2]
+		status = models.TicketStatus(args[2])
 	}
-	return d.SetStatus(args[0], args[1], status)
+	return d.SetStatus(args[0], models.TicketPhase(args[1]), status)
 }
 
 func runClaim(d *db.DB, args []string) error {

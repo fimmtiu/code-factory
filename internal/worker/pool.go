@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/fimmtiu/code-factory/internal/db"
+	"github.com/fimmtiu/code-factory/internal/models"
 )
 
 // logChannelBuffer is the buffer size for the shared log channel. It is kept
@@ -15,7 +16,7 @@ const logChannelBuffer = 100
 type WorkParams struct {
 	WorktreePath string
 	Identifier   string
-	Phase        string
+	Phase        models.TicketPhase
 	Prompt       string
 	LogfilePath  string
 }
