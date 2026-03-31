@@ -247,7 +247,7 @@ func (v LogView) copyLogfilePath() (tea.Model, tea.Cmd) {
 		return v, nil
 	}
 	_ = util.CopyToClipboard(entry.Logfile)
-	return v, nil
+	return v, ShowNotification("Copied path to clipboard")
 }
 
 // ── Dimension helpers ─────────────────────────────────────────────────────────

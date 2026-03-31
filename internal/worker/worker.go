@@ -37,10 +37,11 @@ type Worker struct {
 	// (writer) and the UI goroutine (reader).
 	mu sync.RWMutex
 
-	// database, logCh, ticketsDir, and workFn are set by Pool.Start before the
-	// goroutine is launched and remain constant for the worker's lifetime.
+	// database, logCh, notifCh, ticketsDir, and workFn are set by Pool.Start
+	// before the goroutine is launched and remain constant for the worker's lifetime.
 	database   *db.DB
 	logCh      chan<- LogMessage
+	notifCh    chan<- string // sends notification text to the TUI
 	ticketsDir string
 	workFn     WorkFn
 }

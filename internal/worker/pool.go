@@ -21,6 +21,7 @@ type WorkFn func(ctx context.Context, w *Worker, database dbInterface, logCh cha
 type Pool struct {
 	Workers      []*Worker
 	LogChannel   chan LogMessage
+	NotifChannel chan string // receives notification text strings from workers for display in the TUI
 	PoolSize     int
 	PollInterval int // seconds
 
@@ -44,6 +45,7 @@ func NewPool(size int, pollInterval int) *Pool {
 	return &Pool{
 		Workers:      workers,
 		LogChannel:   make(chan LogMessage, logChannelBuffer),
+		NotifChannel: make(chan string, 20),
 		PoolSize:     size,
 		PollInterval: pollInterval,
 		WorkFn:       runACP,
@@ -67,6 +69,7 @@ func (p *Pool) Start(database *db.DB, ticketsDir string) {
 	for _, w := range p.Workers {
 		w.database = database
 		w.logCh = p.LogChannel
+		w.notifCh = p.NotifChannel
 		w.ticketsDir = ticketsDir
 		w.workFn = p.WorkFn
 		p.wg.Add(1)

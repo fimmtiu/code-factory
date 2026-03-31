@@ -79,6 +79,9 @@ func (m Model) Init() tea.Cmd {
 			cmds = append(cmds, cmd)
 		}
 	}
+	if m.pool != nil {
+		cmds = append(cmds, waitForWorkerNotif(m.pool.NotifChannel))
+	}
 	return tea.Batch(cmds...)
 }
 
@@ -99,6 +102,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return m, tea.Batch(cmds...)
+
+	case workerNotifMsg:
+		// Re-arm the listener so the next notification is also delivered.
+		return m, tea.Batch(
+			ShowNotification(msg.text),
+			waitForWorkerNotif(m.pool.NotifChannel),
+		)
 
 	case notifMsg:
 		m.notifID++

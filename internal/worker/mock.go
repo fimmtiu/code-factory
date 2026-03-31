@@ -88,6 +88,12 @@ func MockWorkFn(ctx context.Context, w *Worker, database dbInterface, logCh chan
 	if err := database.SetStatus(identifier, phase, models.StatusNeedsAttention); err != nil {
 		logCh <- NewLogMessage(w.Number, fmt.Sprintf("[mock] error setting needs-attention: %v", err))
 	}
+	if w.notifCh != nil {
+		select {
+		case w.notifCh <- identifier + " needs attention":
+		default:
+		}
+	}
 	question := "Mock question: please confirm you want to proceed with these changes."
 	writeLog("[mock] asking: " + question)
 	logCh <- NewLogMessage(w.Number, fmt.Sprintf("[mock] asking user: %s", question))
