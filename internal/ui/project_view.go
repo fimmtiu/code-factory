@@ -274,16 +274,28 @@ func (v ProjectView) filteredTreeNodes() []treeNode {
 		}
 	}
 
-	// For each matched node, mark its ancestors.
+	// For each matched node, mark its direct ancestors. After finding each
+	// ancestor, the search continues only from before that ancestor's position
+	// so that siblings of ancestors are never included.
 	for i := range v.treeNodes {
 		if !matched[i] {
 			continue
 		}
+		pos := i
 		depth := v.treeNodes[i].depth
-		for j := i - 1; j >= 0 && depth > 0; j-- {
-			if v.treeNodes[j].depth == depth-1 {
-				matched[j] = true
-				depth--
+		for depth > 0 {
+			found := false
+			for j := pos - 1; j >= 0; j-- {
+				if v.treeNodes[j].depth == depth-1 {
+					matched[j] = true
+					pos = j
+					depth--
+					found = true
+					break
+				}
+			}
+			if !found {
+				break
 			}
 		}
 	}

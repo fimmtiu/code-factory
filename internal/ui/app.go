@@ -209,13 +209,25 @@ func (m Model) View() string {
 	}
 	hint := leftHint
 	if m.dialog == nil {
-		viewHints := map[ViewID][]string{
-			ViewProject: {"E", "edit", "T", "open terminal", "Tab", "switch", "Enter", "view"},
-			ViewCommand: {"E", "open worktree", "T", "open terminal", "Tab", "switch", "Enter", "view"},
-			ViewLog:     {"E", "open in editor", "C", "copy path"},
+		var rightPairs []string
+		switch m.activeView {
+		case ViewProject:
+			if pv, ok := m.views[ViewProject].(ProjectView); ok && pv.filtering {
+				rightPairs = []string{"Esc", "clear filter"}
+			} else {
+				rightPairs = []string{"E", "edit", "T", "open terminal", "Tab", "switch", "Enter", "view", "/", "filter"}
+			}
+		case ViewCommand:
+			rightPairs = []string{"E", "open worktree", "T", "open terminal", "Tab", "switch", "Enter", "view"}
+		case ViewLog:
+			if lv, ok := m.views[ViewLog].(LogView); ok && lv.filtering {
+				rightPairs = []string{"Esc", "clear filter"}
+			} else {
+				rightPairs = []string{"E", "open in editor", "C", "copy path", "/", "filter"}
+			}
 		}
-		if pairs, ok := viewHints[m.activeView]; ok {
-			right := helpHintStyle.Render(buildHint(pairs...))
+		if len(rightPairs) > 0 {
+			right := helpHintStyle.Render(buildHint(rightPairs...))
 			spacer := m.width - lipgloss.Width(leftHint) - lipgloss.Width(right)
 			if spacer < 2 {
 				spacer = 2
@@ -272,7 +284,7 @@ func (m Model) View() string {
 		notifW := lipgloss.Width(notifStr)
 		notifH := strings.Count(notifStr, "\n") + 1
 		x := m.width - notifW
-		y := m.height - notifH
+		y := m.height - notifH - 1 // leave the hint bar unobscured
 		if x < 0 {
 			x = 0
 		}
