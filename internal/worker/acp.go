@@ -21,7 +21,7 @@ import (
 type acpWorkerClient struct {
 	w       *Worker
 	logFile *os.File
-	logMu   sync.Mutex // guards logFile and lastOutputBuf writes
+	logMu   sync.Mutex // guards logFile, partialLine, and committedLines
 
 	// db and ticket state needed for permission handling.
 	database   dbInterface
@@ -29,6 +29,11 @@ type acpWorkerClient struct {
 	phase      string
 
 	logCh chan<- LogMessage
+
+	// partialLine accumulates streaming text until a newline arrives.
+	// committedLines holds up to 3 complete (newline-terminated) lines for display.
+	partialLine    string
+	committedLines []string
 }
 
 // dbInterface is the minimal subset of db.DB used by the ACP client.
@@ -38,6 +43,8 @@ type dbInterface interface {
 }
 
 // appendOutput writes text to the logfile and updates LastOutput on the worker.
+// Streaming text is accumulated in partialLine until a newline arrives, so the
+// display always shows full lines rather than individual streaming fragments.
 func (c *acpWorkerClient) appendOutput(text string) {
 	c.logMu.Lock()
 	defer c.logMu.Unlock()
@@ -46,17 +53,33 @@ func (c *acpWorkerClient) appendOutput(text string) {
 		_, _ = fmt.Fprint(c.logFile, text)
 	}
 
-	current := c.w.GetLastOutput()
-	for _, line := range strings.Split(text, "\n") {
+	// Prepend any in-progress partial line, then split on newlines.
+	parts := strings.Split(c.partialLine+text, "\n")
+
+	// All parts except the last are complete lines.
+	for _, line := range parts[:len(parts)-1] {
 		if line == "" {
 			continue
 		}
-		current = append(current, line)
-		if len(current) > 3 {
-			current = current[len(current)-3:]
+		c.committedLines = append(c.committedLines, line)
+		if len(c.committedLines) > 3 {
+			c.committedLines = c.committedLines[len(c.committedLines)-3:]
 		}
 	}
-	c.w.SetLastOutput(current)
+
+	// The last part has no trailing newline yet; hold it for the next call.
+	c.partialLine = parts[len(parts)-1]
+
+	// Build the display slice: committed lines, plus the partial line if
+	// non-empty (so the view shows live streaming progress).
+	display := c.committedLines
+	if c.partialLine != "" {
+		display = append(append([]string{}, c.committedLines...), c.partialLine)
+		if len(display) > 3 {
+			display = display[len(display)-3:]
+		}
+	}
+	c.w.SetLastOutput(display)
 }
 
 // SessionUpdate receives streaming output from the agent and writes it to the
