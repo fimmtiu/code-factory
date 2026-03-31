@@ -133,6 +133,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.dialog = NewTicketDialog(m.db, msg.wu, m.width, m.height)
 		return m, nil
 
+	case openQuickResponseMsg:
+		m.dialog = NewQuickResponseDialog(m.db, m.pool, msg.wu, m.width)
+		return m, nil
+
 	case startEditorMsg:
 		m.editorWaiting = true
 		fn := msg.fn
@@ -234,7 +238,7 @@ func (m Model) View() string {
 				rightPairs = []string{"E", "edit", "T", "open terminal", "Tab", "switch", "Enter", "view", "/", "filter"}
 			}
 		case ViewCommand:
-			rightPairs = []string{"E", "open worktree", "T", "open terminal", "Tab", "switch", "Enter", "view"}
+			rightPairs = []string{"E", "open worktree", "T", "open terminal", "Tab", "switch", "Enter", "respond/view"}
 		case ViewLog:
 			if lv, ok := m.views[ViewLog].(LogView); ok && lv.filtering {
 				rightPairs = []string{"Esc", "clear filter"}

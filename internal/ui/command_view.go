@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"strconv"
 	"strings"
 	"time"
 
@@ -190,6 +189,10 @@ func (v CommandView) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "pgdown":
 		v.moveDown(v.listHeight())
 	case "enter":
+		wu := v.selectedTicket()
+		if wu != nil && wu.Status == models.StatusNeedsAttention {
+			return v.openQuickResponseDialog(wu)
+		}
 		return v.openTicketDialog()
 	case "r", "R":
 		return v.respondToAgent()
@@ -314,44 +317,41 @@ func (v CommandView) selectedTicket() *models.WorkUnit {
 
 const responseTemplateSep = "=== YOUR RESPONSE ==="
 
+func (v CommandView) openQuickResponseDialog(wu *models.WorkUnit) (tea.Model, tea.Cmd) {
+	database := v.database
+	identifier := wu.Identifier
+	return v, func() tea.Msg {
+		// Fetch fresh work unit so ClaimedBy is current.
+		units, err := database.Status()
+		if err != nil {
+			return openQuickResponseMsg{wu: wu}
+		}
+		for _, u := range units {
+			if u.Identifier == identifier && !u.IsProject {
+				return openQuickResponseMsg{wu: u}
+			}
+		}
+		return openQuickResponseMsg{wu: wu}
+	}
+}
+
 func (v CommandView) respondToAgent() (tea.Model, tea.Cmd) {
 	wu := v.selectedTicket()
 	if wu == nil || wu.Status != models.StatusNeedsAttention {
 		return v, nil
 	}
-	template := v.buildResponseTemplate(wu)
 	pool := v.pool
 	database := v.database
-	wuIdentifier := wu.Identifier
-	wuPhase := wu.Phase
-	wuClaimedBy := wu.ClaimedBy
+	wuCopy := wu
 	return v, wrapEditorCmd(func() tea.Msg {
-		raw, err := util.EditText(template)
-		if err != nil {
-			return respondToAgentDoneMsg{errMsg: fmt.Sprintf("editor error: %s", err)}
-		}
-		response := strings.TrimSpace(extractResponseText(raw))
-		if response == "" {
-			return respondToAgentDoneMsg{}
-		}
-		workerNum, err := strconv.Atoi(wuClaimedBy)
-		if err != nil {
-			return respondToAgentDoneMsg{errMsg: fmt.Sprintf("response error: invalid worker number %q", wuClaimedBy)}
-		}
-		w := pool.GetWorker(workerNum)
-		if w == nil {
-			return respondToAgentDoneMsg{errMsg: fmt.Sprintf("response error: worker %d not found", workerNum)}
-		}
-		w.ToWorker <- worker.MainToWorkerMessage{Kind: worker.MsgResponse, Payload: response}
-		w.Status = worker.StatusBusy
-		_ = database.SetStatus(wuIdentifier, wuPhase, models.StatusInProgress)
-		return respondToAgentDoneMsg{}
+		return respondToAgentViaEditor(wuCopy, database, pool)
 	})
 }
 
-// buildResponseTemplate creates the pre-filled editor content for R, showing
-// the last 30 lines of the ticket's most recent logfile above the separator.
-func (v CommandView) buildResponseTemplate(wu *models.WorkUnit) string {
+// buildAgentResponseTemplate creates the pre-filled editor content for the
+// blocking editor response flow, showing the last 30 lines of the ticket's
+// most recent logfile above the separator.
+func buildAgentResponseTemplate(wu *models.WorkUnit) string {
 	agentOutput := "(no logfile found)"
 	if repoRoot, err := storage.FindRepoRoot("."); err == nil {
 		ticketsDir := storage.TicketsDirPath(repoRoot)
@@ -382,18 +382,6 @@ func lastNLines(path string, n int) string {
 		lines = lines[len(lines)-n:]
 	}
 	return strings.Join(lines, "\n")
-}
-
-// responseSeparatorLine returns the 1-based line number of the line
-// immediately after responseTemplateSep in template, i.e. where the user
-// should start typing. Falls back to 1 if the separator is not found.
-func responseSeparatorLine(template string) int {
-	for i, line := range strings.Split(template, "\n") {
-		if line == responseTemplateSep {
-			return i + 2 // 1-based; +1 for separator line itself, +1 for the line after
-		}
-	}
-	return 1
 }
 
 // extractResponseText returns only the text below responseTemplateSep,
@@ -694,8 +682,8 @@ func (v CommandView) KeyBindings() []KeyBinding {
 	return []KeyBinding{
 		{Key: "↑/↓", Description: "Navigate list"},
 		{Key: "PgUp/PgDn", Description: "Page navigate"},
-		{Key: "Enter", Description: "Open ticket dialog"},
-		{Key: "R", Description: "Respond to agent (needs-attention tickets)"},
+		{Key: "Enter", Description: "Quick respond (needs-attention) / Open ticket dialog"},
+		{Key: "R", Description: "Respond to agent in editor (needs-attention tickets)"},
 		{Key: "T", Description: "Open terminal in worktree"},
 		{Key: "E", Description: "Open worktree in Cursor"},
 		{Key: "A", Description: "Approve ticket (user-review tickets)"},
