@@ -8,6 +8,28 @@ import (
 	"github.com/fimmtiu/code-factory/internal/storage"
 )
 
+// AllLogfilePaths returns all existing logfiles for a ticket phase in
+// chronological order (oldest first): implement.log, implement.log.1, …
+// Returns nil if none exist.
+func AllLogfilePaths(ticketsDir, identifier, phase string) []string {
+	ticketDir := storage.TicketDirPath(ticketsDir, identifier)
+	base := filepath.Join(ticketDir, phase+".log")
+
+	if _, err := os.Stat(base); os.IsNotExist(err) {
+		return nil
+	}
+
+	paths := []string{base}
+	for i := 1; ; i++ {
+		candidate := fmt.Sprintf("%s.%d", base, i)
+		if _, err := os.Stat(candidate); os.IsNotExist(err) {
+			break
+		}
+		paths = append(paths, candidate)
+	}
+	return paths
+}
+
 // LatestLogfilePath returns the path of the most recently written logfile for
 // a ticket phase, or an empty string if none exists.
 func LatestLogfilePath(ticketsDir, identifier, phase string) string {

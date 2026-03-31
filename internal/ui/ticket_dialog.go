@@ -150,20 +150,24 @@ func NewTicketDialog(database *db.DB, wu *models.WorkUnit, width, height int) *T
 	copy(crs, wu.ChangeRequests)
 	sort.Slice(crs, func(i, j int) bool { return crs[i].Date.After(crs[j].Date) })
 
-	// Discover logfiles.
+	// Discover logfiles. Multiple runs for the same phase are numbered:
+	// "Implement 1", "Implement 2", etc.
 	var logs []tdLogEntry
 	if repoRoot, err := storage.FindRepoRoot("."); err == nil {
 		ticketsDir := storage.TicketsDirPath(repoRoot)
 		for _, p := range phaseOrder {
-			path := worker.LatestLogfilePath(ticketsDir, wu.Identifier, p.phase)
-			if path == "" {
-				continue
+			paths := worker.AllLogfilePaths(ticketsDir, wu.Identifier, p.phase)
+			for i, path := range paths {
+				label := p.label
+				if len(paths) > 1 {
+					label = fmt.Sprintf("%s %d", p.label, i+1)
+				}
+				var lines []string
+				if data, err := os.ReadFile(path); err == nil {
+					lines = strings.Split(string(data), "\n")
+				}
+				logs = append(logs, tdLogEntry{label: label, phase: p.phase, path: path, lines: lines})
 			}
-			var lines []string
-			if data, err := os.ReadFile(path); err == nil {
-				lines = strings.Split(string(data), "\n")
-			}
-			logs = append(logs, tdLogEntry{label: p.label, phase: p.phase, path: path, lines: lines})
 		}
 	}
 
