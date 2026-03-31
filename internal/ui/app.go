@@ -2,6 +2,7 @@ package ui
 
 import (
 	"strings"
+	"time"
 
 	lipglossv2 "charm.land/lipgloss/v2"
 	tea "github.com/charmbracelet/bubbletea"
@@ -49,6 +50,9 @@ type Model struct {
 	views      [4]viewModel
 
 	dialog dialog // nil when no dialog is open
+
+	notifText string // current notification text; empty = none visible
+	notifID   int    // incremented on each new notification to expire old timers
 }
 
 // NewModel creates a new root Model with the given pool, database, poll
@@ -95,6 +99,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return m, tea.Batch(cmds...)
+
+	case notifMsg:
+		m.notifID++
+		m.notifText = msg.text
+		id := m.notifID
+		return m, tea.Tick(5*time.Second, func(time.Time) tea.Msg {
+			return clearNotifMsg{id: id}
+		})
+
+	case clearNotifMsg:
+		if msg.id == m.notifID {
+			m.notifText = ""
+		}
+		return m, nil
 
 	case dismissDialogMsg:
 		m.dialog = nil
@@ -237,6 +255,23 @@ func (m Model) View() string {
 		shadow := lipglossv2.NewLayer(shadowStr).X(x + 1).Y(y + 1).Z(1)
 		fg := lipglossv2.NewLayer(dialogStr).X(x).Y(y).Z(2)
 		full = lipglossv2.NewCompositor(bg, shadow, fg).Render()
+	}
+
+	if m.notifText != "" {
+		notifStr := notifStyle.Render(m.notifText)
+		notifW := lipgloss.Width(notifStr)
+		notifH := strings.Count(notifStr, "\n") + 1
+		x := m.width - notifW
+		y := m.height - notifH
+		if x < 0 {
+			x = 0
+		}
+		if y < 0 {
+			y = 0
+		}
+		bg := lipglossv2.NewLayer(full)
+		fg := lipglossv2.NewLayer(notifStr).X(x).Y(y).Z(3)
+		full = lipglossv2.NewCompositor(bg, fg).Render()
 	}
 
 	return full
