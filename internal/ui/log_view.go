@@ -22,11 +22,6 @@ var (
 
 	logWorkerStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("33"))
-
-	logMessageStyle = lipgloss.NewStyle()
-
-	logFileIndicatorStyle = lipgloss.NewStyle().
-				Foreground(colourWarning) // orange — indicates logfile is present
 )
 
 // logTimestampStyle returns a style that fades the timestamp colour based on
@@ -334,15 +329,44 @@ func (v LogView) renderRow(e *models.LogEntry, selected bool) string {
 		return logSelectedStyle.Width(v.width - viewBorderOverhead).Render(line)
 	}
 
-	// For non-selected rows, colour the timestamp by age and compose with the
-	// rest of the line (which may carry the logfile indicator style).
+	// For non-selected rows, colour the timestamp by age and the message
+	// segment by message type for quick visual scanning.
 	age := now.Sub(e.Timestamp)
 	tsStyled := logTimestampStyle(age).Render(fmt.Sprintf("%-*s", logTimestampWidth, ts))
 	rest := fmt.Sprintf(" %s %s", workerStr, msg)
-	if e.Logfile != "" {
-		return tsStyled + logFileIndicatorStyle.Render(rest)
+	msgStyle := lipgloss.NewStyle().Foreground(logMessageColor(e.Message))
+	return tsStyled + msgStyle.Render(rest)
+}
+
+// logMessageColor returns the foreground colour for a log message based on its
+// content, allowing quick visual scanning of the log by message type.
+func logMessageColor(msg string) lipgloss.Color {
+	switch {
+	// [mock] variants first so they don't fall through to the general cases.
+	case strings.HasPrefix(msg, "[mock] error"):
+		return lipgloss.Color("88") // error — dark red
+	case strings.HasPrefix(msg, "[mock] asking user"):
+		return lipgloss.Color("94") // permission request — orange-brown
+	case strings.HasPrefix(msg, "[mock] received response"):
+		return lipgloss.Color("75") // permission response — soft blue
+	case strings.HasPrefix(msg, "[mock] committed"):
+		return lipgloss.Color("74") // commit — teal
+	case strings.HasPrefix(msg, "claimed"):
+		return lipgloss.Color("34") // claim — green
+	case strings.HasPrefix(msg, "released"),
+		strings.HasPrefix(msg, "housekeeping: released"):
+		return lipgloss.Color("21") // release — blue
+	case strings.HasPrefix(msg, "error"),
+		strings.HasPrefix(msg, "ACP error"),
+		strings.HasPrefix(msg, "housekeeping: error"):
+		return lipgloss.Color("88") // error — dark red
+	case strings.HasPrefix(msg, "permission request"):
+		return lipgloss.Color("94") // permission request — orange-brown
+	case strings.HasPrefix(msg, "permission response"):
+		return lipgloss.Color("75") // permission response — soft blue
+	default:
+		return lipgloss.Color("246") // agent output — mid grey
 	}
-	return tsStyled + rest
 }
 
 // formatLogTimestamp formats a timestamp compactly: "15:04:05" for today,
