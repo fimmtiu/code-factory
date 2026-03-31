@@ -109,3 +109,11 @@ func (w *Worker) SetPendingPermission(req *PendingPermissionRequest) {
 	defer w.mu.Unlock()
 	w.pendingPermission = req
 }
+
+// SendResponse sends a response message to the worker and marks it as busy.
+// This is the correct way for the UI layer to respond to a worker's question
+// or permission request.
+func (w *Worker) SendResponse(text string) {
+	w.ToWorker <- MainToWorkerMessage{Kind: MsgResponse, Payload: text}
+	w.Status = StatusBusy
+}
