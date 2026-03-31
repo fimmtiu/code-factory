@@ -57,7 +57,32 @@ If an agent asks a question or requests a permission, the ticket becomes `needs-
 
 ## Configuration
 
-Settings are read from `.tickets/settings.json` at startup. An unknown `editor` value causes an immediate exit with a clear error message. See `internal/config` for all available settings.
+Settings are read from `.tickets/settings.json` at startup. An unknown `editor` value causes an immediate exit with a clear error message.
+
+```jsonc
+// .tickets/settings.json — all fields are optional; defaults shown below
+{
+  "stale_threshold_minutes": 30,
+  "editor": "cursor",
+  "open_terminal_command": "open -a iTerm .",
+  "model_implement": "sonnet",
+  "model_refactor": "opus",
+  "model_review": "opus",
+  "model_respond": "sonnet",
+  "effort": "high"
+}
+```
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `stale_threshold_minutes` | `30` | Minutes before an in-progress ticket is considered abandoned |
+| `editor` | `"cursor"` | Editor to open worktrees in (`"cursor"` or `"vscode"`) |
+| `open_terminal_command` | `"open -a iTerm ."` | Shell command to open a terminal in the worktree directory |
+| `model_implement` | `"sonnet"` | Claude model for the implementation phase |
+| `model_refactor` | `"opus"` | Claude model for the refactoring phase |
+| `model_review` | `"opus"` | Claude model for the review phase |
+| `model_respond` | `"sonnet"` | Claude model for the response phase |
+| `effort` | `"high"` | Effort level for the agent (`"low"`, `"normal"`, `"high"`, or `"max"`) |
 
 ## Logfiles
 

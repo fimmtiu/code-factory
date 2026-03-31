@@ -75,6 +75,11 @@ func Default() *Settings {
 		StaleThresholdMinutes: 30,
 		Editor:                defaultEditor,
 		OpenTerminalCommand:   defaultOpenTerminalCommand,
+		ModelImplement:        "sonnet",
+		ModelRefactor:         "opus",
+		ModelReview:           "opus",
+		ModelRespond:          "sonnet",
+		Effort:                "high",
 	}
 }
 

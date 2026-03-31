@@ -235,11 +235,13 @@ func runACP(
 	defer logFile.Close()
 
 	acpArgs := []string{"-y", "@zed-industries/claude-code-acp@latest"}
-	if model := config.Current.ModelForPhase(phase); model != "" {
-		acpArgs = append(acpArgs, "--model", model)
-	}
-	if config.Current.Effort != "" {
-		acpArgs = append(acpArgs, "--effort", config.Current.Effort)
+	if config.Current != nil {
+		if model := config.Current.ModelForPhase(phase); model != "" {
+			acpArgs = append(acpArgs, "--model", model)
+		}
+		if config.Current.Effort != "" {
+			acpArgs = append(acpArgs, "--effort", config.Current.Effort)
+		}
 	}
 	cmd := exec.CommandContext(ctx, "npx", acpArgs...)
 	cmd.Dir = worktreePath
