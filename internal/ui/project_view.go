@@ -489,22 +489,23 @@ func (v ProjectView) openTerminal() (tea.Model, tea.Cmd) {
 
 func (v ProjectView) openEditor() (tea.Model, tea.Cmd) {
 	nodes := v.filteredTreeNodes()
-	if len(nodes) == 0 {
+	if len(nodes) == 0 || v.treeSelected >= len(nodes) {
 		return v, nil
 	}
 	wu := nodes[v.treeSelected].wu
-	newDesc, err := util.EditText(wu.Description)
-	if err != nil {
-		return v, nil
-	}
+	currentDesc := wu.Description
 	identifier := wu.Identifier
 	database := v.database
-	return v, func() tea.Msg {
+	return v, wrapEditorCmd(func() tea.Msg {
+		newDesc, err := util.EditText(currentDesc)
+		if err != nil {
+			return nil
+		}
 		if err := database.UpdateDescription(identifier, newDesc); err != nil {
 			return nil
 		}
 		return projectDescriptionSavedMsg{}
-	}
+	})
 }
 
 // ── Scroll helpers ────────────────────────────────────────────────────────────

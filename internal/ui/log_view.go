@@ -309,10 +309,11 @@ func (v LogView) openLogfile() (tea.Model, tea.Cmd) {
 	if entry == nil || entry.Logfile == "" {
 		return v, nil
 	}
-
-	_ = util.OpenFileInEditor(entry.Logfile)
-
-	return v, nil
+	logfile := entry.Logfile
+	return v, wrapEditorCmd(func() tea.Msg {
+		_ = util.OpenFileInEditor(logfile)
+		return nil
+	})
 }
 
 // copyLogfilePath copies the selected entry's logfile path to the clipboard.

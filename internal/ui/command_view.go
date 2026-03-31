@@ -40,6 +40,8 @@ type commandRefreshMsg struct {
 	tickets []*models.WorkUnit
 }
 
+type respondToAgentDoneMsg struct{ errMsg string }
+
 // ── listRow ───────────────────────────────────────────────────────────────────
 
 // listRow represents one row in the command view list. If separator is true,
@@ -157,6 +159,14 @@ func (v CommandView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case approveResultMsg:
 		if msg.err != nil {
 			v.errorMsg = fmt.Sprintf("approve error: %s", msg.err)
+			return v, nil
+		}
+		v.errorMsg = ""
+		return v, v.fetchCmd()
+
+	case respondToAgentDoneMsg:
+		if msg.errMsg != "" {
+			v.errorMsg = msg.errMsg
 			return v, nil
 		}
 		v.errorMsg = ""
@@ -309,43 +319,34 @@ func (v CommandView) respondToAgent() (tea.Model, tea.Cmd) {
 	if wu == nil || wu.Status != models.StatusNeedsAttention {
 		return v, nil
 	}
-
 	template := v.buildResponseTemplate(wu)
-	// Use EditText (plain cursor --wait) rather than EditTextAtLine because
-	// cursor --wait --goto does not reliably block when a window is already open.
-	raw, err := util.EditText(template)
-	if err != nil {
-		v.errorMsg = fmt.Sprintf("editor error: %s", err)
-		return v, nil
-	}
-
-	// Extract only the text the user wrote below the separator.
-	response := strings.TrimSpace(extractResponseText(raw))
-	if response == "" {
-		return v, nil
-	}
-
-	workerNum, err := strconv.Atoi(wu.ClaimedBy)
-	if err != nil {
-		v.errorMsg = fmt.Sprintf("response error: invalid worker number %q", wu.ClaimedBy)
-		return v, nil
-	}
-	w := v.pool.GetWorker(workerNum)
-	if w == nil {
-		v.errorMsg = fmt.Sprintf("response error: worker %d not found", workerNum)
-		return v, nil
-	}
-
-	w.ToWorker <- worker.MainToWorkerMessage{
-		Kind:    worker.MsgResponse,
-		Payload: response,
-	}
-
-	// Immediately reflect the resumed state so the UI doesn't lag behind.
-	w.Status = worker.StatusBusy
-	_ = v.database.SetStatus(wu.Identifier, wu.Phase, models.StatusInProgress)
-
-	return v, v.fetchCmd()
+	pool := v.pool
+	database := v.database
+	wuIdentifier := wu.Identifier
+	wuPhase := wu.Phase
+	wuClaimedBy := wu.ClaimedBy
+	return v, wrapEditorCmd(func() tea.Msg {
+		raw, err := util.EditText(template)
+		if err != nil {
+			return respondToAgentDoneMsg{errMsg: fmt.Sprintf("editor error: %s", err)}
+		}
+		response := strings.TrimSpace(extractResponseText(raw))
+		if response == "" {
+			return respondToAgentDoneMsg{}
+		}
+		workerNum, err := strconv.Atoi(wuClaimedBy)
+		if err != nil {
+			return respondToAgentDoneMsg{errMsg: fmt.Sprintf("response error: invalid worker number %q", wuClaimedBy)}
+		}
+		w := pool.GetWorker(workerNum)
+		if w == nil {
+			return respondToAgentDoneMsg{errMsg: fmt.Sprintf("response error: worker %d not found", workerNum)}
+		}
+		w.ToWorker <- worker.MainToWorkerMessage{Kind: worker.MsgResponse, Payload: response}
+		w.Status = worker.StatusBusy
+		_ = database.SetStatus(wuIdentifier, wuPhase, models.StatusInProgress)
+		return respondToAgentDoneMsg{}
+	})
 }
 
 // buildResponseTemplate creates the pre-filled editor content for R, showing
@@ -611,7 +612,7 @@ func (v CommandView) debugPrompt() (tea.Model, tea.Cmd) {
 // dialog passes the phase of the selected logfile, which may differ from the
 // ticket's current phase).
 func debugPromptCmd(wu *models.WorkUnit, phase models.TicketPhase, logfilePath string) tea.Cmd {
-	return func() tea.Msg {
+	return wrapEditorCmd(func() tea.Msg {
 		repoRoot, err := storage.FindRepoRoot(".")
 		if err != nil {
 			return nil
@@ -644,7 +645,7 @@ end tell`, claudeCmd, tmpPath)
 		cmd.Stdin = strings.NewReader(script)
 		_ = cmd.Start()
 		return nil
-	}
+	})
 }
 
 // buildDebugTemplate returns a pre-filled debug prompt for the given ticket

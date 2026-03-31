@@ -49,7 +49,8 @@ type Model struct {
 	activeView ViewID
 	views      [4]viewModel
 
-	dialog dialog // nil when no dialog is open
+	dialog        dialog // nil when no dialog is open
+	editorWaiting bool   // true while a blocking editor is open
 
 	notifText string // current notification text; empty = none visible
 	notifID   int    // incremented on each new notification to expire old timers
@@ -132,7 +133,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.dialog = NewTicketDialog(m.db, msg.wu, m.width, m.height)
 		return m, nil
 
+	case startEditorMsg:
+		m.editorWaiting = true
+		fn := msg.fn
+		return m, func() tea.Msg { return editorDoneMsg{result: fn()} }
+
+	case editorDoneMsg:
+		m.editorWaiting = false
+		if msg.result != nil {
+			return m, func() tea.Msg { return msg.result }
+		}
+		return m, nil
+
 	case tea.KeyMsg:
+		if m.editorWaiting {
+			return m, nil
+		}
 		// If a dialog is open, route all keys to it.
 		if m.dialog != nil {
 			updated, cmd := m.dialog.Update(msg)
@@ -277,6 +293,23 @@ func (m Model) View() string {
 		shadow := lipglossv2.NewLayer(shadowStr).X(x + 1).Y(y + 1).Z(1)
 		fg := lipglossv2.NewLayer(dialogStr).X(x).Y(y).Z(2)
 		full = lipglossv2.NewCompositor(bg, shadow, fg).Render()
+	}
+
+	if m.editorWaiting {
+		waitStr := editorWaitingStyle.Render("Waiting for editor…")
+		waitW := lipgloss.Width(waitStr)
+		waitH := strings.Count(waitStr, "\n") + 1
+		x := (m.width - waitW) / 2
+		y := (m.height - waitH) / 2
+		if x < 0 {
+			x = 0
+		}
+		if y < 0 {
+			y = 0
+		}
+		bg := lipglossv2.NewLayer(full)
+		fg := lipglossv2.NewLayer(waitStr).X(x).Y(y).Z(4)
+		full = lipglossv2.NewCompositor(bg, fg).Render()
 	}
 
 	if m.notifText != "" {

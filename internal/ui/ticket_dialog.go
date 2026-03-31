@@ -475,7 +475,7 @@ func (d *TicketDialog) editCRDescription(idx int) tea.Cmd {
 	}
 	currentDesc := d.changeRequests[idx].Description
 	database := d.database
-	return func() tea.Msg {
+	return wrapEditorCmd(func() tea.Msg {
 		newDesc, err := util.EditText(currentDesc)
 		if err != nil {
 			return nil
@@ -484,7 +484,7 @@ func (d *TicketDialog) editCRDescription(idx int) tea.Cmd {
 			return nil
 		}
 		return crDescriptionUpdatedMsg{idx: idx, description: newDesc}
-	}
+	})
 }
 
 // ── Content lines ─────────────────────────────────────────────────────────────
