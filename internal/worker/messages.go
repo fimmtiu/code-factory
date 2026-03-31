@@ -11,13 +11,9 @@ const (
 	// MsgUnpause instructs a worker to resume normal operation.
 	MsgUnpause MainToWorkerKind = "unpause"
 
-	// MsgResponse delivers an answer to a question the agent asked. The
-	// answer text is in Payload.
+	// MsgResponse delivers an answer to a question or permission request
+	// from the agent. The answer text is in Payload.
 	MsgResponse MainToWorkerKind = "response"
-
-	// MsgPermission delivers an approval or denial of a permissions request.
-	// The decision is in Payload (e.g. "approve" or "deny").
-	MsgPermission MainToWorkerKind = "permission"
 )
 
 // MainToWorkerMessage is a message sent from the main goroutine to a worker.

@@ -16,14 +16,6 @@ func TestMainToWorkerMessageConstruction(t *testing.T) {
 		t.Errorf("Payload = %q, want %q", msg2.Payload, "yes")
 	}
 
-	msg3 := MainToWorkerMessage{Kind: MsgPermission, Payload: "approve"}
-	if msg3.Kind != MsgPermission {
-		t.Errorf("Kind = %q, want %q", msg3.Kind, MsgPermission)
-	}
-	if msg3.Payload != "approve" {
-		t.Errorf("Payload = %q, want %q", msg3.Payload, "approve")
-	}
-
 	msg4 := MainToWorkerMessage{Kind: MsgUnpause}
 	if msg4.Kind != MsgUnpause {
 		t.Errorf("Kind = %q, want %q", msg4.Kind, MsgUnpause)
@@ -63,9 +55,6 @@ func TestMainToWorkerKindConstants(t *testing.T) {
 	}
 	if MsgResponse != "response" {
 		t.Errorf("MsgResponse = %q, want %q", MsgResponse, "response")
-	}
-	if MsgPermission != "permission" {
-		t.Errorf("MsgPermission = %q, want %q", MsgPermission, "permission")
 	}
 }
 
