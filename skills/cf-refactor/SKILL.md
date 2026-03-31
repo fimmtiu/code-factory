@@ -1,13 +1,13 @@
 ---
-name: refactorizer
-description: "Scan branch changes for code smells and aggressively refactor to remove them using Martin Fowler-style techniques. Trigger with `/refactorizer`."
+name: cf-refactor
+description: "Scan branch changes for code smells and aggressively refactor to remove them using Martin Fowler-style techniques. Trigger with `/cf-refactor` or `/refactorizer`."
 ---
 
 # Refactorizer
 
 Aggressively scan the changes on the current branch for code smells and refactor to remove them, applying Martin Fowler-style refactoring techniques.
 
-Trigger with `/refactorizer`.
+Trigger with `/cf-refactor` or `/refactorizer`.
 
 ## Prerequisites
 
@@ -76,7 +76,7 @@ These rules are ABSOLUTE and apply to every phase:
    - The line itself was added or modified on this branch (appears in `git diff <BRANCHPOINT>`)
    - The line is inside a function/method where at least 30% of lines were modified on this branch
    - The line must move to accommodate an Extract Method/Class refactoring of changed code
-   
+
    Do NOT refactor pre-existing code that merely appears in the same file as changes.
 4. **Deferred refactorings**: If a refactoring would require modifying files outside `CHANGED_FILES` (e.g., updating callers in untouched files), note it in the summary as a "deferred refactoring" but do NOT make the change.
 5. **No backtracking**: Files created by a refactoring in phase N are considered "clean" for smells 1 through N. Do not re-check earlier smells on newly created files.

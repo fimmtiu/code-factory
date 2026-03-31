@@ -8,7 +8,7 @@ Tickets live in a `.tickets/` directory inside your repository alongside your co
 
 ## How it works
 
-1. **Define work** — Create projects and tickets with `tickets create-project` / `tickets create-ticket`. Each ticket has an identifier, a description, and an optional list of dependencies.
+1. **Define work** — Create projects and tickets by running the `/cf-project` skill on your design doc. Each ticket has an identifier, a description, and an optional list of dependencies.
 2. **Run agents** — Start `code-factory` to spawn a pool of Claude Code workers. Workers claim idle tickets, run the appropriate agent prompt, and advance tickets through a four-phase pipeline.
 3. **Supervise** — Watch progress in the terminal UI. Approve work, respond to agent questions, request changes, and merge completed tickets.
 
@@ -60,7 +60,7 @@ This creates `.tickets/` with a default `settings.json`. Edit `settings.json` to
 }
 ```
 
-Supported editors: `cursor`, `vscode`.
+Supported editors: `cursor`, `vscode`. (For more settings, see [the `code-factory` README](cmd/code-factory/README.md).)
 
 ### Create some work
 
