@@ -59,8 +59,8 @@ func MockWorkFn(ctx context.Context, w *Worker, database dbInterface, logCh chan
 		writeLog(line)
 		current := w.GetLastOutput()
 		current = append(current, line)
-		if len(current) > 3 {
-			current = current[len(current)-3:]
+		if len(current) > OutputLines {
+			current = current[len(current)-OutputLines:]
 		}
 		w.SetLastOutput(current)
 		logCh <- NewLogMessage(w.Number, fmt.Sprintf("[mock] %s", line))

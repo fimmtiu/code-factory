@@ -9,6 +9,10 @@ import (
 // workerChannelBuffer is the buffer size for the worker communication channels.
 const workerChannelBuffer = 16
 
+// OutputLines is the number of recent output lines each worker keeps for
+// display in the Workers view.
+const OutputLines = 4
+
 // PermissionOption is one choice in a pending permission request.
 type PermissionOption struct {
 	Name     string

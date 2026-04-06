@@ -31,7 +31,7 @@ type acpWorkerClient struct {
 	logCh chan<- LogMessage
 
 	// partialLine accumulates streaming text until a newline arrives.
-	// committedLines holds up to 3 complete (newline-terminated) lines for display.
+	// committedLines holds up to OutputLines complete (newline-terminated) lines for display.
 	partialLine    string
 	committedLines []string
 }
@@ -62,8 +62,8 @@ func (c *acpWorkerClient) appendOutput(text string) {
 			continue
 		}
 		c.committedLines = append(c.committedLines, line)
-		if len(c.committedLines) > 3 {
-			c.committedLines = c.committedLines[len(c.committedLines)-3:]
+		if len(c.committedLines) > OutputLines {
+			c.committedLines = c.committedLines[len(c.committedLines)-OutputLines:]
 		}
 	}
 
@@ -75,8 +75,8 @@ func (c *acpWorkerClient) appendOutput(text string) {
 	display := c.committedLines
 	if c.partialLine != "" {
 		display = append(append([]string{}, c.committedLines...), c.partialLine)
-		if len(display) > 3 {
-			display = display[len(display)-3:]
+		if len(display) > OutputLines {
+			display = display[len(display)-OutputLines:]
 		}
 	}
 	c.w.SetLastOutput(display)

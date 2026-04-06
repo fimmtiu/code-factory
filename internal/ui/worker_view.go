@@ -204,8 +204,8 @@ func (v WorkerView) renderAllLines() []string {
 		statusLine := v.renderStatusLine(w)
 		lines = append(lines, statusLine)
 
-		// Wrap all raw output lines and take the last 3 display lines so
-		// each worker section is always exactly 3 output lines tall.
+		// Wrap all raw output lines and take the last OutputLines display lines so
+		// each worker section is always exactly OutputLines output lines tall.
 		output := w.GetLastOutput()
 		highlight := time.Since(v.outputChangedAt[w.Number]) < 600*time.Millisecond
 
@@ -215,11 +215,11 @@ func (v WorkerView) renderAllLines() []string {
 				displayLines = append(displayLines, dl)
 			}
 		}
-		if len(displayLines) > 3 {
-			displayLines = displayLines[len(displayLines)-3:]
+		if len(displayLines) > worker.OutputLines {
+			displayLines = displayLines[len(displayLines)-worker.OutputLines:]
 		}
 		lastContentIdx := len(displayLines) - 1 // index of last real line; -1 if none
-		for len(displayLines) < 3 {
+		for len(displayLines) < worker.OutputLines {
 			displayLines = append(displayLines, "")
 		}
 
