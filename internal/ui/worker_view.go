@@ -186,7 +186,8 @@ func (v WorkerView) View() string {
 		end = len(all)
 	}
 
-	return viewPaneStyle.Width(v.width - viewBorderOverhead).Height(v.viewHeight()).Render(strings.Join(all[start:end], "\n"))
+	content := strings.Join(all[start:end], "\n")
+	return viewPaneStyle.Width(v.width - viewBorderOverhead).Height(vh).Render(clipLines(content, vh))
 }
 
 // renderAllLines builds the full list of display lines for every worker.

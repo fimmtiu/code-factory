@@ -65,6 +65,18 @@ type viewModel interface {
 	KeyBindings() []KeyBinding
 }
 
+// clipLines truncates content to at most maxLines lines, preventing overflow
+// when lipgloss line-wrapping produces more lines than the pane expects.
+// lipgloss's Height() pads short content but does not clip tall content, so
+// without this guard a wrapped line pushes the bottom border off-screen.
+func clipLines(content string, maxLines int) string {
+	lines := strings.Split(content, "\n")
+	if len(lines) <= maxLines {
+		return content
+	}
+	return strings.Join(lines[:maxLines], "\n")
+}
+
 // truncateLine truncates s to at most maxWidth visible runes, appending an
 // ellipsis if truncation occurred.
 func truncateLine(s string, maxWidth int) string {

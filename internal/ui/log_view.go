@@ -376,7 +376,7 @@ func (v LogView) View() string {
 			sb.WriteString("\n")
 		}
 	}
-	return viewPaneStyle.Width(paneW).Height(v.listHeight()).Render(sb.String())
+	return viewPaneStyle.Width(paneW).Height(h).Render(clipLines(sb.String(), h))
 }
 
 // renderRow formats one log entry as a three-column row.

@@ -525,7 +525,7 @@ func (v CommandView) View() string {
 			sb.WriteString("\n")
 		}
 	}
-	return viewPaneStyle.Width(v.width - viewBorderOverhead).Height(v.listHeight()).Render(sb.String())
+	return viewPaneStyle.Width(v.width - viewBorderOverhead).Height(v.listHeight()).Render(clipLines(sb.String(), v.listHeight()))
 }
 
 // renderRow formats one ticket row in tabular style:
