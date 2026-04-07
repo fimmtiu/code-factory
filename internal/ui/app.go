@@ -141,7 +141,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if num, err := strconv.Atoi(msg.wu.ClaimedBy); err == nil {
 				if w := m.pool.GetWorker(num); w != nil {
 					if perm := w.GetPendingPermission(); perm != nil {
-						m.dialog = NewPermissionDialog(m.db, m.pool, msg.wu, perm)
+						m.dialog = NewPermissionDialog(m.db, m.pool, msg.wu, perm, m.width)
 						return m, nil
 					}
 				}

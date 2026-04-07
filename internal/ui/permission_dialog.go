@@ -36,6 +36,7 @@ type PermissionDialog struct {
 	title    string
 	options  []worker.PermissionOption // sorted for display
 	selected int                       // currently highlighted option (0-based)
+	width    int                       // terminal width for constraining dialog size
 }
 
 // permOptionOrder defines the canonical sort position for known option kinds.
@@ -50,7 +51,7 @@ var permOptionOrder = map[string]int{
 // NewPermissionDialog creates a PermissionDialog for the given ticket and
 // pending permission request. Options are sorted into the canonical order
 // (allow once → always allow → reject), with unknown kinds last in original order.
-func NewPermissionDialog(database *db.DB, pool *worker.Pool, wu *models.WorkUnit, perm *worker.PendingPermissionRequest) PermissionDialog {
+func NewPermissionDialog(database *db.DB, pool *worker.Pool, wu *models.WorkUnit, perm *worker.PendingPermissionRequest, width int) PermissionDialog {
 	opts := make([]worker.PermissionOption, len(perm.Options))
 	copy(opts, perm.Options)
 	sort.SliceStable(opts, func(i, j int) bool {
@@ -70,6 +71,7 @@ func NewPermissionDialog(database *db.DB, pool *worker.Pool, wu *models.WorkUnit
 		wu:       wu,
 		title:    perm.Title,
 		options:  opts,
+		width:    width,
 	}
 }
 
@@ -118,13 +120,20 @@ func (d PermissionDialog) sendResponseCmd(kind string) tea.Cmd {
 }
 
 func (d PermissionDialog) View() string {
+	// dialogBoxStyle has Border (2) + Padding (4) = 6 horizontal frame chars.
+	// Leave 4 chars of margin (2 per side) between dialog and screen edge.
+	contentWidth := d.width - 10
+	if contentWidth < 20 {
+		contentWidth = 20
+	}
+
 	var sb strings.Builder
 
 	sb.WriteString(dialogTitleStyle.Render("Permission Request"))
 	sb.WriteString("\n")
 
 	if d.title != "" {
-		sb.WriteString(d.title)
+		sb.WriteString(lipgloss.NewStyle().Width(contentWidth).Render(d.title))
 		sb.WriteString("\n")
 	}
 	sb.WriteString("\n")
@@ -143,5 +152,5 @@ func (d PermissionDialog) View() string {
 	sb.WriteString("\n")
 	sb.WriteString(helpHintStyle.Render(buildHint("1-9", "pick", "↑↓", "navigate", "Enter", "confirm", "Esc", "cancel")))
 
-	return dialogBoxStyle.Render(sb.String())
+	return dialogBoxStyle.Width(contentWidth).Render(sb.String())
 }

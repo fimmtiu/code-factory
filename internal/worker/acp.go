@@ -146,12 +146,6 @@ func (c *acpWorkerClient) RequestPermission(ctx context.Context, params acp.Requ
 		}
 	}
 
-	c.w.FromWorker <- WorkerToMainMessage{
-		WorkerNumber: c.w.Number,
-		Kind:         MsgPermissionRequest,
-		Payload:      payload,
-	}
-
 	select {
 	case <-ctx.Done():
 		c.w.SetPendingPermission(nil)

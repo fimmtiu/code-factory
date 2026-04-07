@@ -44,9 +44,6 @@ type Worker struct {
 	// ToWorker carries messages from the main goroutine to this worker.
 	ToWorker chan MainToWorkerMessage
 
-	// FromWorker carries messages from this worker to the main goroutine.
-	FromWorker chan WorkerToMainMessage
-
 	// LastOutput holds the last three lines of agent output, used for display
 	// in the worker status view. Protected by mu.
 	LastOutput []string
@@ -76,7 +73,6 @@ func NewWorker(number int) *Worker {
 		Status:     StatusIdle,
 		Paused:     false,
 		ToWorker:   make(chan MainToWorkerMessage, workerChannelBuffer),
-		FromWorker: make(chan WorkerToMainMessage, workerChannelBuffer),
 		LastOutput: []string{},
 	}
 }

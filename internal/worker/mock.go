@@ -110,12 +110,6 @@ func MockWorkFn(ctx context.Context, w *Worker, database dbInterface, logCh chan
 	question := "Mock question: please confirm you want to proceed with these changes."
 	writeLog("[mock] asking: " + question)
 	logCh <- NewLogMessage(w.Number, fmt.Sprintf("[mock] asking user: %s", question))
-	w.FromWorker <- WorkerToMainMessage{
-		WorkerNumber: w.Number,
-		Kind:         MsgQuestion,
-		Payload:      question,
-	}
-
 	// Wait for the user's response or context cancellation.
 	select {
 	case <-ctx.Done():
