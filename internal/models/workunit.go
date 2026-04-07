@@ -46,7 +46,7 @@ func NewTicket(identifier, description string) *WorkUnit {
 		Phase:        PhaseImplement,
 		Status:       StatusIdle,
 		Dependencies: []string{},
-		LastUpdated:  time.Now().UTC(),
+		LastUpdated:  time.Now(),
 		IsProject:    false,
 	}
 }
@@ -56,7 +56,7 @@ func NewProject(identifier, description string) *WorkUnit {
 		Identifier:   identifier,
 		Description:  description,
 		Dependencies: []string{},
-		LastUpdated:  time.Now().UTC(),
+		LastUpdated:  time.Now(),
 		IsProject:    true,
 	}
 }

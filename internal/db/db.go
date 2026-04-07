@@ -275,7 +275,7 @@ func (d *DB) loadProjects() (map[int64]*models.WorkUnit, error) {
 			Description:  description,
 			Phase:        models.TicketPhase(phase),
 			IsProject:    true,
-			LastUpdated:  time.Unix(lastUpdated, 0).UTC(),
+			LastUpdated:  time.Unix(lastUpdated, 0),
 			Dependencies: []string{},
 		}
 	}
@@ -317,7 +317,7 @@ func (d *DB) loadTickets(projectByID map[int64]*models.WorkUnit) (map[int64]*mod
 			Phase:        models.TicketPhase(phase),
 			Status:       models.TicketStatus(status),
 			IsProject:    false,
-			LastUpdated:  time.Unix(lastUpdated, 0).UTC(),
+			LastUpdated:  time.Unix(lastUpdated, 0),
 			Dependencies: []string{},
 		}
 		if claimedBy.Valid {
@@ -410,7 +410,7 @@ func (d *DB) loadChangeRequests(ticketByID map[int64]*models.WorkUnit) error {
 			CommitHash:   commitHash,
 			CodeLocation: fmt.Sprintf("%s:%d", filename, lineNumber),
 			Status:       cstatus,
-			Date:         time.Unix(date, 0).UTC(),
+			Date:         time.Unix(date, 0),
 			Author:       author,
 			Description:  description,
 		})
@@ -624,7 +624,7 @@ func claimTicketRow(tx *sql.Tx, pid int) (int64, *models.WorkUnit, error) {
 		Phase:        models.TicketPhase(phase),
 		Status:       models.TicketStatus(status),
 		ClaimedBy:    strconv.Itoa(pid),
-		LastUpdated:  time.Unix(now, 0).UTC(),
+		LastUpdated:  time.Unix(now, 0),
 		IsProject:    false,
 		Dependencies: []string{},
 		Parent:       projectIdentifierByID(tx, projectID),
@@ -793,7 +793,7 @@ func (d *DB) OpenChangeRequests(identifier string) ([]models.ChangeRequest, erro
 			CommitHash:   commitHash,
 			CodeLocation: fmt.Sprintf("%s:%d", filename, lineNumber),
 			Status:       status,
-			Date:         time.Unix(date, 0).UTC(),
+			Date:         time.Unix(date, 0),
 			Author:       author,
 			Description:  description,
 		})
@@ -875,7 +875,7 @@ func (d *DB) FindStaleTickets(thresholdMinutes int) ([]*models.WorkUnit, error) 
 			Description: description,
 			Phase:       models.TicketPhase(phase),
 			Status:      models.TicketStatus(status),
-			LastUpdated: time.Unix(lastUpdated, 0).UTC(),
+			LastUpdated: time.Unix(lastUpdated, 0),
 			IsProject:   false,
 		})
 	}
@@ -964,7 +964,7 @@ func (d *DB) ActionableTickets() ([]*models.WorkUnit, error) {
 			Description:  description,
 			Phase:        models.TicketPhase(phase),
 			Status:       models.TicketStatus(status),
-			LastUpdated:  time.Unix(lastUpdated, 0).UTC(),
+			LastUpdated:  time.Unix(lastUpdated, 0),
 			IsProject:    false,
 			Dependencies: []string{},
 		}
@@ -1097,7 +1097,7 @@ func (d *DB) GetLogs() ([]models.LogEntry, error) {
 		if err := rows.Scan(&e.ID, &ts, &e.WorkerNumber, &e.Message, &nullLogfile); err != nil {
 			return nil, fmt.Errorf("scan log entry: %w", err)
 		}
-		e.Timestamp = time.Unix(ts, 0).UTC()
+		e.Timestamp = time.Unix(ts, 0)
 		if nullLogfile.Valid {
 			e.Logfile = nullLogfile.String
 		}

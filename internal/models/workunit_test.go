@@ -63,7 +63,7 @@ func TestNewProject(t *testing.T) {
 }
 
 func TestWorkUnitJSONRoundTrip(t *testing.T) {
-	now := time.Now().UTC().Truncate(time.Second)
+	now := time.Now().Truncate(time.Second)
 	original := &WorkUnit{
 		Identifier:   "my-project/fix-bug",
 		Description:  "Fix the bug in the widget",
@@ -117,7 +117,7 @@ func TestWorkUnitJSONFieldNames(t *testing.T) {
 		Phase:        PhaseImplement,
 		Status:       StatusIdle,
 		Dependencies: []string{},
-		LastUpdated:  time.Now().UTC(),
+		LastUpdated:  time.Now(),
 	}
 
 	data, err := json.Marshal(wu)
