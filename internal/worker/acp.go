@@ -330,22 +330,18 @@ func runACP(
 	// Run the prompt and subprocess wait in separate goroutines so we
 	// don't deadlock if the subprocess exits without sending a prompt
 	// response or if conn.Prompt blocks after the subprocess finishes.
-	logCh <- NewLogMessage(w.Number, fmt.Sprintf("[debug] runACP: starting prompt for %s", params.Identifier))
 	promptCh := make(chan error, 1)
 	go func() {
 		_, err := conn.Prompt(ctx, acp.PromptRequest{
 			SessionId: sessResp.SessionId,
 			Prompt:    []acp.ContentBlock{acp.TextBlock(params.Prompt)},
 		})
-		logCh <- NewLogMessage(w.Number, fmt.Sprintf("[debug] runACP: conn.Prompt returned (err=%v)", err))
 		promptCh <- err
 	}()
 
 	waitCh := make(chan error, 1)
 	go func() {
-		err := cmd.Wait()
-		logCh <- NewLogMessage(w.Number, fmt.Sprintf("[debug] runACP: cmd.Wait returned (err=%v)", err))
-		waitCh <- err
+		waitCh <- cmd.Wait()
 	}()
 
 	// Whichever finishes first unblocks us.
@@ -353,25 +349,20 @@ func runACP(
 	var procExited bool
 	select {
 	case promptErr = <-promptCh:
-		logCh <- NewLogMessage(w.Number, "[debug] runACP: unblocked by conn.Prompt")
 	case <-waitCh:
-		logCh <- NewLogMessage(w.Number, "[debug] runACP: unblocked by cmd.Wait (subprocess exited)")
 		procExited = true
 	}
 
-	logCh <- NewLogMessage(w.Number, "[debug] runACP: tearing down subprocess")
+	// Tear down the subprocess and its children.
 	_ = stdin.Close()
 	if cmd.Process != nil {
 		_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM)
 	}
 	_ = stdout.Close()
 	if !procExited {
-		logCh <- NewLogMessage(w.Number, "[debug] runACP: waiting for cmd.Wait to return")
 		<-waitCh
-		logCh <- NewLogMessage(w.Number, "[debug] runACP: cmd.Wait returned after kill")
 	}
 
-	logCh <- NewLogMessage(w.Number, fmt.Sprintf("[debug] runACP: returning (promptErr=%v)", promptErr))
 	if promptErr != nil {
 		return fmt.Errorf("ACP prompt: %w", promptErr)
 	}

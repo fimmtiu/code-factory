@@ -61,7 +61,6 @@ func (w *Worker) processTicket(ctx context.Context, ticket *models.WorkUnit) {
 		return
 	}
 
-	w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("[debug] processTicket: calling workFn for %s", identifier))
 	acpErr := w.workFn(ctx, w, w.database, w.logCh, WorkParams{
 		WorktreePath: worktreePath,
 		Identifier:   identifier,
@@ -69,7 +68,6 @@ func (w *Worker) processTicket(ctx context.Context, ticket *models.WorkUnit) {
 		Prompt:       prompt,
 		LogfilePath:  logfilePath,
 	})
-	w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("[debug] processTicket: workFn returned for %s (err=%v, ctxErr=%v)", identifier, acpErr, ctx.Err()))
 
 	// On graceful shutdown the context is cancelled before the work finishes.
 	// Reset the ticket to idle so it is re-processed on the next run rather
@@ -86,14 +84,11 @@ func (w *Worker) processTicket(ctx context.Context, ticket *models.WorkUnit) {
 	}
 	w.logCh <- NewLogMessageWithFile(w.Number, fmt.Sprintf("completed processing ticket %s", identifier), logfilePath)
 
-	w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("[debug] processTicket: setting user-review for %s", identifier))
 	if err := w.database.SetStatus(identifier, ticket.Phase, models.StatusUserReview); err != nil {
 		w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("error setting user-review on %s: %v", identifier, err))
 	}
-	w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("[debug] processTicket: releasing %s", identifier))
 	w.releaseTicket(identifier)
 
-	w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("[debug] processTicket: setting idle for %s", identifier))
 	w.Status = StatusIdle
 }
 
