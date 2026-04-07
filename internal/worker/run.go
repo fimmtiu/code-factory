@@ -41,9 +41,11 @@ func (w *Worker) run(ctx context.Context, pollIntervalSecs int) {
 func (w *Worker) processTicket(ctx context.Context, ticket *models.WorkUnit) {
 	identifier := ticket.Identifier
 
+	w.SetCurrentTicket(string(ticket.Phase) + " " + identifier)
 	w.Status = StatusBusy
 	if err := w.database.SetStatus(identifier, ticket.Phase, models.StatusInProgress); err != nil {
 		w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("error setting in-progress on %s: %v", identifier, err))
+		w.SetCurrentTicket("")
 		w.Status = StatusIdle
 		return
 	}
@@ -88,12 +90,13 @@ func (w *Worker) processTicket(ctx context.Context, ticket *models.WorkUnit) {
 		w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("error setting user-review on %s: %v", identifier, err))
 	}
 	w.releaseTicket(identifier)
-
 	w.Status = StatusIdle
 }
 
-// releaseTicket clears the claim on a ticket and sends a log message.
+// releaseTicket clears the claim on a ticket, clears the display label, and
+// sends a log message.
 func (w *Worker) releaseTicket(identifier string) {
+	w.SetCurrentTicket("")
 	if err := w.database.Release(identifier); err != nil {
 		w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("error releasing ticket %s: %v", identifier, err))
 		return

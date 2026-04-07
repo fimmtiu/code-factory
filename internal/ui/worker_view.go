@@ -242,19 +242,23 @@ func (v WorkerView) renderAllLines() []string {
 	return lines
 }
 
-// renderStatusLine returns the styled "Worker <N>: <status>" line for a worker.
+// renderStatusLine returns the styled "Worker <N>: <status> (<ticket>)" line for a worker.
 func (v WorkerView) renderStatusLine(w *worker.Worker) string {
 	text := fmt.Sprintf("Worker %d: %s", w.Number, w.Status.String())
 	if w.Paused {
 		text = fmt.Sprintf("Worker %d: paused", w.Number)
-		return workerPausedStyle.Render(text)
 	}
-	switch w.Status {
-	case worker.StatusIdle:
+	if ticket := w.GetCurrentTicket(); ticket != "" {
+		text += fmt.Sprintf(" (%s)", ticket)
+	}
+	switch {
+	case w.Paused:
+		return workerPausedStyle.Render(text)
+	case w.Status == worker.StatusIdle:
 		return workerIdleStyle.Render(text)
-	case worker.StatusAwaitingResponse:
+	case w.Status == worker.StatusAwaitingResponse:
 		return workerAwaitingStyle.Render(text)
-	case worker.StatusBusy:
+	case w.Status == worker.StatusBusy:
 		return workerBusyStyle.Render(text)
 	default:
 		return workerIdleStyle.Render(text)

@@ -44,6 +44,10 @@ type Worker struct {
 	// ToWorker carries messages from the main goroutine to this worker.
 	ToWorker chan MainToWorkerMessage
 
+	// CurrentTicket is the identifier of the ticket currently being processed,
+	// or empty if the worker is idle. Protected by mu.
+	CurrentTicket string
+
 	// LastOutput holds the last three lines of agent output, used for display
 	// in the worker status view. Protected by mu.
 	LastOutput []string
@@ -52,8 +56,8 @@ type Worker struct {
 	// user response, or nil if none is pending. Protected by mu.
 	pendingPermission *PendingPermissionRequest
 
-	// mu guards LastOutput and pendingPermission for concurrent access between
-	// the worker goroutine (writer) and the UI goroutine (reader).
+	// mu guards CurrentTicket, LastOutput, and pendingPermission for concurrent
+	// access between the worker goroutine (writer) and the UI goroutine (reader).
 	mu sync.RWMutex
 
 	// database, logCh, notifCh, ticketsDir, and workFn are set by Pool.Start
@@ -75,6 +79,21 @@ func NewWorker(number int) *Worker {
 		ToWorker:   make(chan MainToWorkerMessage, workerChannelBuffer),
 		LastOutput: []string{},
 	}
+}
+
+// GetCurrentTicket returns the identifier of the ticket being processed, or
+// empty if idle. Safe for concurrent access from the UI goroutine.
+func (w *Worker) GetCurrentTicket() string {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	return w.CurrentTicket
+}
+
+// SetCurrentTicket updates the identifier of the ticket being processed.
+func (w *Worker) SetCurrentTicket(identifier string) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.CurrentTicket = identifier
 }
 
 // GetLastOutput returns a copy of the worker's last output lines, safe for
