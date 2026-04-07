@@ -282,12 +282,12 @@ func (m Model) View() string {
 				rightPairs = []string{"E", "edit", "T", "open terminal", "Tab", "switch", "Enter", "view", "/", "filter"}
 			}
 		case ViewCommand:
-			rightPairs = []string{"A", "approve", "E", "edit worktree", "T", "open terminal", "Enter", "respond/view"}
+			rightPairs = []string{"A", "approve", "G", "git-diff", "E", "edit worktree", "T", "open terminal", "Enter", "respond/view"}
 		case ViewLog:
 			if lv, ok := m.views[ViewLog].(LogView); ok && lv.filtering {
 				rightPairs = []string{"Esc", "clear filter"}
 			} else {
-				rightPairs = []string{"E", "open in editor", "C", "copy path", "/", "filter"}
+				rightPairs = []string{"E", "open in editor", "G", "git-diff", "C", "copy path", "/", "filter"}
 			}
 		}
 		if len(rightPairs) > 0 {

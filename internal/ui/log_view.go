@@ -249,6 +249,8 @@ func (v LogView) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return v.openLogfile()
 	case "c", "C":
 		return v.copyLogfilePath()
+	case "g", "G":
+		return v.gitDiff()
 	case "/":
 		v.filtering = true
 		return v, nil
@@ -315,6 +317,21 @@ func (v LogView) openLogfile() (tea.Model, tea.Cmd) {
 		_ = util.OpenFileInEditor(logfile)
 		return nil
 	})
+}
+
+// gitDiff opens a GitHub compare page or terminal git diff for the ticket
+// associated with the selected log entry's logfile.
+func (v LogView) gitDiff() (tea.Model, tea.Cmd) {
+	entry := v.selectedEntry()
+	if entry == nil || entry.Logfile == "" {
+		return v, nil
+	}
+	identifier := identifierFromLogfile(entry.Logfile)
+	if identifier == "" {
+		return v, nil
+	}
+	openGitDiff(identifier)
+	return v, nil
 }
 
 // copyLogfilePath copies the selected entry's logfile path to the clipboard.
@@ -475,6 +492,7 @@ func (v LogView) KeyBindings() []KeyBinding {
 		{Key: "PgUp/PgDn", Description: "Page navigate"},
 		{Key: "E", Description: "Open logfile in $EDITOR"},
 		{Key: "C", Description: "Copy logfile path to clipboard"},
+		{Key: "G", Description: "Open git diff (GitHub compare or terminal)"},
 		{Key: "/", Description: "Filter entries by substring"},
 	}
 }
