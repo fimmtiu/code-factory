@@ -152,8 +152,21 @@ func (v CommandView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Tick ping: fetch real data.
 			return v, v.fetchCmd()
 		}
+		// Remember the currently selected ticket so we can restore it after
+		// rebuilding the row list.
+		prevID := ""
+		if v.selected < len(v.rows) && !v.rows[v.selected].separator {
+			prevID = v.rows[v.selected].wu.Identifier
+		}
 		v.rows = buildRows(msg.tickets)
-		// Clamp selection to a non-separator selectable row.
+		if prevID != "" {
+			for i, row := range v.rows {
+				if !row.separator && row.wu.Identifier == prevID {
+					v.selected = i
+					break
+				}
+			}
+		}
 		v.clampSelected()
 		v.clampScroll()
 		return v, v.tickCmd()
