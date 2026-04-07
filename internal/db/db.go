@@ -81,8 +81,8 @@ func (d *DB) Close() error {
 	return d.db.Close()
 }
 
-// withTx executes fn inside a transaction, committing on success and rolling
-// back on any error returned by fn.
+// withTx executes fn inside a DEFERRED transaction, committing on success and
+// rolling back on any error returned by fn.
 func (d *DB) withTx(fn func(*sql.Tx) error) error {
 	tx, err := d.db.Begin()
 	if err != nil {
@@ -94,6 +94,7 @@ func (d *DB) withTx(fn func(*sql.Tx) error) error {
 	}
 	return tx.Commit()
 }
+
 
 var schemaStatements = []string{
 	`CREATE TABLE IF NOT EXISTS "projects" (
@@ -604,33 +605,53 @@ func (d *DB) Claim(pid int) (*models.WorkUnit, error) {
 	return result, err
 }
 
-// claimTicketRow selects the first claimable ticket, marks it claimed by pid,
-// and returns its row id and a partially-populated WorkUnit.
+// claimTicketRow atomically claims the first claimable ticket for pid and
+// returns its row id and a partially-populated WorkUnit.
+//
+// The UPDATE-then-SELECT pattern ensures that only one worker can claim a
+// given ticket even under concurrent DEFERRED transactions — the UPDATE's
+// WHERE clause acts as an atomic compare-and-swap.
 func claimTicketRow(tx *sql.Tx, pid int) (int64, *models.WorkUnit, error) {
-	var id int64
-	var identifier, description, phase, status string
-	var lastUpdated int64
-	var projectID sql.NullInt64
-	err := tx.QueryRow(`
-		SELECT id, identifier, description, phase, status, last_updated, project_id
-		FROM tickets
-		WHERE phase NOT IN ('blocked', 'done')
-		  AND status = 'idle'
-		  AND claimed_by IS NULL
-		LIMIT 1
-	`).Scan(&id, &identifier, &description, &phase, &status, &lastUpdated, &projectID)
-	if err == sql.ErrNoRows {
-		return 0, nil, fmt.Errorf("no claimable ticket available")
-	}
+	now := time.Now().Unix()
+
+	// Atomically claim the first available ticket. SQLite evaluates the
+	// subquery and applies the UPDATE in a single statement, so no other
+	// transaction can claim the same row.
+	res, err := tx.Exec(`
+		UPDATE tickets
+		SET claimed_by = ?, last_updated = ?
+		WHERE id = (
+			SELECT id FROM tickets
+			WHERE phase NOT IN ('blocked', 'done')
+			  AND status = 'idle'
+			  AND claimed_by IS NULL
+			LIMIT 1
+		)
+	`, pid, now)
 	if err != nil {
 		return 0, nil, err
 	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return 0, nil, err
+	}
+	if n == 0 {
+		return 0, nil, fmt.Errorf("no claimable ticket available")
+	}
 
-	now := time.Now().Unix()
-	if _, err := tx.Exec(
-		`UPDATE tickets SET claimed_by = ?, last_updated = ? WHERE id = ?`,
-		pid, now, id,
-	); err != nil {
+	// Read back the ticket we just claimed. The status is still 'idle' at this
+	// point (the caller transitions it to in-progress), and a worker can only
+	// hold one idle ticket at a time, so this is unambiguous.
+	var id int64
+	var identifier, description, phase, status string
+	var projectID sql.NullInt64
+	err = tx.QueryRow(`
+		SELECT id, identifier, description, phase, status, project_id
+		FROM tickets
+		WHERE claimed_by = ? AND status = 'idle'
+		LIMIT 1
+	`, pid).Scan(&id, &identifier, &description, &phase, &status, &projectID)
+	if err != nil {
 		return 0, nil, err
 	}
 
