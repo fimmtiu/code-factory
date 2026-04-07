@@ -42,10 +42,10 @@ func releaseStaleTickets(database *db.DB, logCh chan<- LogMessage) {
 		return
 	}
 	for _, ticket := range stale {
-		if err := database.Release(ticket.Identifier); err != nil {
-			logCh <- NewLogMessage(0, fmt.Sprintf("housekeeping: error releasing stale ticket %s: %v", ticket.Identifier, err))
+		if err := database.ResetTicket(ticket.Identifier); err != nil {
+			logCh <- NewLogMessage(0, fmt.Sprintf("housekeeping: error resetting stale ticket %s: %v", ticket.Identifier, err))
 			continue
 		}
-		logCh <- NewLogMessage(0, fmt.Sprintf("housekeeping: released stale ticket %s", ticket.Identifier))
+		logCh <- NewLogMessage(0, fmt.Sprintf("housekeeping: reset stale ticket %s to idle", ticket.Identifier))
 	}
 }

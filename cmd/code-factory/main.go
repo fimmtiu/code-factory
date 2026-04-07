@@ -89,6 +89,13 @@ Options:
 	}
 	defer database.Close()
 
+	// Recover any tickets left in a running state by a previous hard kill.
+	if recovered, err := database.RecoverOrphanedTickets(); err != nil {
+		fmt.Fprintln(os.Stderr, "warning: recovering orphaned tickets:", err)
+	} else if recovered > 0 {
+		fmt.Fprintf(os.Stderr, "recovered %d orphaned ticket(s) from previous run\n", recovered)
+	}
+
 	// NewPool defaults WorkFn to the real ACP subprocess; --mock overrides it.
 	pool := worker.NewPool(*poolSize, *waitSecs)
 	if *mock {

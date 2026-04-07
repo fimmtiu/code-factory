@@ -693,6 +693,53 @@ func (d *DB) Release(identifier string) error {
 	})
 }
 
+// ResetTicket atomically clears the claim and resets the status to idle.
+// Used by housekeeping for stale tickets where the worker is presumed dead.
+func (d *DB) ResetTicket(identifier string) error {
+	return d.withTx(func(tx *sql.Tx) error {
+		res, err := tx.Exec(
+			`UPDATE tickets SET status = 'idle', claimed_by = NULL, last_updated = ? WHERE identifier = ?`,
+			time.Now().Unix(), identifier,
+		)
+		if err != nil {
+			return err
+		}
+		n, err := res.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if n == 0 {
+			return fmt.Errorf("ticket %q not found", identifier)
+		}
+		return nil
+	})
+}
+
+// RecoverOrphanedTickets resets all tickets stuck in a running state
+// (in-progress or needs-attention) back to idle with no claim. This is
+// called at startup to recover from hard kills where workers died without
+// cleaning up. Returns the number of tickets recovered.
+func (d *DB) RecoverOrphanedTickets() (int, error) {
+	var count int
+	err := d.withTx(func(tx *sql.Tx) error {
+		res, err := tx.Exec(
+			`UPDATE tickets SET status = 'idle', claimed_by = NULL, last_updated = ?
+			 WHERE status IN ('in-progress', 'needs-attention')`,
+			time.Now().Unix(),
+		)
+		if err != nil {
+			return err
+		}
+		n, err := res.RowsAffected()
+		if err != nil {
+			return err
+		}
+		count = int(n)
+		return nil
+	})
+	return count, err
+}
+
 // AddChangeRequest adds a new change request for the given ticket at the
 // specified code location.
 func (d *DB) AddChangeRequest(identifier, codeLocation, author, description string) error {

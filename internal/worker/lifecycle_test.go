@@ -516,3 +516,93 @@ func TestPool_MultipleWorkers_ClaimIndependently(t *testing.T) {
 
 	pool.Stop()
 }
+
+// --- Startup recovery ---
+
+func TestResetTicket_ResetsStatusAndClaim(t *testing.T) {
+	d, _ := openTestDB(t)
+	createProject(t, d, "proj")
+	createTicket(t, d, "proj/stuck")
+
+	// Simulate a worker claiming and starting work.
+	ticket, err := d.Claim(1)
+	if err != nil {
+		t.Fatalf("Claim: %v", err)
+	}
+	if err := d.SetStatus(ticket.Identifier, ticket.Phase, models.StatusInProgress); err != nil {
+		t.Fatalf("SetStatus: %v", err)
+	}
+
+	// ResetTicket should clear both status and claim.
+	if err := d.ResetTicket("proj/stuck"); err != nil {
+		t.Fatalf("ResetTicket: %v", err)
+	}
+
+	// The ticket should now be claimable again.
+	reclaimed, err := d.Claim(2)
+	if err != nil {
+		t.Fatalf("Claim after reset: %v", err)
+	}
+	if reclaimed.Identifier != "proj/stuck" {
+		t.Errorf("expected to reclaim proj/stuck, got %q", reclaimed.Identifier)
+	}
+}
+
+func TestRecoverOrphanedTickets_ResetsRunningTickets(t *testing.T) {
+	d, _ := openTestDB(t)
+	createProject(t, d, "proj")
+	createTicket(t, d, "proj/in-prog")
+	createTicket(t, d, "proj/needs-attn")
+	createTicket(t, d, "proj/user-rev")
+	createTicket(t, d, "proj/idle")
+
+	// Set up various states to simulate a hard kill mid-run.
+	t1, _ := d.Claim(1)
+	_ = d.SetStatus(t1.Identifier, t1.Phase, models.StatusInProgress)
+
+	t2, _ := d.Claim(2)
+	_ = d.SetStatus(t2.Identifier, t2.Phase, models.StatusNeedsAttention)
+
+	t3, _ := d.Claim(3)
+	_ = d.SetStatus(t3.Identifier, t3.Phase, models.StatusUserReview)
+	_ = d.Release(t3.Identifier)
+
+	// proj/idle is never claimed — stays idle.
+
+	// Recover should reset in-progress and needs-attention, but not user-review or idle.
+	count, err := d.RecoverOrphanedTickets()
+	if err != nil {
+		t.Fatalf("RecoverOrphanedTickets: %v", err)
+	}
+	if count != 2 {
+		t.Errorf("expected 2 recovered tickets, got %d", count)
+	}
+
+	// All 4 tickets should now be in a valid state. The two recovered ones
+	// plus the idle one should be claimable (3 total). user-review stays put.
+	var claimed []string
+	for i := 0; i < 3; i++ {
+		wu, err := d.Claim(10 + i)
+		if err != nil {
+			break
+		}
+		claimed = append(claimed, wu.Identifier)
+	}
+	if len(claimed) != 3 {
+		t.Errorf("expected 3 claimable tickets after recovery, got %d: %v", len(claimed), claimed)
+	}
+}
+
+func TestRecoverOrphanedTickets_NothingToRecover(t *testing.T) {
+	d, _ := openTestDB(t)
+	createProject(t, d, "proj")
+	createTicket(t, d, "proj/healthy")
+
+	count, err := d.RecoverOrphanedTickets()
+	if err != nil {
+		t.Fatalf("RecoverOrphanedTickets: %v", err)
+	}
+	if count != 0 {
+		t.Errorf("expected 0 recovered tickets, got %d", count)
+	}
+}
