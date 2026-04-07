@@ -165,6 +165,71 @@ func (d HelpDialog) View() string {
 	return dialogBoxStyle.Render(body)
 }
 
+// ── Merge conflict dialog ─────────────────────────────────────────────────────
+
+type mergeConflictFocused int
+
+const (
+	mergeFocusFix mergeConflictFocused = iota
+	mergeFocusIgnore
+)
+
+// MergeConflictDialog is shown when a git merge fails. It offers to open a
+// terminal in the conflicted worktree so the user can resolve the conflict.
+type MergeConflictDialog struct {
+	worktreePath string
+	focused      mergeConflictFocused
+}
+
+func NewMergeConflictDialog(worktreePath string) MergeConflictDialog {
+	return MergeConflictDialog{worktreePath: worktreePath, focused: mergeFocusFix}
+}
+
+func (d MergeConflictDialog) Init() tea.Cmd { return nil }
+
+func (d MergeConflictDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "tab", "left", "right", "h", "l":
+			if d.focused == mergeFocusFix {
+				d.focused = mergeFocusIgnore
+			} else {
+				d.focused = mergeFocusFix
+			}
+		case "enter":
+			if d.focused == mergeFocusFix {
+				openTerminalWithCommand(d.worktreePath, "git status")
+			}
+			return d, dismissDialogCmd()
+		case "esc":
+			return d, dismissDialogCmd()
+		}
+	}
+	return d, nil
+}
+
+func (d MergeConflictDialog) View() string {
+	fixBtn := buttonNormalStyle.Render("Fix")
+	ignoreBtn := buttonNormalStyle.Render("Ignore")
+	if d.focused == mergeFocusFix {
+		fixBtn = buttonFocusedStyle.Render("Fix")
+	} else {
+		ignoreBtn = buttonFocusedStyle.Render("Ignore")
+	}
+
+	body := lipgloss.JoinVertical(lipgloss.Left,
+		dialogTitleStyle.Render("Merge Conflict"),
+		"A merge failed in:",
+		detailLabelStyle.Render(d.worktreePath),
+		"",
+		"Resolve the conflict, then try approving again.",
+		"",
+		lipgloss.JoinHorizontal(lipgloss.Top, fixBtn, "  ", ignoreBtn),
+	)
+	return dialogBoxStyle.Render(body)
+}
+
 // ── dismissDialogMsg ──────────────────────────────────────────────────────────
 
 // dismissDialogMsg is sent by dialogs when they want to be closed.

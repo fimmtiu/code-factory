@@ -10,6 +10,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"errors"
+
 	"github.com/fimmtiu/code-factory/internal/config"
 	"github.com/fimmtiu/code-factory/internal/db"
 	"github.com/fimmtiu/code-factory/internal/models"
@@ -37,6 +39,10 @@ var (
 
 type commandRefreshMsg struct {
 	tickets []*models.WorkUnit
+}
+
+type openMergeConflictDialogMsg struct {
+	worktreePath string
 }
 
 type respondToAgentDoneMsg struct {
@@ -173,6 +179,12 @@ func (v CommandView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case approveResultMsg:
 		if msg.err != nil {
+			var mergeErr *db.MergeConflictError
+			if errors.As(msg.err, &mergeErr) {
+				return v, func() tea.Msg {
+					return openMergeConflictDialogMsg{worktreePath: mergeErr.WorktreePath}
+				}
+			}
 			v.errorMsg = fmt.Sprintf("approve error: %s", msg.err)
 			return v, nil
 		}

@@ -22,6 +22,22 @@ const (
 	workUnitTypeProject = 2
 )
 
+// MergeConflictError is returned when a git merge fails during ticket or
+// project completion. It carries the path to the worktree where the conflict
+// exists so the UI can offer to open a terminal there.
+type MergeConflictError struct {
+	WorktreePath string
+	Err          error
+}
+
+func (e *MergeConflictError) Error() string {
+	return fmt.Sprintf("merge conflict in %s: %v", e.WorktreePath, e.Err)
+}
+
+func (e *MergeConflictError) Unwrap() error {
+	return e.Err
+}
+
 // DB provides read/write access to the tickets SQLite database.
 type DB struct {
 	db         *sql.DB
@@ -552,7 +568,7 @@ func (d *DB) markTicketDone(ticketID int64, identifier string, projectID sql.Nul
 	}
 
 	if err := d.git.MergeBranch(mergeTarget, identifier); err != nil {
-		return fmt.Errorf("merge failed: %w", err)
+		return &MergeConflictError{WorktreePath: mergeTarget, Err: err}
 	}
 
 	if err := d.withTx(func(tx *sql.Tx) error {
@@ -1054,7 +1070,7 @@ func (d *DB) SetProjectPhase(identifier, phase string) error {
 			}
 		}
 		if err := d.git.MergeBranch(mergeTarget, identifier); err != nil {
-			return fmt.Errorf("merge project %q: %w", identifier, err)
+			return &MergeConflictError{WorktreePath: mergeTarget, Err: err}
 		}
 	}
 
