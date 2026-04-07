@@ -46,8 +46,9 @@ func logTimestampStyle(age time.Duration) lipgloss.Style {
 
 // Column widths for the three-column layout.
 const (
-	logTimestampWidth = 14 // "15:04:05" or "01/02 15:04"
-	logWorkerWidth    = 4  // right-aligned worker number
+	logTimestampWidth = 12 // "15:04:05" or "01/02 15:04"
+	logWorkerWidth    = 2  // right-aligned worker number
+	logWorkerGap      = 3  // space after worker number (before message)
 	logColGap         = 1  // space between columns
 )
 
@@ -339,7 +340,7 @@ func (v LogView) listHeight() int {
 
 // messageWidth returns the width available for the message column.
 func (v LogView) messageWidth() int {
-	used := logTimestampWidth + logColGap + logWorkerWidth + logColGap + viewBorderOverhead
+	used := logTimestampWidth + logColGap + logWorkerWidth + logWorkerGap + viewBorderOverhead
 	w := v.width - used
 	if w < 1 {
 		w = 1
@@ -383,7 +384,12 @@ func (v LogView) View() string {
 func (v LogView) renderRow(e *models.LogEntry, selected bool) string {
 	now := time.Now()
 	ts := formatLogTimestamp(e.Timestamp, now)
-	workerStr := fmt.Sprintf("%*d", logWorkerWidth, e.WorkerNumber)
+	var workerStr string
+	if e.WorkerNumber > 0 {
+		workerStr = fmt.Sprintf("%*d", logWorkerWidth, e.WorkerNumber)
+	} else {
+		workerStr = strings.Repeat(" ", logWorkerWidth)
+	}
 	msgW := v.messageWidth()
 
 	// Build the message segment. If the entry has a logfile, prepend a subtle marker.
@@ -400,9 +406,11 @@ func (v LogView) renderRow(e *models.LogEntry, selected bool) string {
 		msg = truncateLine(msg, msgW)
 	}
 
-	line := fmt.Sprintf("%-*s %s %s",
+	gap := strings.Repeat(" ", logWorkerGap)
+	line := fmt.Sprintf("%-*s %s%s%s",
 		logTimestampWidth, ts,
 		workerStr,
+		gap,
 		msg,
 	)
 
@@ -414,7 +422,7 @@ func (v LogView) renderRow(e *models.LogEntry, selected bool) string {
 	// segment by message type for quick visual scanning.
 	age := now.Sub(e.Timestamp)
 	tsStyled := logTimestampStyle(age).Render(fmt.Sprintf("%-*s", logTimestampWidth, ts))
-	rest := fmt.Sprintf(" %s %s", workerStr, msg)
+	rest := fmt.Sprintf(" %s%s%s", workerStr, gap, msg)
 	msgStyle := lipgloss.NewStyle().Foreground(logMessageColor(e.Message))
 	return tsStyled + msgStyle.Render(rest)
 }
