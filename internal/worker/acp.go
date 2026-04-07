@@ -333,6 +333,9 @@ func runACP(
 		return fmt.Errorf("ACP prompt: %w", err)
 	}
 
+	// Close stdin so the subprocess sees EOF and exits; without this
+	// cmd.Wait blocks forever because the process keeps waiting for input.
+	_ = stdin.Close()
 	_ = cmd.Wait()
 	return nil
 }
