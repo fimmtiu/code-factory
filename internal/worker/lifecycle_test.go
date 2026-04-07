@@ -422,6 +422,70 @@ func TestPool_PauseUnpauseWorker_OutOfRange(t *testing.T) {
 	pool.UnpauseWorker(99)
 }
 
+// --- US-006: Worker returns to idle after work completes ---
+
+func TestWorker_PicksUpNewWorkAfterCompletion(t *testing.T) {
+	d, ticketsDir := openTestDB(t)
+	createProject(t, d, "proj")
+	createTicket(t, d, "proj/t1")
+	createTicket(t, d, "proj/t2")
+
+	pool := worker.NewPool(1, 1)
+	pool.WorkFn = worker.NoopWorkFn
+	pool.Start(d, ticketsDir)
+
+	// Both tickets must be released; if the worker deadlocks after the
+	// first ticket, the second is never claimed and the test times out.
+	released := 0
+	deadline := time.After(5 * time.Second)
+	for released < 2 {
+		select {
+		case msg := <-pool.LogChannel:
+			if len(msg.Message) > 8 && msg.Message[:8] == "released" {
+				released++
+			}
+		case <-deadline:
+			pool.Stop()
+			t.Fatalf("only %d/2 tickets released within 5s — worker likely stuck in busy state after first ticket", released)
+		}
+	}
+
+	pool.Stop()
+}
+
+func TestWorker_ShutdownUnblocksHangingWorkFn(t *testing.T) {
+	d, ticketsDir := openTestDB(t)
+	createProject(t, d, "proj")
+	createTicket(t, d, "proj/t1")
+
+	pool := worker.NewPool(1, 1)
+	// WorkFn that blocks until the context is cancelled, simulating
+	// a subprocess that never exits.
+	pool.WorkFn = worker.HangingWorkFn
+	pool.Start(d, ticketsDir)
+
+	// Wait for the ticket to be claimed.
+	if !waitForLog(pool.LogChannel, "claimed ticket proj/t1", 5*time.Second) {
+		pool.Stop()
+		t.Fatal("ticket was not claimed within 5 seconds")
+	}
+
+	// Stop the pool — this cancels the context and must unblock the
+	// hanging WorkFn. If it doesn't, the test times out.
+	done := make(chan struct{})
+	go func() {
+		pool.Stop()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// ok — shutdown completed
+	case <-time.After(5 * time.Second):
+		t.Fatal("Pool.Stop() did not return within 5s — hanging WorkFn was not unblocked by context cancellation")
+	}
+}
+
 // --- concurrent workers test ---
 
 func TestPool_MultipleWorkers_ClaimIndependently(t *testing.T) {

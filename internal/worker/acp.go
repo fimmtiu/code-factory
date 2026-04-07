@@ -325,18 +325,46 @@ func runACP(
 	_, _ = fmt.Fprintf(logFile, "=== SESSION ===\n%s\n\n=== PROMPT ===\n%s\n\n=== OUTPUT ===\n",
 		sessResp.SessionId, params.Prompt)
 
-	_, err = conn.Prompt(ctx, acp.PromptRequest{
-		SessionId: sessResp.SessionId,
-		Prompt:    []acp.ContentBlock{acp.TextBlock(params.Prompt)},
-	})
-	if err != nil {
-		return fmt.Errorf("ACP prompt: %w", err)
+	// Run the prompt and subprocess wait in separate goroutines so we
+	// don't deadlock if the subprocess exits without sending a prompt
+	// response or if conn.Prompt blocks after the subprocess finishes.
+	promptCh := make(chan error, 1)
+	go func() {
+		_, err := conn.Prompt(ctx, acp.PromptRequest{
+			SessionId: sessResp.SessionId,
+			Prompt:    []acp.ContentBlock{acp.TextBlock(params.Prompt)},
+		})
+		promptCh <- err
+	}()
+
+	waitCh := make(chan error, 1)
+	go func() {
+		waitCh <- cmd.Wait()
+	}()
+
+	// Whichever finishes first unblocks us.
+	var promptErr error
+	var procExited bool
+	select {
+	case promptErr = <-promptCh:
+		// Prompt completed (possibly with error).
+	case <-waitCh:
+		// Subprocess exited before prompt returned.
+		procExited = true
 	}
 
-	// Close stdin so the subprocess sees EOF and exits; without this
-	// cmd.Wait blocks forever because the process keeps waiting for input.
+	// Tear down the subprocess.
 	_ = stdin.Close()
-	_ = cmd.Wait()
+	if cmd.Process != nil {
+		_ = cmd.Process.Kill()
+	}
+	if !procExited {
+		<-waitCh
+	}
+
+	if promptErr != nil {
+		return fmt.Errorf("ACP prompt: %w", promptErr)
+	}
 	return nil
 }
 

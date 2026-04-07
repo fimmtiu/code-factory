@@ -12,6 +12,19 @@ import (
 	"github.com/fimmtiu/code-factory/internal/models"
 )
 
+// NoopWorkFn is a WorkFn that returns immediately without doing any work.
+// Used in tests that only need to exercise the worker lifecycle.
+func NoopWorkFn(_ context.Context, _ *Worker, _ dbInterface, _ chan<- LogMessage, _ WorkParams) error {
+	return nil
+}
+
+// HangingWorkFn is a WorkFn that blocks until the context is cancelled.
+// Used to test that shutdown properly unblocks a stuck worker.
+func HangingWorkFn(ctx context.Context, _ *Worker, _ dbInterface, _ chan<- LogMessage, _ WorkParams) error {
+	<-ctx.Done()
+	return ctx.Err()
+}
+
 // mockScript is the sequence of output lines the mock worker emits.
 // The first batch is emitted before the needs-attention pause; the second
 // batch after the user responds.
