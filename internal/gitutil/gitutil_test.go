@@ -85,6 +85,49 @@ func TestCreateWorktree(t *testing.T) {
 	}
 }
 
+func TestCreateWorktreeCopiesClaudeSettings(t *testing.T) {
+	dir := initTestRepo(t)
+	client := gitutil.NewRealGitClient()
+
+	// Create .claude/settings.json in the repo root.
+	claudeDir := filepath.Join(dir, ".claude")
+	if err := os.MkdirAll(claudeDir, 0755); err != nil {
+		t.Fatalf("failed to create .claude dir: %v", err)
+	}
+	settings := []byte(`{"permissions":{"allow":["Bash(go *)"]}}`)
+	if err := os.WriteFile(filepath.Join(claudeDir, "settings.json"), settings, 0644); err != nil {
+		t.Fatalf("failed to write settings.json: %v", err)
+	}
+
+	worktreePath := filepath.Join(dir, ".tickets", "test-copy", "worktree")
+	if err := client.CreateWorktree(dir, worktreePath, "test-copy"); err != nil {
+		t.Fatalf("CreateWorktree returned error: %v", err)
+	}
+
+	got, err := os.ReadFile(filepath.Join(worktreePath, ".claude", "settings.json"))
+	if err != nil {
+		t.Fatalf("settings.json not copied to worktree: %v", err)
+	}
+	if string(got) != string(settings) {
+		t.Errorf("copied settings mismatch: got %q, want %q", got, settings)
+	}
+}
+
+func TestCreateWorktreeNoSettingsNoCopy(t *testing.T) {
+	dir := initTestRepo(t)
+	client := gitutil.NewRealGitClient()
+
+	worktreePath := filepath.Join(dir, ".tickets", "no-settings", "worktree")
+	if err := client.CreateWorktree(dir, worktreePath, "no-settings"); err != nil {
+		t.Fatalf("CreateWorktree returned error: %v", err)
+	}
+
+	// No .claude/settings.json in repo root, so none should appear in worktree.
+	if _, err := os.Stat(filepath.Join(worktreePath, ".claude", "settings.json")); !os.IsNotExist(err) {
+		t.Fatal("settings.json should not exist in worktree when absent from repo root")
+	}
+}
+
 func TestCreateWorktreeWithSlashIdentifier(t *testing.T) {
 	dir := initTestRepo(t)
 	client := gitutil.NewRealGitClient()

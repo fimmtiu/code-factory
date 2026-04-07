@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
@@ -59,6 +60,22 @@ func (g *RealGitClient) CreateWorktree(repoRoot, worktreePath, branchName string
 	if err := runGit("-C", repoRoot, "worktree", "add", worktreePath, "-b", safeBranchName); err != nil {
 		return fmt.Errorf("CreateWorktree(%q, %q): %w", repoRoot, worktreePath, err)
 	}
+
+	// Copy .claude/settings.json into the worktree so that ACP agents
+	// inherit the project's permission allow-list. Without this, agents
+	// running in the worktree won't find the file (it lives on main but
+	// the worktree branch may predate the commit).
+	srcSettings := filepath.Join(repoRoot, ".claude", "settings.json")
+	if data, err := os.ReadFile(srcSettings); err == nil {
+		dstDir := filepath.Join(worktreePath, ".claude")
+		if err := os.MkdirAll(dstDir, 0755); err != nil {
+			return fmt.Errorf("CreateWorktree: create .claude dir in worktree: %w", err)
+		}
+		if err := os.WriteFile(filepath.Join(dstDir, "settings.json"), data, 0644); err != nil {
+			return fmt.Errorf("CreateWorktree: copy settings.json to worktree: %w", err)
+		}
+	}
+
 	return nil
 }
 
