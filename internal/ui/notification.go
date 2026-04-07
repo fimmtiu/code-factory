@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"os/exec"
+
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -61,5 +63,28 @@ type workerNotifMsg struct{ text string }
 func waitForWorkerNotif(ch <-chan string) tea.Cmd {
 	return func() tea.Msg {
 		return workerNotifMsg{text: <-ch}
+	}
+}
+
+// fireOSNotifMsg is sent after the 3-second batching window expires.
+type fireOSNotifMsg struct{ id int }
+
+// hasTerminalNotifier caches whether terminal-notifier is available.
+var hasTerminalNotifier = func() bool {
+	_, err := exec.LookPath("terminal-notifier")
+	return err == nil
+}()
+
+// fireOSNotification sends an OS-level notification via terminal-notifier.
+func fireOSNotification(text string) tea.Cmd {
+	if !hasTerminalNotifier {
+		return nil
+	}
+	return func() tea.Msg {
+		_ = exec.Command("terminal-notifier",
+			"-title", "Code Factory",
+			"-message", text,
+		).Run()
+		return nil
 	}
 }

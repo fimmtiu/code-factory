@@ -55,6 +55,13 @@ type Model struct {
 
 	notifText string // current notification text; empty = none visible
 	notifID   int    // incremented on each new notification to expire old timers
+
+	// OS notification batching: when a "needs attention" notification arrives,
+	// we buffer it and fire terminal-notifier after a 3-second delay. If
+	// multiple arrive in that window, the message becomes "Multiple tickets
+	// need attention".
+	osNotifPending []string // buffered notification texts; nil = no timer running
+	osNotifID      int      // incremented on each batch to expire stale timers
 }
 
 // NewModel creates a new root Model with the given pool, database, poll
@@ -107,10 +114,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case workerNotifMsg:
 		// Re-arm the listener so the next notification is also delivered.
-		return m, tea.Batch(
+		cmds := []tea.Cmd{
 			ShowNotification(msg.text),
 			waitForWorkerNotif(m.pool.NotifChannel),
-		)
+		}
+		// Buffer for a batched OS notification. If this is the first in
+		// the batch, start a 3-second timer.
+		startTimer := len(m.osNotifPending) == 0
+		m.osNotifPending = append(m.osNotifPending, msg.text)
+		if startTimer {
+			m.osNotifID++
+			id := m.osNotifID
+			cmds = append(cmds, tea.Tick(3*time.Second, func(time.Time) tea.Msg {
+				return fireOSNotifMsg{id: id}
+			}))
+		}
+		return m, tea.Batch(cmds...)
 
 	case notifMsg:
 		m.notifID++
@@ -123,6 +142,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case clearNotifMsg:
 		if msg.id == m.notifID {
 			m.notifText = ""
+		}
+		return m, nil
+
+	case fireOSNotifMsg:
+		if msg.id == m.osNotifID && len(m.osNotifPending) > 0 {
+			text := m.osNotifPending[0]
+			if len(m.osNotifPending) > 1 {
+				text = "Multiple tickets need attention"
+			}
+			m.osNotifPending = nil
+			return m, fireOSNotification(text)
 		}
 		return m, nil
 
