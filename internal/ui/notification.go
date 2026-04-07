@@ -34,7 +34,7 @@ func wrapEditorCmd(fn func() tea.Msg) tea.Cmd {
 // Dark background with bright text and an amber border for high visibility.
 var notifStyle = lipgloss.NewStyle().
 	Border(lipgloss.RoundedBorder()).
-	BorderForeground(lipgloss.Color("214")).
+	BorderForeground(lipgloss.Color("166")).
 	BorderBackground(lipgloss.Color("238")).
 	Background(lipgloss.Color("238")).
 	Foreground(lipgloss.Color("230")).

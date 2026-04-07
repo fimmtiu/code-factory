@@ -61,7 +61,7 @@ var (
 	// Phase badge styles (keyed by ticket phase)
 	phaseBadgeStyles = map[models.TicketPhase]lipgloss.Style{
 		models.PhaseImplement: lipgloss.NewStyle().Foreground(lipgloss.Color("37")),
-		models.PhaseRefactor:  lipgloss.NewStyle().Foreground(lipgloss.Color("214")),
+		models.PhaseRefactor:  lipgloss.NewStyle().Foreground(lipgloss.Color("166")),
 		models.PhaseReview:    lipgloss.NewStyle().Foreground(lipgloss.Color("69")),
 		models.PhaseRespond:   lipgloss.NewStyle().Foreground(lipgloss.Color("135")),
 		models.PhaseBlocked:   lipgloss.NewStyle().Foreground(lipgloss.Color("124")),
@@ -386,11 +386,13 @@ func (v ProjectView) updateTreeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "up":
 		if v.treeSelected > 0 {
 			v.treeSelected--
+			v.detailOffset = 0
 			v.clampScroll()
 		}
 	case "down":
 		if v.treeSelected < len(v.filteredTreeNodes())-1 {
 			v.treeSelected++
+			v.detailOffset = 0
 			v.clampScroll()
 		}
 	case "pgup":
@@ -398,12 +400,14 @@ func (v ProjectView) updateTreeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if v.treeSelected < 0 {
 			v.treeSelected = 0
 		}
+		v.detailOffset = 0
 		v.clampScroll()
 	case "pgdown":
 		v.treeSelected += treeH
 		if v.treeSelected >= len(v.filteredTreeNodes()) {
 			v.treeSelected = max(0, len(v.filteredTreeNodes())-1)
 		}
+		v.detailOffset = 0
 		v.clampScroll()
 	case "tab":
 		v.focus = focusDetail

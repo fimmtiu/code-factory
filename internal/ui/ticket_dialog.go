@@ -272,7 +272,7 @@ func (d *TicketDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "esc":
 			return d, dismissDialogCmd()
 
-		case "tab":
+		case "tab", "left", "right":
 			if d.focus == tdListFocus {
 				d.focus = tdContentFocus
 			} else {

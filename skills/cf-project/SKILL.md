@@ -60,7 +60,7 @@ Terminology for the `tickets` system:
 
 ## How to divide the project
 
-Each project should either describe an individual feature of the proposed change or lay necessary groundwork for implementing future features. Each output PRD must be small enough that it's easily read and worked on in a single context window.
+Each project should either describe an individual feature of the proposed change or lay necessary groundwork for implementing future features. Each output PRD must be small enough that it's easily read and worked on in a single context window. Tickets should not generate duplicate code -- if multiple tickets need a particular function, it should be extracted to a separate ticket that the others depend on. We want to minimize the chances of merge conflicts when we merge the tickets' output commits together.
 
 If the project encompasses a very broad, general feature, you may break that project into multiple subprojects of that parent project with their own short descriptive names and PRDs. Subprojects may themselves contain subprojects. There are no hard limits on nesting, but if you've gone deeper than three levels of nesting then something is wrong and you're probably making the projects too fine-grained.
 

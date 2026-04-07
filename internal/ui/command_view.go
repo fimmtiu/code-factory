@@ -557,9 +557,9 @@ func (v CommandView) View() string {
 
 // renderRow formats one ticket row in tabular style:
 //
-//	<identifier>  <status>  <N>m
+//	<identifier>  <phase>  <status>  <N>m
 //
-// The identifier expands to fill available width; status and time are
+// The identifier expands to fill available width; phase, status, and time are
 // right-aligned.
 // formatAge converts a duration into a human-readable age string such as
 // "just now", "45m ago", "3h 20m ago", or "1d 13h 20m ago".
@@ -584,8 +584,8 @@ func formatAge(d time.Duration) string {
 
 func (v CommandView) renderRow(wu *models.WorkUnit, selected bool) string {
 	age := formatAge(time.Since(wu.LastUpdated))
-	// Fixed-width right column: 2 + 15 (status) + 2 + 12 (age) = 34 chars.
-	right := fmt.Sprintf("  %-15s  %12s", wu.Status, age)
+	// Fixed-width right columns: 2 + 10 (phase) + 2 + 15 (status) + 2 + 12 (age) = 43 chars.
+	right := fmt.Sprintf("  %-10s  %-15s  %12s", wu.Phase, wu.Status, age)
 
 	// Available width for identifier (subtract border overhead).
 	availW := v.width - viewBorderOverhead - lipgloss.Width(right)
