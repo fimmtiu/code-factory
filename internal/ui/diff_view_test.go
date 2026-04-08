@@ -395,13 +395,14 @@ func TestHandleKey_ShiftUpTriggersStatRefresh(t *testing.T) {
 		makeCommit("cccc", "oldest"),
 	}, -1, false)
 	v := DiffView{
-		rows:       rows,
-		width:      80,
-		height:     24,
-		cursor:     2,
-		anchor:     2,
-		identifier: "proj/ticket",
-		statHash:   "cccc", // stat is cached for current cursor
+		rows:         rows,
+		width:        80,
+		height:       24,
+		cursor:       2,
+		anchor:       2,
+		identifier:   "proj/ticket",
+		worktreePath: "/tmp/fake-worktree",
+		statHash:     "cccc", // stat is cached for current cursor
 	}
 
 	updated, cmd := v.handleKey(fakeKeyMsg("shift+up"))
@@ -428,13 +429,14 @@ func TestHandleKey_ShiftDownTriggersStatRefresh(t *testing.T) {
 		makeCommit("cccc", "oldest"),
 	}, -1, false)
 	v := DiffView{
-		rows:       rows,
-		width:      80,
-		height:     24,
-		cursor:     0,
-		anchor:     0,
-		identifier: "proj/ticket",
-		statHash:   "aaaa",
+		rows:         rows,
+		width:        80,
+		height:       24,
+		cursor:       0,
+		anchor:       0,
+		identifier:   "proj/ticket",
+		worktreePath: "/tmp/fake-worktree",
+		statHash:     "aaaa",
 	}
 
 	updated, cmd := v.handleKey(fakeKeyMsg("shift+down"))

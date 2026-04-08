@@ -77,8 +77,9 @@ type DiffView struct {
 	height int
 
 	// Ticket context
-	identifier string
-	phase      string
+	identifier   string
+	phase        string
+	worktreePath string // resolved once from identifier; empty until set
 
 	// Commit data
 	rows []commitRow
@@ -373,13 +374,8 @@ func (v *DiffView) clampSelected() {
 // ── Commands ─────────────────────────────────────────────────────────────────
 
 // fetchCommitsCmd fetches the commit list and fork point asynchronously.
-func fetchCommitsCmd(identifier string) tea.Cmd {
+func fetchCommitsCmd(worktreePath string) tea.Cmd {
 	return func() tea.Msg {
-		worktreePath, err := storage.WorktreePathForIdentifier(identifier)
-		if err != nil {
-			return diffCommitListMsg{forkPointIdx: -1}
-		}
-
 		// Fetch non-merge commits.
 		logOutput, err := gitOutput(worktreePath, "log", "--no-merges", "--format=%H %s", fmt.Sprintf("-%d", maxCommits))
 		if err != nil {
@@ -413,13 +409,8 @@ func fetchCommitsCmd(identifier string) tea.Cmd {
 }
 
 // fetchShowStatCmd fetches `git show --stat` output for a commit.
-func fetchShowStatCmd(identifier, hash string) tea.Cmd {
+func fetchShowStatCmd(worktreePath, hash string) tea.Cmd {
 	return func() tea.Msg {
-		worktreePath, err := storage.WorktreePathForIdentifier(identifier)
-		if err != nil {
-			return diffShowStatMsg{hash: hash, output: "(error)"}
-		}
-
 		if hash == uncommittedHash {
 			out, err := gitOutput(worktreePath, "diff", "--stat")
 			if err != nil {
@@ -450,7 +441,12 @@ func (v DiffView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case setDiffTicketMsg:
 		v.identifier = msg.identifier
 		v.phase = msg.phase
-		return v, fetchCommitsCmd(v.identifier)
+		wp, err := storage.WorktreePathForIdentifier(v.identifier)
+		if err != nil {
+			return v, nil
+		}
+		v.worktreePath = wp
+		return v, fetchCommitsCmd(v.worktreePath)
 
 	case diffCommitListMsg:
 		v.rows = buildCommitRows(msg.commits, msg.forkPointIdx, msg.hasUncommit)
@@ -504,13 +500,13 @@ func (v DiffView) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // fetchStatForCurrent returns a command to fetch the stat for the current commit.
 func (v DiffView) fetchStatForCurrent() tea.Cmd {
 	c := v.currentCommit()
-	if c == nil || v.identifier == "" {
+	if c == nil || v.worktreePath == "" {
 		return nil
 	}
 	if c.Hash == v.statHash {
 		return nil // already cached
 	}
-	return fetchShowStatCmd(v.identifier, c.Hash)
+	return fetchShowStatCmd(v.worktreePath, c.Hash)
 }
 
 func (v DiffView) switchToDiffViewer() (tea.Model, tea.Cmd) {
