@@ -83,11 +83,12 @@ type DiffView struct {
 	rows         []commitRow
 	forkPointIdx int
 
-	// Selection state: startCommit is the older (higher index) end of the range,
-	// endCommit is the newer (lower index) end. For single selection, they are equal.
-	startCommit int
-	endCommit   int
-	offset      int // first visible row in the commit list
+	// Selection state: cursor is the actively-moving end of the selection (tracked
+	// by clampScroll and highlighted by renderCommitRow). anchor is the fixed end
+	// of a range selection. For single selection, they are equal.
+	cursor int
+	anchor int
+	offset int // first visible row in the commit list
 
 	// Right pane: cached git show --stat output
 	statOutput string
@@ -214,20 +215,17 @@ func (v DiffView) selectedCount() int {
 // selectionRange returns (lo, hi) row indices for the current selection,
 // with lo <= hi regardless of which direction the range was extended.
 func (v DiffView) selectionRange() (int, int) {
-	lo, hi := v.endCommit, v.startCommit
+	lo, hi := v.anchor, v.cursor
 	if lo > hi {
 		lo, hi = hi, lo
 	}
 	return lo, hi
 }
 
-// currentCommit returns the commit entry at the startCommit position (the
-// "cursor" for single-selection and the anchor for range selection).
+// currentCommit returns the commit entry at the cursor position. This is
+// always the actively-moving end of the selection, used for stat display.
 func (v DiffView) currentCommit() *commitEntry {
-	// The cursor position is always startCommit for single selection,
-	// but for display/stat purposes we show whichever end moved most recently.
-	// Use startCommit as the "current" commit for stat display.
-	idx := v.startCommit
+	idx := v.cursor
 	if idx < 0 || idx >= len(v.rows) || v.rows[idx].separator {
 		return nil
 	}
@@ -262,58 +260,58 @@ func (v *DiffView) advanceCursor(cursor int, n, direction int) int {
 }
 
 // moveDown moves the single selection down by n steps, skipping separators.
-// Both startCommit and endCommit move together.
+// Both cursor and anchor move together.
 func (v *DiffView) moveDown(n int) {
 	if len(v.rows) == 0 {
 		return
 	}
-	v.startCommit = v.advanceCursor(v.startCommit, n, 1)
-	v.endCommit = v.startCommit
+	v.cursor = v.advanceCursor(v.cursor, n, 1)
+	v.anchor = v.cursor
 	v.clampScroll()
 }
 
 // moveUp moves the single selection up by n steps, skipping separators.
-// Both startCommit and endCommit move together.
+// Both cursor and anchor move together.
 func (v *DiffView) moveUp(n int) {
 	if len(v.rows) == 0 {
 		return
 	}
-	v.startCommit = v.advanceCursor(v.startCommit, n, -1)
-	v.endCommit = v.startCommit
+	v.cursor = v.advanceCursor(v.cursor, n, -1)
+	v.anchor = v.cursor
 	v.clampScroll()
 }
 
-// extendRangeDown moves startCommit downward (older) while leaving endCommit fixed.
+// extendRangeDown moves cursor downward (older) while leaving anchor fixed.
 func (v *DiffView) extendRangeDown(n int) {
 	if len(v.rows) == 0 {
 		return
 	}
-	v.startCommit = v.advanceCursor(v.startCommit, n, 1)
+	v.cursor = v.advanceCursor(v.cursor, n, 1)
 	v.clampScroll()
 }
 
-// extendRangeUp moves endCommit upward (newer) while leaving startCommit fixed.
+// extendRangeUp moves anchor upward (newer) while leaving cursor fixed.
 func (v *DiffView) extendRangeUp(n int) {
 	if len(v.rows) == 0 {
 		return
 	}
-	v.endCommit = v.advanceCursor(v.endCommit, n, -1)
+	v.anchor = v.advanceCursor(v.anchor, n, -1)
 	v.clampScroll()
 }
 
-// clampScroll ensures the cursor (startCommit) is visible in the list.
+// clampScroll ensures the cursor is visible in the list.
 func (v *DiffView) clampScroll() {
 	h := v.commitListHeight()
 	if h <= 0 || len(v.rows) == 0 {
 		v.offset = 0
 		return
 	}
-	// The visible cursor is startCommit.
-	if v.startCommit < v.offset {
-		v.offset = v.startCommit
+	// The visible cursor position.
+	if v.cursor < v.offset {
+		v.offset = v.cursor
 	}
-	if v.startCommit >= v.offset+h {
-		v.offset = v.startCommit - h + 1
+	if v.cursor >= v.offset+h {
+		v.offset = v.cursor - h + 1
 	}
 	maxOffset := len(v.rows) - h
 	if maxOffset < 0 {
@@ -327,39 +325,39 @@ func (v *DiffView) clampScroll() {
 	}
 }
 
-// clampSelected ensures startCommit and endCommit are valid after a data refresh.
+// clampSelected ensures cursor and anchor are valid after a data refresh.
 func (v *DiffView) clampSelected() {
 	if len(v.rows) == 0 {
-		v.startCommit = 0
-		v.endCommit = 0
+		v.cursor = 0
+		v.anchor = 0
 		return
 	}
-	if v.startCommit >= len(v.rows) {
-		v.startCommit = len(v.rows) - 1
+	if v.cursor >= len(v.rows) {
+		v.cursor = len(v.rows) - 1
 	}
-	if v.startCommit < 0 {
-		v.startCommit = 0
+	if v.cursor < 0 {
+		v.cursor = 0
 	}
-	if v.endCommit >= len(v.rows) {
-		v.endCommit = len(v.rows) - 1
+	if v.anchor >= len(v.rows) {
+		v.anchor = len(v.rows) - 1
 	}
-	if v.endCommit < 0 {
-		v.endCommit = 0
+	if v.anchor < 0 {
+		v.anchor = 0
 	}
 	// Skip separators.
-	for v.startCommit < len(v.rows) && v.rows[v.startCommit].separator {
-		v.startCommit++
+	for v.cursor < len(v.rows) && v.rows[v.cursor].separator {
+		v.cursor++
 	}
-	if v.startCommit >= len(v.rows) {
-		v.startCommit = len(v.rows) - 1
-		for v.startCommit >= 0 && v.rows[v.startCommit].separator {
-			v.startCommit--
+	if v.cursor >= len(v.rows) {
+		v.cursor = len(v.rows) - 1
+		for v.cursor >= 0 && v.rows[v.cursor].separator {
+			v.cursor--
 		}
 	}
-	if v.startCommit < 0 {
-		v.startCommit = 0
+	if v.cursor < 0 {
+		v.cursor = 0
 	}
-	v.endCommit = v.startCommit
+	v.anchor = v.cursor
 }
 
 // ── Commands ─────────────────────────────────────────────────────────────────
@@ -466,7 +464,7 @@ func (v DiffView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (v DiffView) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	prevStart := v.startCommit
+	prevStart := v.cursor
 
 	switch msg.String() {
 	case "up":
@@ -488,7 +486,7 @@ func (v DiffView) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	// If the cursor moved to a different commit, fetch its stat.
-	if v.startCommit != prevStart {
+	if v.cursor != prevStart {
 		return v, v.fetchStatForCurrent()
 	}
 	return v, nil
@@ -603,7 +601,7 @@ func (v DiffView) renderCommitRow(i, w, lo, hi int) string {
 		return diffSeparatorStyle.Render(strings.Repeat("─", w))
 	}
 	label := truncateLine(renderCommitLabel(row.commit), w)
-	if i == v.startCommit {
+	if i == v.cursor {
 		return diffSelectedStyle.Width(w).Render(label)
 	}
 	if i >= lo && i <= hi {

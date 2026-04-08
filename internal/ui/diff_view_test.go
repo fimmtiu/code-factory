@@ -160,11 +160,11 @@ func TestBuildCommitRows_OnlyUncommitted(t *testing.T) {
 
 func makeDiffViewWithRows(rows []commitRow) DiffView {
 	return DiffView{
-		rows:        rows,
-		width:       80,
-		height:      24,
-		startCommit: 0,
-		endCommit:   0,
+		rows:   rows,
+		width:  80,
+		height: 24,
+		cursor: 0,
+		anchor: 0,
 	}
 }
 
@@ -178,8 +178,8 @@ func TestMoveDown_Basic(t *testing.T) {
 	v := makeDiffViewWithRows(rows)
 
 	v.moveDown(1)
-	if v.startCommit != 1 || v.endCommit != 1 {
-		t.Errorf("after moveDown(1): start=%d end=%d, want 1,1", v.startCommit, v.endCommit)
+	if v.cursor != 1 || v.anchor != 1 {
+		t.Errorf("after moveDown(1): start=%d end=%d, want 1,1", v.cursor, v.anchor)
 	}
 }
 
@@ -191,12 +191,12 @@ func TestMoveUp_Basic(t *testing.T) {
 		makeCommit("cccc", "third"),
 	}, -1, false)
 	v := makeDiffViewWithRows(rows)
-	v.startCommit = 2
-	v.endCommit = 2
+	v.cursor = 2
+	v.anchor = 2
 
 	v.moveUp(1)
-	if v.startCommit != 1 || v.endCommit != 1 {
-		t.Errorf("after moveUp(1): start=%d end=%d, want 1,1", v.startCommit, v.endCommit)
+	if v.cursor != 1 || v.anchor != 1 {
+		t.Errorf("after moveUp(1): start=%d end=%d, want 1,1", v.cursor, v.anchor)
 	}
 }
 
@@ -211,8 +211,8 @@ func TestMoveDown_SkipsSeparator(t *testing.T) {
 	v := makeDiffViewWithRows(rows)
 
 	v.moveDown(1) // aaaa -> should skip separator -> bbbb (row index 2)
-	if v.startCommit != 2 || v.endCommit != 2 {
-		t.Errorf("after moveDown(1) over separator: start=%d end=%d, want 2,2", v.startCommit, v.endCommit)
+	if v.cursor != 2 || v.anchor != 2 {
+		t.Errorf("after moveDown(1) over separator: start=%d end=%d, want 2,2", v.cursor, v.anchor)
 	}
 }
 
@@ -225,12 +225,12 @@ func TestMoveUp_SkipsSeparator(t *testing.T) {
 	}, 1, false)
 	// rows: aaaa, separator, bbbb, cccc
 	v := makeDiffViewWithRows(rows)
-	v.startCommit = 2
-	v.endCommit = 2
+	v.cursor = 2
+	v.anchor = 2
 
 	v.moveUp(1) // bbbb -> should skip separator -> aaaa (row index 0)
-	if v.startCommit != 0 || v.endCommit != 0 {
-		t.Errorf("after moveUp(1) over separator: start=%d end=%d, want 0,0", v.startCommit, v.endCommit)
+	if v.cursor != 0 || v.anchor != 0 {
+		t.Errorf("after moveUp(1) over separator: start=%d end=%d, want 0,0", v.cursor, v.anchor)
 	}
 }
 
@@ -242,8 +242,8 @@ func TestMoveDown_ClampsAtEnd(t *testing.T) {
 	v := makeDiffViewWithRows(rows)
 
 	v.moveDown(5)
-	if v.startCommit != 0 || v.endCommit != 0 {
-		t.Errorf("after moveDown past end: start=%d end=%d, want 0,0", v.startCommit, v.endCommit)
+	if v.cursor != 0 || v.anchor != 0 {
+		t.Errorf("after moveDown past end: start=%d end=%d, want 0,0", v.cursor, v.anchor)
 	}
 }
 
@@ -256,8 +256,8 @@ func TestMoveUp_ClampsAtStart(t *testing.T) {
 	v := makeDiffViewWithRows(rows)
 
 	v.moveUp(5)
-	if v.startCommit != 0 || v.endCommit != 0 {
-		t.Errorf("after moveUp past start: start=%d end=%d, want 0,0", v.startCommit, v.endCommit)
+	if v.cursor != 0 || v.anchor != 0 {
+		t.Errorf("after moveUp past start: start=%d end=%d, want 0,0", v.cursor, v.anchor)
 	}
 }
 
@@ -272,17 +272,17 @@ func TestExtendRangeDown(t *testing.T) {
 	}, -1, false)
 	v := makeDiffViewWithRows(rows)
 	// Start at row 0
-	v.startCommit = 0
-	v.endCommit = 0
+	v.cursor = 0
+	v.anchor = 0
 
 	v.extendRangeDown(1) // move start down to 1
-	if v.startCommit != 1 || v.endCommit != 0 {
-		t.Errorf("after extendRangeDown(1): start=%d end=%d, want 1,0", v.startCommit, v.endCommit)
+	if v.cursor != 1 || v.anchor != 0 {
+		t.Errorf("after extendRangeDown(1): start=%d end=%d, want 1,0", v.cursor, v.anchor)
 	}
 
 	v.extendRangeDown(1) // move start down to 2
-	if v.startCommit != 2 || v.endCommit != 0 {
-		t.Errorf("after extendRangeDown(2): start=%d end=%d, want 2,0", v.startCommit, v.endCommit)
+	if v.cursor != 2 || v.anchor != 0 {
+		t.Errorf("after extendRangeDown(2): start=%d end=%d, want 2,0", v.cursor, v.anchor)
 	}
 }
 
@@ -295,17 +295,17 @@ func TestExtendRangeUp(t *testing.T) {
 	}, -1, false)
 	v := makeDiffViewWithRows(rows)
 	// Start at row 2
-	v.startCommit = 2
-	v.endCommit = 2
+	v.cursor = 2
+	v.anchor = 2
 
 	v.extendRangeUp(1) // move end up to 1
-	if v.startCommit != 2 || v.endCommit != 1 {
-		t.Errorf("after extendRangeUp(1): start=%d end=%d, want 2,1", v.startCommit, v.endCommit)
+	if v.cursor != 2 || v.anchor != 1 {
+		t.Errorf("after extendRangeUp(1): start=%d end=%d, want 2,1", v.cursor, v.anchor)
 	}
 
 	v.extendRangeUp(1) // move end up to 0
-	if v.startCommit != 2 || v.endCommit != 0 {
-		t.Errorf("after extendRangeUp(2): start=%d end=%d, want 2,0", v.startCommit, v.endCommit)
+	if v.cursor != 2 || v.anchor != 0 {
+		t.Errorf("after extendRangeUp(2): start=%d end=%d, want 2,0", v.cursor, v.anchor)
 	}
 }
 
@@ -318,12 +318,12 @@ func TestExtendRangeDown_SkipsSeparator(t *testing.T) {
 	}, 1, false)
 	// rows: aaaa(0), separator(1), bbbb(2), cccc(3)
 	v := makeDiffViewWithRows(rows)
-	v.startCommit = 0
-	v.endCommit = 0
+	v.cursor = 0
+	v.anchor = 0
 
 	v.extendRangeDown(1) // should skip separator, land on bbbb (row 2)
-	if v.startCommit != 2 || v.endCommit != 0 {
-		t.Errorf("after extendRangeDown over separator: start=%d end=%d, want 2,0", v.startCommit, v.endCommit)
+	if v.cursor != 2 || v.anchor != 0 {
+		t.Errorf("after extendRangeDown over separator: start=%d end=%d, want 2,0", v.cursor, v.anchor)
 	}
 }
 
@@ -336,17 +336,17 @@ func TestExtendRangeUp_SkipsSeparator(t *testing.T) {
 	}, 1, false)
 	// rows: aaaa(0), separator(1), bbbb(2), cccc(3)
 	v := makeDiffViewWithRows(rows)
-	v.startCommit = 3
-	v.endCommit = 3
+	v.cursor = 3
+	v.anchor = 3
 
 	v.extendRangeUp(1) // bbbb (row 2)
-	if v.startCommit != 3 || v.endCommit != 2 {
-		t.Errorf("step 1: start=%d end=%d, want 3,2", v.startCommit, v.endCommit)
+	if v.cursor != 3 || v.anchor != 2 {
+		t.Errorf("step 1: start=%d end=%d, want 3,2", v.cursor, v.anchor)
 	}
 
 	v.extendRangeUp(1) // should skip separator, land on aaaa (row 0)
-	if v.startCommit != 3 || v.endCommit != 0 {
-		t.Errorf("step 2: start=%d end=%d, want 3,0", v.startCommit, v.endCommit)
+	if v.cursor != 3 || v.anchor != 0 {
+		t.Errorf("step 2: start=%d end=%d, want 3,0", v.cursor, v.anchor)
 	}
 }
 
@@ -357,12 +357,12 @@ func TestExtendRangeDown_ClampsAtEnd(t *testing.T) {
 		makeCommit("bbbb", "second"),
 	}, -1, false)
 	v := makeDiffViewWithRows(rows)
-	v.startCommit = 0
-	v.endCommit = 0
+	v.cursor = 0
+	v.anchor = 0
 
 	v.extendRangeDown(10)
-	if v.startCommit != 1 || v.endCommit != 0 {
-		t.Errorf("after extendRangeDown clamp: start=%d end=%d, want 1,0", v.startCommit, v.endCommit)
+	if v.cursor != 1 || v.anchor != 0 {
+		t.Errorf("after extendRangeDown clamp: start=%d end=%d, want 1,0", v.cursor, v.anchor)
 	}
 }
 
@@ -373,12 +373,12 @@ func TestExtendRangeUp_ClampsAtStart(t *testing.T) {
 		makeCommit("bbbb", "second"),
 	}, -1, false)
 	v := makeDiffViewWithRows(rows)
-	v.startCommit = 1
-	v.endCommit = 1
+	v.cursor = 1
+	v.anchor = 1
 
 	v.extendRangeUp(10)
-	if v.startCommit != 1 || v.endCommit != 0 {
-		t.Errorf("after extendRangeUp clamp: start=%d end=%d, want 1,0", v.startCommit, v.endCommit)
+	if v.cursor != 1 || v.anchor != 0 {
+		t.Errorf("after extendRangeUp clamp: start=%d end=%d, want 1,0", v.cursor, v.anchor)
 	}
 }
 
@@ -392,8 +392,8 @@ func TestSelectedCount_Single(t *testing.T) {
 		makeCommit("cccc", "third"),
 	}, -1, false)
 	v := makeDiffViewWithRows(rows)
-	v.startCommit = 1
-	v.endCommit = 1
+	v.cursor = 1
+	v.anchor = 1
 
 	got := v.selectedCount()
 	if got != 1 {
@@ -410,8 +410,8 @@ func TestSelectedCount_Range(t *testing.T) {
 	}, 1, false)
 	// rows: aaaa(0), separator(1), bbbb(2), cccc(3)
 	v := makeDiffViewWithRows(rows)
-	v.startCommit = 3 // cccc (oldest)
-	v.endCommit = 0   // aaaa (newest)
+	v.cursor = 3 // cccc (oldest)
+	v.anchor = 0 // aaaa (newest)
 
 	got := v.selectedCount()
 	// Should count aaaa, bbbb, cccc = 3 (skip separator)
@@ -504,12 +504,12 @@ func TestParseGitLog_LimitsTo100(t *testing.T) {
 // TestRenderStatusBar verifies the status bar content.
 func TestRenderStatusBar(t *testing.T) {
 	v := DiffView{
-		identifier:  "project/ticket-1",
-		phase:       "implement",
-		startCommit: 0,
-		endCommit:   0,
-		width:       80,
-		height:      24,
+		identifier: "project/ticket-1",
+		phase:      "implement",
+		cursor:     0,
+		anchor:     0,
+		width:      80,
+		height:     24,
 		rows: buildCommitRows([]commitEntry{
 			makeCommit("aaaa", "one"),
 		}, -1, false),
@@ -529,12 +529,12 @@ func TestRenderStatusBar(t *testing.T) {
 // TestRenderStatusBar_Range verifies the status bar with a range selection.
 func TestRenderStatusBar_Range(t *testing.T) {
 	v := DiffView{
-		identifier:  "my-proj/my-ticket",
-		phase:       "review",
-		startCommit: 2,
-		endCommit:   0,
-		width:       80,
-		height:      24,
+		identifier: "my-proj/my-ticket",
+		phase:      "review",
+		cursor:     2,
+		anchor:     0,
+		width:      80,
+		height:     24,
 		rows: buildCommitRows([]commitEntry{
 			makeCommit("aaaa", "one"),
 			makeCommit("bbbb", "two"),
