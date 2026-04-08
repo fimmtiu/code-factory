@@ -817,6 +817,9 @@ func buildDetailLines(wu *models.WorkUnit, width int) []string {
 	if !wu.IsProject {
 		addLabel("Status", string(wu.Status))
 	}
+	if len(wu.Dependencies) > 0 {
+		addLabel("Dependencies", strings.Join(wu.Dependencies, ", "))
+	}
 
 	lines = append(lines, "")
 	lines = append(lines, detailLabelStyle.Render("Description:"))
