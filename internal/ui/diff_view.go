@@ -55,6 +55,8 @@ type diffShowStatMsg struct {
 }
 
 // switchToDiffViewerMsg is sent when the user presses Tab/Enter to view the diff.
+// TODO: No Update handler consumes this message yet. The parent Model.Update in
+// app.go should handle it to switch to a full diff viewer pane once implemented.
 type switchToDiffViewerMsg struct {
 	startCommit commitEntry
 	endCommit   commitEntry
