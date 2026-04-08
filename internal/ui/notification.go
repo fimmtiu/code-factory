@@ -1,11 +1,16 @@
 package ui
 
 import (
+	"os"
 	"os/exec"
+	"path/filepath"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
+
+// notifIconPath is the absolute path to the notification icon.
+var notifIconPath = filepath.Join(os.Getenv("HOME"), "src", "code-factory", "img", "terminal_icon.png")
 
 // startEditorMsg is dispatched by wrapEditorCmd; the root model uses it to
 // set editorWaiting and then run fn in a goroutine.
@@ -84,7 +89,7 @@ func fireOSNotification(text string) tea.Cmd {
 		_ = exec.Command("terminal-notifier",
 			"-title", "Code Factory",
 			"-message", text,
-			"-appIcon", "img/terminal_icon.png",
+			"-appIcon", notifIconPath,
 		).Run()
 		return nil
 	}
