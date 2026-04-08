@@ -146,18 +146,12 @@ func (w *Worker) AbortWork() {
 	}
 }
 
-// setCancel stores the cancel function for the current per-task context.
+// setCancel stores (or clears, if nil) the cancel function for the current
+// per-task context.
 func (w *Worker) setCancel(cancel context.CancelFunc) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.cancelWork = cancel
-}
-
-// clearCancel removes the cancel function after a task completes.
-func (w *Worker) clearCancel() {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	w.cancelWork = nil
 }
 
 // SendResponse sends a response message to the worker and marks it as busy.

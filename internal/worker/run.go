@@ -45,7 +45,7 @@ func (w *Worker) processTicket(ctx context.Context, ticket *models.WorkUnit) {
 	// without tearing down the entire pool.
 	taskCtx, taskCancel := context.WithCancel(ctx)
 	w.setCancel(taskCancel)
-	defer w.clearCancel()
+	defer w.setCancel(nil)
 	defer taskCancel()
 
 	w.SetCurrentTicket(string(ticket.Phase) + " " + identifier)
@@ -78,25 +78,8 @@ func (w *Worker) processTicket(ctx context.Context, ticket *models.WorkUnit) {
 		LogfilePath:  logfilePath,
 	})
 
-	// If the task context was cancelled (either by housekeeping aborting this
-	// specific task or by a pool-wide shutdown), reset the ticket to idle so
-	// it is re-processed on the next run rather than incorrectly advancing to
-	// user-review.
 	if taskCtx.Err() != nil {
-		// Only reset the DB if the ticket is still ours. Housekeeping may
-		// have already reset it, in which case another worker may have
-		// claimed it — we must not touch it.
-		if ctx.Err() != nil {
-			// Pool-wide shutdown: the ticket is still ours, reset it.
-			_ = w.database.SetStatus(identifier, ticket.Phase, models.StatusIdle)
-			w.releaseTicket(identifier)
-		} else {
-			// Housekeeping abort: ticket was already reset in DB. Just
-			// clean up our local state.
-			w.SetCurrentTicket("")
-			w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("aborted stale ticket %s", identifier))
-		}
-		w.Status = StatusIdle
+		w.handleAbort(ctx, identifier, ticket.Phase)
 		return
 	}
 
@@ -121,6 +104,21 @@ func (w *Worker) releaseTicket(identifier string) {
 		return
 	}
 	w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("released ticket %s", identifier))
+}
+
+// handleAbort cleans up after a task context cancellation. If the pool context
+// is also cancelled (shutdown), the ticket is still ours and we reset it. If
+// only the task context was cancelled (housekeeping abort), the ticket was
+// already reset in the DB and possibly reclaimed, so we only clean up local state.
+func (w *Worker) handleAbort(poolCtx context.Context, identifier string, phase models.TicketPhase) {
+	if poolCtx.Err() != nil {
+		_ = w.database.SetStatus(identifier, phase, models.StatusIdle)
+		w.releaseTicket(identifier)
+	} else {
+		w.SetCurrentTicket("")
+		w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("aborted stale ticket %s", identifier))
+	}
+	w.Status = StatusIdle
 }
 
 // waitForNextPoll waits for the poll interval to elapse, processing any

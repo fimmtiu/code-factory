@@ -95,7 +95,6 @@ func (d *DB) withTx(fn func(*sql.Tx) error) error {
 	return tx.Commit()
 }
 
-
 var schemaStatements = []string{
 	`CREATE TABLE IF NOT EXISTS "projects" (
 		"id" integer PRIMARY KEY,
