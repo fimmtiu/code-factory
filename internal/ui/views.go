@@ -41,7 +41,7 @@ var emptyStateStyle = lipgloss.NewStyle().
 // viewBorderOverhead is the number of rows (and columns) consumed by viewPaneStyle.
 const viewBorderOverhead = 2
 
-// ViewID is an enum for the four main views.
+// ViewID is an enum for the five main views.
 type ViewID int
 
 const (

@@ -406,19 +406,7 @@ func (m Model) renderHeader() string {
 		viewNames[ViewLog],
 		viewNames[ViewDiffs],
 	} {
-		label := name
-		switch ViewID(i) {
-		case ViewProject:
-			label = "F1:" + name
-		case ViewCommand:
-			label = "F2:" + name
-		case ViewWorker:
-			label = "F3:" + name
-		case ViewLog:
-			label = "F4:" + name
-		case ViewDiffs:
-			label = "F5:" + name
-		}
+		label := "F" + strconv.Itoa(i+1) + ":" + name
 		if ViewID(i) == m.activeView {
 			tabs[i] = activeTabStyle.Render(label)
 		} else {
