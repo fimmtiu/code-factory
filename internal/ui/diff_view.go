@@ -55,8 +55,8 @@ type diffShowStatMsg struct {
 }
 
 // switchToDiffViewerMsg is sent when the user presses Tab/Enter to view the diff.
-// TODO: No Update handler consumes this message yet. The parent Model.Update in
-// app.go should handle it to switch to a full diff viewer pane once implemented.
+// DiffView.Update handles this by kicking off an async diff fetch; the result
+// arrives as diffContentMsg which activates the viewer screen.
 type switchToDiffViewerMsg struct {
 	startCommit commitEntry
 	endCommit   commitEntry
@@ -70,8 +70,9 @@ type setDiffTicketMsg struct {
 
 // ── DiffView ─────────────────────────────────────────────────────────────────
 
-// DiffView implements the commit selector screen of the Diffs view (F5).
-// It shows a two-pane layout: commit list on the left, git show --stat on the right.
+// DiffView implements the Diffs view (F5). It has two sub-screens:
+// a commit selector (two-pane layout) and a diff viewer (scrollable diff).
+// The viewerActive flag controls which sub-screen is shown.
 type DiffView struct {
 	width  int
 	height int
@@ -99,6 +100,13 @@ type DiffView struct {
 	// Right pane: cached git show --stat output
 	statOutput string
 	statHash   string // hash for which statOutput was fetched
+
+	// ── Viewer screen state ──────────────────────────────────────────────
+	viewerActive     bool   // true when showing the diff viewer
+	viewerText       string // pre-rendered diff content
+	viewerFileStarts []int  // line offset where each file begins
+	viewerFileNames  []string
+	viewerOffset     int // first visible line in the viewer pane
 }
 
 // NewDiffView creates an empty DiffView.
@@ -436,6 +444,9 @@ func (v DiffView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		v.width = msg.Width
 		v.height = msg.Height
 		v.clampScroll()
+		if v.viewerActive {
+			v.viewerClampScroll()
+		}
 		return v, nil
 
 	case setDiffTicketMsg:
@@ -460,7 +471,21 @@ func (v DiffView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		v.statOutput = msg.output
 		return v, nil
 
+	case switchToDiffViewerMsg:
+		// Kick off an async diff fetch for the selected range.
+		if v.worktreePath == "" {
+			return v, nil
+		}
+		return v, fetchDiffCmd(v.worktreePath, msg.startCommit, msg.endCommit)
+
+	case diffContentMsg:
+		v.enterViewerMode(msg.files, v.width)
+		return v, nil
+
 	case tea.KeyMsg:
+		if v.viewerActive {
+			return v.handleViewerKey(msg)
+		}
 		return v.handleKey(msg)
 	}
 
@@ -536,6 +561,10 @@ func (v DiffView) switchToDiffViewer() (tea.Model, tea.Cmd) {
 // ── View ─────────────────────────────────────────────────────────────────────
 
 func (v DiffView) View() string {
+	if v.viewerActive {
+		return v.viewerView()
+	}
+
 	if v.identifier == "" {
 		paneW := v.width - viewBorderOverhead
 		h := v.height - chromeHeight - viewBorderOverhead
@@ -641,6 +670,9 @@ func (v DiffView) renderRightPane() string {
 // ── KeyBindings ──────────────────────────────────────────────────────────────
 
 func (v DiffView) KeyBindings() []KeyBinding {
+	if v.viewerActive {
+		return viewerKeyBindings()
+	}
 	return []KeyBinding{
 		{Key: "↑/↓", Description: "Navigate commits"},
 		{Key: "PgUp/PgDn", Description: "Page navigate"},
