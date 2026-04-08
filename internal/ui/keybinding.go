@@ -14,6 +14,7 @@ var globalKeyBindings = []KeyBinding{
 	{Key: "F2", Description: "Switch to command view"},
 	{Key: "F3", Description: "Switch to worker view"},
 	{Key: "F4", Description: "Switch to log view"},
+	{Key: "F5", Description: "Switch to diffs view"},
 	{Key: "Shift-Tab", Description: "Next view"},
 	{Key: "Ctrl-Tab", Description: "Previous view"},
 	{Key: "?, H", Description: "Show help"},

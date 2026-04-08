@@ -41,7 +41,7 @@ var emptyStateStyle = lipgloss.NewStyle().
 // viewBorderOverhead is the number of rows (and columns) consumed by viewPaneStyle.
 const viewBorderOverhead = 2
 
-// ViewID is an enum for the four main views.
+// ViewID is an enum for the five main views.
 type ViewID int
 
 const (
@@ -49,6 +49,7 @@ const (
 	ViewCommand
 	ViewWorker
 	ViewLog
+	ViewDiff
 )
 
 // viewNames maps ViewID to a display name.
@@ -57,6 +58,7 @@ var viewNames = map[ViewID]string{
 	ViewCommand: "Commands",
 	ViewWorker:  "Workers",
 	ViewLog:     "Log",
+	ViewDiff:    "Diffs",
 }
 
 // viewModel is the interface that each view sub-model must satisfy.
@@ -93,12 +95,12 @@ func truncateLine(s string, maxWidth int) string {
 	return string(runes[:maxWidth])
 }
 
-// nextView returns the next view in the cycle (project → command → worker → log → project).
+// nextView returns the next view in the cycle (project → command → worker → log → diffs → project).
 func nextView(current ViewID) ViewID {
-	return (current + 1) % 4
+	return (current + 1) % 5
 }
 
 // prevView returns the previous view in the cycle.
 func prevView(current ViewID) ViewID {
-	return (current + 3) % 4
+	return (current + 4) % 5
 }
