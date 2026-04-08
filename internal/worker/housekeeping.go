@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"fmt"
+	"os"
 	"strconv"
 	"time"
 
@@ -13,13 +14,13 @@ import (
 // check for stale tickets.
 const housekeepingInterval = 60 * time.Second
 
-// staleThresholdMinutes is the number of minutes after which an in-progress
-// ticket is considered stale and will be released.
-const staleThresholdMinutes = 10
+// staleThreshold is the duration of logfile inactivity after which an
+// in-progress ticket is considered stale and will be released.
+const staleThreshold = 10 * time.Minute
 
 // runHousekeeping runs until ctx is cancelled. On each wake it queries for
 // stale tickets and releases them.
-func runHousekeeping(ctx context.Context, pool *Pool, database *db.DB, logCh chan<- LogMessage) {
+func runHousekeeping(ctx context.Context, pool *Pool, database *db.DB, logCh chan<- LogMessage, ticketsDir string) {
 	timer := time.NewTimer(housekeepingInterval)
 	defer timer.Stop()
 
@@ -28,22 +29,28 @@ func runHousekeeping(ctx context.Context, pool *Pool, database *db.DB, logCh cha
 		case <-ctx.Done():
 			return
 		case <-timer.C:
-			releaseStaleTickets(pool, database, logCh)
+			releaseStaleTickets(pool, database, logCh, ticketsDir)
 			timer.Reset(housekeepingInterval)
 		}
 	}
 }
 
-// releaseStaleTickets finds tickets that have been in-progress for longer than
-// staleThresholdMinutes, aborts the owning worker's subprocess, and resets the
-// ticket to idle.
-func releaseStaleTickets(pool *Pool, database *db.DB, logCh chan<- LogMessage) {
-	stale, err := database.FindStaleTickets(staleThresholdMinutes)
+// releaseStaleTickets finds in-progress tickets whose logfile has not been
+// modified within staleThreshold, aborts the owning worker's subprocess, and
+// resets the ticket to idle.
+func releaseStaleTickets(pool *Pool, database *db.DB, logCh chan<- LogMessage, ticketsDir string) {
+	tickets, err := database.FindInProgressTickets()
 	if err != nil {
-		logCh <- NewLogMessage(0, fmt.Sprintf("housekeeping: error querying stale tickets: %v", err))
+		logCh <- NewLogMessage(0, fmt.Sprintf("housekeeping: error querying in-progress tickets: %v", err))
 		return
 	}
-	for _, ticket := range stale {
+	now := time.Now()
+	for _, ticket := range tickets {
+		logfile := LatestLogfilePath(ticketsDir, ticket.Identifier, string(ticket.Phase))
+		if !IsLogfileStale(logfile, now) {
+			continue
+		}
+
 		// Abort the owning worker's subprocess before resetting the DB.
 		if ticket.ClaimedBy != "" {
 			if num, err := strconv.Atoi(ticket.ClaimedBy); err == nil {
@@ -57,6 +64,19 @@ func releaseStaleTickets(pool *Pool, database *db.DB, logCh chan<- LogMessage) {
 			logCh <- NewLogMessage(0, fmt.Sprintf("housekeeping: error resetting stale ticket %s: %v", ticket.Identifier, err))
 			continue
 		}
-		logCh <- NewLogMessage(0, fmt.Sprintf("housekeeping: reset stale ticket %s to idle", ticket.Identifier))
+		logCh <- NewLogMessage(0, fmt.Sprintf("housekeeping: released stale ticket %s (no logfile activity for %s)", ticket.Identifier, staleThreshold))
 	}
+}
+
+// isLogfileStale returns true if the logfile is missing or has not been
+// modified within staleThreshold of now.
+func IsLogfileStale(logfile string, now time.Time) bool {
+	if logfile == "" {
+		return true
+	}
+	info, err := os.Stat(logfile)
+	if err != nil {
+		return true
+	}
+	return now.Sub(info.ModTime()) >= staleThreshold
 }

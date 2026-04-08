@@ -1,6 +1,7 @@
 package worker_test
 
 import (
+	"os"
 	"path/filepath"
 	"sync/atomic"
 	"testing"
@@ -321,71 +322,91 @@ func TestWorker_ProcessesMessagesWhileIdle(t *testing.T) {
 
 // --- US-005: Housekeeping ---
 
-func TestFindStaleTickets_WithThreshold(t *testing.T) {
+func TestFindInProgressTickets_ReturnsInProgressTickets(t *testing.T) {
 	d, _ := openTestDB(t)
 	createProject(t, d, "proj")
-	createTicket(t, d, "proj/stale")
-	createTicket(t, d, "proj/fresh")
+	createTicket(t, d, "proj/ticket-a")
+	createTicket(t, d, "proj/ticket-b")
 
-	// Claim both so they are in-progress.
-	if _, err := d.Claim(1); err != nil {
-		t.Fatalf("Claim: %v", err)
-	}
-	if _, err := d.Claim(1); err != nil {
-		t.Fatalf("Claim: %v", err)
-	}
-
-	// Freshly claimed tickets are NOT stale with a 10-minute threshold.
-	stale10, err := d.FindStaleTickets(10)
-	if err != nil {
-		t.Fatalf("FindStaleTickets(10): %v", err)
-	}
-	if len(stale10) != 0 {
-		t.Errorf("expected 0 stale tickets with 10-min threshold, got %d", len(stale10))
-	}
-}
-
-func TestFindStaleTickets_FindsOldTickets(t *testing.T) {
-	d, _ := openTestDB(t)
-	createProject(t, d, "proj")
-	createTicket(t, d, "proj/old-ticket")
-
-	// Claim the ticket and then set it to in-progress (as a real worker would).
-	ticket, err := d.Claim(99)
+	// Claim both and transition to in-progress (as a real worker would).
+	ta, err := d.Claim(1)
 	if err != nil {
 		t.Fatalf("Claim: %v", err)
 	}
-	if err := d.SetStatus(ticket.Identifier, ticket.Phase, models.StatusInProgress); err != nil {
+	if err := d.SetStatus(ta.Identifier, ta.Phase, models.StatusInProgress); err != nil {
+		t.Fatalf("SetStatus: %v", err)
+	}
+	tb, err := d.Claim(2)
+	if err != nil {
+		t.Fatalf("Claim: %v", err)
+	}
+	if err := d.SetStatus(tb.Identifier, tb.Phase, models.StatusInProgress); err != nil {
 		t.Fatalf("SetStatus: %v", err)
 	}
 
-	// With threshold=-1 (cutoff = now + 1 minute), the freshly-claimed ticket
-	// should appear as stale because its last_updated < cutoff.
-	stale, err := d.FindStaleTickets(-1)
+	tickets, err := d.FindInProgressTickets()
 	if err != nil {
-		t.Fatalf("FindStaleTickets(-1): %v", err)
+		t.Fatalf("FindInProgressTickets: %v", err)
 	}
-	if len(stale) != 1 {
-		t.Fatalf("expected 1 stale ticket with threshold=-1, got %d", len(stale))
-	}
-	if stale[0].Identifier != "proj/old-ticket" {
-		t.Errorf("expected stale ticket 'proj/old-ticket', got %q", stale[0].Identifier)
+	if len(tickets) != 2 {
+		t.Errorf("expected 2 in-progress tickets, got %d", len(tickets))
 	}
 }
 
-func TestFindStaleTickets_OnlyInProgress(t *testing.T) {
+func TestFindInProgressTickets_ExcludesIdleTickets(t *testing.T) {
 	d, _ := openTestDB(t)
 	createProject(t, d, "proj")
 	createTicket(t, d, "proj/idle-ticket")
 	// idle-ticket is not claimed, status = idle — NOT in-progress.
 
-	// FindStaleTickets should not return idle tickets even with a very wide threshold.
-	stale, err := d.FindStaleTickets(-1)
+	tickets, err := d.FindInProgressTickets()
 	if err != nil {
-		t.Fatalf("FindStaleTickets: %v", err)
+		t.Fatalf("FindInProgressTickets: %v", err)
 	}
-	if len(stale) != 0 {
-		t.Errorf("expected 0 stale tickets for idle ticket, got %d", len(stale))
+	if len(tickets) != 0 {
+		t.Errorf("expected 0 in-progress tickets for idle ticket, got %d", len(tickets))
+	}
+}
+
+func TestIsLogfileStale_MissingFile(t *testing.T) {
+	if !worker.IsLogfileStale("/nonexistent/path", time.Now()) {
+		t.Error("expected missing logfile to be considered stale")
+	}
+}
+
+func TestIsLogfileStale_EmptyPath(t *testing.T) {
+	if !worker.IsLogfileStale("", time.Now()) {
+		t.Error("expected empty logfile path to be considered stale")
+	}
+}
+
+func TestIsLogfileStale_RecentFile(t *testing.T) {
+	f, err := os.CreateTemp(t.TempDir(), "logfile")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
+
+	if worker.IsLogfileStale(f.Name(), time.Now()) {
+		t.Error("expected recently created logfile to NOT be considered stale")
+	}
+}
+
+func TestIsLogfileStale_OldFile(t *testing.T) {
+	f, err := os.CreateTemp(t.TempDir(), "logfile")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
+
+	// Set mod time to 15 minutes ago.
+	old := time.Now().Add(-15 * time.Minute)
+	if err := os.Chtimes(f.Name(), old, old); err != nil {
+		t.Fatal(err)
+	}
+
+	if !worker.IsLogfileStale(f.Name(), time.Now()) {
+		t.Error("expected logfile with 15-minute-old mod time to be considered stale")
 	}
 }
 
@@ -394,7 +415,7 @@ func TestPool_StartHousekeeping_StopsCleanly(t *testing.T) {
 
 	pool := worker.NewPool(1, 1)
 	pool.Start(d, ticketsDir)
-	pool.StartHousekeeping(d)
+	pool.StartHousekeeping(d, ticketsDir)
 
 	// Stop must complete within a few seconds even with housekeeping running.
 	done := make(chan struct{})

@@ -991,18 +991,17 @@ func (d *DB) InsertLog(workerNumber int, message string, logfile string) error {
 	})
 }
 
-// FindStaleTickets returns all tickets that have been in-progress for longer
-// than thresholdMinutes minutes. These are candidates for release by the
-// housekeeping thread.
-func (d *DB) FindStaleTickets(thresholdMinutes int) ([]*models.WorkUnit, error) {
-	cutoff := time.Now().Add(-time.Duration(thresholdMinutes) * time.Minute).Unix()
+// FindInProgressTickets returns all tickets currently in the in-progress state.
+// The caller is responsible for determining which of these are stale (e.g. by
+// checking logfile modification times).
+func (d *DB) FindInProgressTickets() ([]*models.WorkUnit, error) {
 	rows, err := d.db.Query(`
 		SELECT identifier, description, phase, status, claimed_by, last_updated
 		FROM tickets
-		WHERE status = 'in-progress' AND last_updated < ?
-	`, cutoff)
+		WHERE status = 'in-progress'
+	`)
 	if err != nil {
-		return nil, fmt.Errorf("find stale tickets: %w", err)
+		return nil, fmt.Errorf("find in-progress tickets: %w", err)
 	}
 	defer rows.Close()
 
@@ -1012,7 +1011,7 @@ func (d *DB) FindStaleTickets(thresholdMinutes int) ([]*models.WorkUnit, error) 
 		var claimedBy sql.NullString
 		var lastUpdated int64
 		if err := rows.Scan(&identifier, &description, &phase, &status, &claimedBy, &lastUpdated); err != nil {
-			return nil, fmt.Errorf("scan stale ticket: %w", err)
+			return nil, fmt.Errorf("scan in-progress ticket: %w", err)
 		}
 		tickets = append(tickets, &models.WorkUnit{
 			Identifier:  identifier,
@@ -1025,7 +1024,7 @@ func (d *DB) FindStaleTickets(thresholdMinutes int) ([]*models.WorkUnit, error) 
 		})
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("scan stale tickets: %w", err)
+		return nil, fmt.Errorf("scan in-progress tickets: %w", err)
 	}
 	return tickets, nil
 }

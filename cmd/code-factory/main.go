@@ -102,7 +102,7 @@ Options:
 		pool.WorkFn = worker.MockWorkFn
 	}
 	pool.Start(database, ticketsDir)
-	pool.StartHousekeeping(database)
+	pool.StartHousekeeping(database, ticketsDir)
 	pool.StartLogDrainer(database)
 
 	// Redirect the standard logger to a file so library log output doesn't
