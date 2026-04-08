@@ -236,24 +236,38 @@ func (v DiffView) currentCommit() *commitEntry {
 
 // ── Navigation ───────────────────────────────────────────────────────────────
 
+// nextSelectableRow returns the next non-separator row index from `from` in the
+// given direction (+1 for down, -1 for up). Returns -1 if no selectable row exists.
+func (v *DiffView) nextSelectableRow(from, direction int) int {
+	next := from + direction
+	for next >= 0 && next < len(v.rows) && v.rows[next].separator {
+		next += direction
+	}
+	if next < 0 || next >= len(v.rows) {
+		return -1
+	}
+	return next
+}
+
+// advanceCursor moves a cursor index n steps in the given direction, skipping separators.
+func (v *DiffView) advanceCursor(cursor int, n, direction int) int {
+	for i := 0; i < n; i++ {
+		next := v.nextSelectableRow(cursor, direction)
+		if next == -1 {
+			break
+		}
+		cursor = next
+	}
+	return cursor
+}
+
 // moveDown moves the single selection down by n steps, skipping separators.
 // Both startCommit and endCommit move together.
 func (v *DiffView) moveDown(n int) {
-	last := len(v.rows) - 1
-	if last < 0 {
+	if len(v.rows) == 0 {
 		return
 	}
-	for i := 0; i < n; i++ {
-		next := v.startCommit + 1
-		// Skip separators.
-		for next <= last && v.rows[next].separator {
-			next++
-		}
-		if next > last {
-			break
-		}
-		v.startCommit = next
-	}
+	v.startCommit = v.advanceCursor(v.startCommit, n, 1)
 	v.endCommit = v.startCommit
 	v.clampScroll()
 }
@@ -264,37 +278,17 @@ func (v *DiffView) moveUp(n int) {
 	if len(v.rows) == 0 {
 		return
 	}
-	for i := 0; i < n; i++ {
-		next := v.startCommit - 1
-		// Skip separators.
-		for next >= 0 && v.rows[next].separator {
-			next--
-		}
-		if next < 0 {
-			break
-		}
-		v.startCommit = next
-	}
+	v.startCommit = v.advanceCursor(v.startCommit, n, -1)
 	v.endCommit = v.startCommit
 	v.clampScroll()
 }
 
 // extendRangeDown moves startCommit downward (older) while leaving endCommit fixed.
 func (v *DiffView) extendRangeDown(n int) {
-	last := len(v.rows) - 1
-	if last < 0 {
+	if len(v.rows) == 0 {
 		return
 	}
-	for i := 0; i < n; i++ {
-		next := v.startCommit + 1
-		for next <= last && v.rows[next].separator {
-			next++
-		}
-		if next > last {
-			break
-		}
-		v.startCommit = next
-	}
+	v.startCommit = v.advanceCursor(v.startCommit, n, 1)
 	v.clampScroll()
 }
 
@@ -303,16 +297,7 @@ func (v *DiffView) extendRangeUp(n int) {
 	if len(v.rows) == 0 {
 		return
 	}
-	for i := 0; i < n; i++ {
-		next := v.endCommit - 1
-		for next >= 0 && v.rows[next].separator {
-			next--
-		}
-		if next < 0 {
-			break
-		}
-		v.endCommit = next
-	}
+	v.endCommit = v.advanceCursor(v.endCommit, n, -1)
 	v.clampScroll()
 }
 
@@ -422,11 +407,12 @@ func fetchCommitsCmd(identifier string) tea.Cmd {
 // fetchShowStatCmd fetches `git show --stat` output for a commit.
 func fetchShowStatCmd(identifier, hash string) tea.Cmd {
 	return func() tea.Msg {
+		worktreePath, err := storage.WorktreePathForIdentifier(identifier)
+		if err != nil {
+			return diffShowStatMsg{hash: hash, output: "(error)"}
+		}
+
 		if hash == uncommittedHash {
-			worktreePath, err := storage.WorktreePathForIdentifier(identifier)
-			if err != nil {
-				return diffShowStatMsg{hash: hash, output: "(error)"}
-			}
 			out, err := gitOutput(worktreePath, "diff", "--stat")
 			if err != nil {
 				return diffShowStatMsg{hash: hash, output: "(no changes)"}
@@ -434,10 +420,6 @@ func fetchShowStatCmd(identifier, hash string) tea.Cmd {
 			return diffShowStatMsg{hash: hash, output: out}
 		}
 
-		worktreePath, err := storage.WorktreePathForIdentifier(identifier)
-		if err != nil {
-			return diffShowStatMsg{hash: hash, output: "(error)"}
-		}
 		out, err := gitOutput(worktreePath, "show", "--stat", "--format=", hash)
 		if err != nil {
 			return diffShowStatMsg{hash: hash, output: "(error)"}
@@ -605,27 +587,29 @@ func (v DiffView) renderLeftPane() string {
 
 	var sb strings.Builder
 	for i := v.offset; i < end; i++ {
-		row := v.rows[i]
-		if row.separator {
-			sep := strings.Repeat("─", w)
-			sb.WriteString(diffSeparatorStyle.Render(sep))
-		} else {
-			label := renderCommitLabel(row.commit)
-			label = truncateLine(label, w)
-			if i == v.startCommit {
-				sb.WriteString(diffSelectedStyle.Width(w).Render(label))
-			} else if i >= lo && i <= hi {
-				sb.WriteString(diffRangeStyle.Width(w).Render(label))
-			} else {
-				sb.WriteString(label)
-			}
-		}
+		sb.WriteString(v.renderCommitRow(i, w, lo, hi))
 		if i < end-1 {
 			sb.WriteString("\n")
 		}
 	}
 
 	return viewPaneStyle.Width(w).Height(h).Render(clipLines(sb.String(), h))
+}
+
+// renderCommitRow renders a single row in the commit list with appropriate styling.
+func (v DiffView) renderCommitRow(i, w, lo, hi int) string {
+	row := v.rows[i]
+	if row.separator {
+		return diffSeparatorStyle.Render(strings.Repeat("─", w))
+	}
+	label := truncateLine(renderCommitLabel(row.commit), w)
+	if i == v.startCommit {
+		return diffSelectedStyle.Width(w).Render(label)
+	}
+	if i >= lo && i <= hi {
+		return diffRangeStyle.Width(w).Render(label)
+	}
+	return label
 }
 
 // renderRightPane renders the git show --stat preview pane.
