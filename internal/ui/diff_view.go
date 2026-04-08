@@ -81,9 +81,7 @@ type DiffView struct {
 	phase      string
 
 	// Commit data
-	commits      []commitEntry
-	rows         []commitRow
-	forkPointIdx int
+	rows []commitRow
 
 	// Selection state: cursor is the actively-moving end of the selection (tracked
 	// by clampScroll and highlighted by renderCommitRow). anchor is the fixed end
@@ -104,9 +102,7 @@ type DiffView struct {
 
 // NewDiffView creates an empty DiffView.
 func NewDiffView() DiffView {
-	return DiffView{
-		forkPointIdx: -1,
-	}
+	return DiffView{}
 }
 
 // Init returns nil; the view loads data when a ticket is set.
@@ -457,8 +453,6 @@ func (v DiffView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return v, fetchCommitsCmd(v.identifier)
 
 	case diffCommitListMsg:
-		v.commits = msg.commits
-		v.forkPointIdx = msg.forkPointIdx
 		v.rows = buildCommitRows(msg.commits, msg.forkPointIdx, msg.hasUncommit)
 		v.clampSelected()
 		v.clampScroll()
