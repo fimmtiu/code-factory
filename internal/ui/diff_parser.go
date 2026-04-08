@@ -87,21 +87,30 @@ func parseFileSection(section string) DiffFile {
 	lines := strings.Split(section, "\n")
 	f := DiffFile{Type: DiffNormal}
 
-	// Extract filename from the "diff --git a/<name> b/<name>" header.
 	aName, bName := parseGitHeader(lines[0])
 	f.Name = aName
 
-	// Scan header lines (everything before the first @@ or end of section)
-	// to detect the file type.
+	if detectFileType(&f, lines[1:], aName, bName) {
+		return f // binary file — no hunks to parse
+	}
+
+	f.Hunks = parseHunks(lines)
+	return f
+}
+
+// detectFileType scans the header lines before the first @@ to determine the
+// file's change type (binary, delete, new, rename). It returns true when the
+// caller should stop processing (binary files have no hunks).
+func detectFileType(f *DiffFile, headerLines []string, aName, bName string) bool {
 	hasSimilarityIndex := false
-	for _, line := range lines[1:] {
+	for _, line := range headerLines {
 		if strings.HasPrefix(line, "@@") {
 			break
 		}
 		switch {
 		case strings.HasPrefix(line, "Binary files"):
 			f.Type = DiffBinary
-			return f
+			return true
 		case strings.HasPrefix(line, "deleted file mode"):
 			f.Type = DiffDelete
 		case strings.HasPrefix(line, "new file mode"):
@@ -115,17 +124,13 @@ func parseFileSection(section string) DiffFile {
 		}
 	}
 
-	// Detect rename via similarity index with different a/b paths.
 	if hasSimilarityIndex && aName != bName {
 		f.Type = DiffRename
 		if f.RenameTo == "" {
 			f.RenameTo = bName
 		}
 	}
-
-	// Parse hunks.
-	f.Hunks = parseHunks(lines)
-	return f
+	return false
 }
 
 // parseGitHeader extracts the two filenames from a "diff --git a/X b/Y" line.
