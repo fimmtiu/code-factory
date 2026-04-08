@@ -94,17 +94,17 @@ func (c *acpWorkerClient) SessionUpdate(_ context.Context, params acp.SessionNot
 		}
 	case u.AgentThoughtChunk != nil:
 		if u.AgentThoughtChunk.Content.Text != nil {
-			c.appendOutput("\n[thought] " + u.AgentThoughtChunk.Content.Text.Text)
+			c.appendOutput("[thought] " + u.AgentThoughtChunk.Content.Text.Text)
 		}
 	case u.ToolCall != nil:
 		title := u.ToolCall.Title
-		c.appendOutput(fmt.Sprintf("\n[tool] %s (%s)\n", title, u.ToolCall.Status))
+		c.appendOutput(fmt.Sprintf("[tool] %s (%s)\n", title, u.ToolCall.Status))
 	case u.ToolCallUpdate != nil:
 		status := ""
 		if u.ToolCallUpdate.Status != nil {
 			status = string(*u.ToolCallUpdate.Status)
 		}
-		c.appendOutput(fmt.Sprintf("\n[tool-update] %s: %s\n", u.ToolCallUpdate.ToolCallId, status))
+		c.appendOutput(fmt.Sprintf("[tool-update] %s: %s\n", u.ToolCallUpdate.ToolCallId, status))
 	}
 	return nil
 }
