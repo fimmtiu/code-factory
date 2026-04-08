@@ -182,12 +182,12 @@ func (v CommandView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			var mergeErr *db.MergeConflictError
 			if errors.As(msg.err, &mergeErr) {
-				return v, func() tea.Msg {
+				return v, tea.Batch(v.fetchCmd(), func() tea.Msg {
 					return openMergeConflictDialogMsg{worktreePath: mergeErr.WorktreePath, branch: mergeErr.Branch}
-				}
+				})
 			}
 			v.errorMsg = fmt.Sprintf("approve error: %s", msg.err)
-			return v, nil
+			return v, v.fetchCmd()
 		}
 		v.errorMsg = ""
 		return v, v.fetchCmd()
