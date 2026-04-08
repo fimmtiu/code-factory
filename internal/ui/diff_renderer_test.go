@@ -476,8 +476,9 @@ func TestFileStartLines(t *testing.T) {
 		},
 	}
 
-	rendered := renderDiff(files, 60)
-	starts := fileStartLines(files, 60)
+	rd := renderDiffResult(files, 60)
+	rendered := rd.text
+	starts := rd.fileStarts
 
 	if len(starts) != 3 {
 		t.Fatalf("expected 3 start lines, got %d", len(starts))
@@ -517,7 +518,7 @@ func TestFileStartLines(t *testing.T) {
 
 // TestFileStartLines_Empty handles empty input.
 func TestFileStartLines_Empty(t *testing.T) {
-	starts := fileStartLines(nil, 60)
+	starts := renderDiffResult(nil, 60).fileStarts
 	if len(starts) != 0 {
 		t.Errorf("expected empty slice, got %v", starts)
 	}

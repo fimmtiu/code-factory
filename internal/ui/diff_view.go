@@ -25,6 +25,15 @@ const separatorLineHeight = 1
 
 // ── Data types ───────────────────────────────────────────────────────────────
 
+// selectionEnd identifies which end of the commit range selection moved most
+// recently, so the stat preview can display the relevant commit.
+type selectionEnd int
+
+const (
+	movedCursor selectionEnd = iota
+	movedAnchor
+)
+
 // commitEntry represents one commit in the list.
 type commitEntry struct {
 	Hash    string
@@ -92,10 +101,9 @@ type DiffView struct {
 	anchor int
 	offset int // first visible row in the commit list
 
-	// lastMoved tracks which end of the selection moved most recently:
-	// "cursor" or "anchor". Used by currentCommit() to display the stat
-	// for the end the user just moved.
-	lastMoved string
+	// lastMoved tracks which end of the selection moved most recently.
+	// Used by currentCommit() to display the stat for the end the user just moved.
+	lastMoved selectionEnd
 
 	// Right pane: cached git show --stat output
 	statOutput string
@@ -238,7 +246,7 @@ func (v DiffView) selectionRange() (int, int) {
 // most recently, used for stat display. Falls back to cursor if unset.
 func (v DiffView) currentCommit() *commitEntry {
 	idx := v.cursor
-	if v.lastMoved == "anchor" {
+	if v.lastMoved == movedAnchor {
 		idx = v.anchor
 	}
 	if idx < 0 || idx >= len(v.rows) || v.rows[idx].separator {
@@ -282,7 +290,7 @@ func (v *DiffView) moveDown(n int) {
 	}
 	v.cursor = v.advanceCursor(v.cursor, n, 1)
 	v.anchor = v.cursor
-	v.lastMoved = "cursor"
+	v.lastMoved = movedCursor
 	v.clampScroll()
 }
 
@@ -294,7 +302,7 @@ func (v *DiffView) moveUp(n int) {
 	}
 	v.cursor = v.advanceCursor(v.cursor, n, -1)
 	v.anchor = v.cursor
-	v.lastMoved = "cursor"
+	v.lastMoved = movedCursor
 	v.clampScroll()
 }
 
@@ -304,7 +312,7 @@ func (v *DiffView) extendRangeDown(n int) {
 		return
 	}
 	v.cursor = v.advanceCursor(v.cursor, n, 1)
-	v.lastMoved = "cursor"
+	v.lastMoved = movedCursor
 	v.clampScroll()
 }
 
@@ -314,7 +322,7 @@ func (v *DiffView) extendRangeUp(n int) {
 		return
 	}
 	v.anchor = v.advanceCursor(v.anchor, n, -1)
-	v.lastMoved = "anchor"
+	v.lastMoved = movedAnchor
 	v.clampScroll()
 }
 

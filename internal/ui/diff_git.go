@@ -9,16 +9,9 @@ import (
 // to request a diff of uncommitted changes against HEAD.
 const UncommittedRef = "uncommitted"
 
-// DiffCommit represents a single commit in the diff viewer's commit list.
-type DiffCommit struct {
-	Hash          string
-	Message       string
-	IsUncommitted bool
-}
-
 // fetchCommitList returns the most recent commits from the worktree, newest first.
 // It runs git log --oneline --no-merges to get non-merge commits with full hashes.
-func fetchCommitList(worktreePath string, maxCommits int) ([]DiffCommit, error) {
+func fetchCommitList(worktreePath string, maxCommits int) ([]commitEntry, error) {
 	out, err := gitOutput(worktreePath, "log", "--oneline", "--no-merges",
 		fmt.Sprintf("-%d", maxCommits), "--format=%H %s")
 	if err != nil {
@@ -28,13 +21,13 @@ func fetchCommitList(worktreePath string, maxCommits int) ([]DiffCommit, error) 
 		return nil, nil
 	}
 
-	var commits []DiffCommit
+	var commits []commitEntry
 	for _, line := range strings.Split(out, "\n") {
 		if line == "" {
 			continue
 		}
 		hash, message, _ := strings.Cut(line, " ")
-		commits = append(commits, DiffCommit{Hash: hash, Message: message})
+		commits = append(commits, commitEntry{Hash: hash, Message: message})
 	}
 	return commits, nil
 }

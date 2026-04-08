@@ -83,13 +83,6 @@ func TestFetchCommitList(t *testing.T) {
 			t.Errorf("expected 40-char hash, got %d chars: %q", len(c.Hash), c.Hash)
 		}
 	}
-
-	// IsUncommitted should be false for real commits.
-	for _, c := range commits {
-		if c.IsUncommitted {
-			t.Errorf("commit %q should not be marked uncommitted", c.Hash)
-		}
-	}
 }
 
 func TestFetchCommitList_MaxCommits(t *testing.T) {
