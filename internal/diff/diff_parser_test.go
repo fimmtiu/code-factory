@@ -317,6 +317,52 @@ index abc1234..def5678 100644
 	}
 }
 
+// TestParseFileSection_EmptyInput verifies that parseFileSection does not panic
+// on empty or blank input.
+func TestParseFileSection_EmptyInput(t *testing.T) {
+	// Empty string should not panic and should return a zero-value File.
+	f := parseFileSection("")
+	if f.Name != "" {
+		t.Errorf("expected empty name, got %q", f.Name)
+	}
+	if f.Type != Normal {
+		t.Errorf("expected Normal type, got %v", f.Type)
+	}
+}
+
+func TestParse_SkipsEmptySections(t *testing.T) {
+	// Simulate a diff where one section produces an empty File (blank section
+	// sandwiched between two valid ones). Parse should silently drop it.
+	raw := `diff --git a/first.go b/first.go
+index abc1234..def5678 100644
+--- a/first.go
++++ b/first.go
+@@ -1,3 +1,3 @@ func one() {
+ 	a := 1
+-	b := 2
++	b := 3
+diff --git a/ b/
+diff --git a/second.go b/second.go
+index abc1234..def5678 100644
+--- a/second.go
++++ b/second.go
+@@ -1,2 +1,2 @@ func two() {
+-	return 1
++	return 2
+`
+
+	files := Parse(raw)
+	if len(files) != 2 {
+		t.Fatalf("expected 2 files (empty section dropped), got %d", len(files))
+	}
+	if files[0].Name != "first.go" {
+		t.Errorf("file 0: expected %q, got %q", "first.go", files[0].Name)
+	}
+	if files[1].Name != "second.go" {
+		t.Errorf("file 1: expected %q, got %q", "second.go", files[1].Name)
+	}
+}
+
 func TestParseRange_MalformedInput(t *testing.T) {
 	tests := []struct {
 		name      string

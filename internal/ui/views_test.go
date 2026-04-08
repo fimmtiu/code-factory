@@ -15,7 +15,7 @@ func TestNextView_CyclesThroughAllFiveViews(t *testing.T) {
 
 func TestNextView_Order(t *testing.T) {
 	// Verify the full cycle order: Project → Command → Worker → Log → Diffs → Project.
-	want := []ViewID{ViewCommand, ViewWorker, ViewLog, ViewDiffs, ViewProject}
+	want := []ViewID{ViewCommand, ViewWorker, ViewLog, ViewDiff, ViewProject}
 	v := ViewProject
 	for i, expected := range want {
 		v = nextView(v)
@@ -37,7 +37,7 @@ func TestPrevView_CyclesThroughAllFiveViews(t *testing.T) {
 
 func TestPrevView_Order(t *testing.T) {
 	// Reverse cycle: Project → Diffs → Log → Worker → Command → Project.
-	want := []ViewID{ViewDiffs, ViewLog, ViewWorker, ViewCommand, ViewProject}
+	want := []ViewID{ViewDiff, ViewLog, ViewWorker, ViewCommand, ViewProject}
 	v := ViewProject
 	for i, expected := range want {
 		v = prevView(v)
@@ -47,24 +47,14 @@ func TestPrevView_Order(t *testing.T) {
 	}
 }
 
-func TestViewDiffs_HasCorrectValue(t *testing.T) {
-	if ViewDiffs != 4 {
-		t.Errorf("ViewDiffs = %d, want 4", ViewDiffs)
+func TestViewDiff_HasCorrectValue(t *testing.T) {
+	if ViewDiff != 4 {
+		t.Errorf("ViewDiff = %d, want 4", ViewDiff)
 	}
 }
 
-func TestViewNames_ContainsDiffs(t *testing.T) {
-	name, ok := viewNames[ViewDiffs]
-	if !ok {
-		t.Fatal("viewNames does not contain ViewDiffs")
-	}
-	if name != "Diffs" {
-		t.Errorf("viewNames[ViewDiffs] = %q, want %q", name, "Diffs")
-	}
-}
-
-func TestViewNames_HasFiveEntries(t *testing.T) {
-	if len(viewNames) != 5 {
-		t.Errorf("viewNames has %d entries, want 5", len(viewNames))
+func TestViewCount_IsFive(t *testing.T) {
+	if viewCount != 5 {
+		t.Errorf("viewCount = %d, want 5", viewCount)
 	}
 }

@@ -11,6 +11,13 @@ var (
 	colourDanger    = lipgloss.Color("196") // red — errors
 	colourMuted     = lipgloss.Color("240") // grey — hints, unfocused borders, dimmed text
 	colourOnPrimary = lipgloss.Color("230") // near-white — text on primary/blue backgrounds
+
+	// Diff view colours.
+	colourDiffHunkHeader = lipgloss.Color("159") // light blue — @@ hunk headers
+	colourDiffAdded      = lipgloss.Color("156") // green — added lines
+	colourDiffRemoved    = lipgloss.Color("219") // pink — removed lines
+	colourDiffDeleted    = lipgloss.Color("52")  // dark red — "Deleted" file message
+	colourDiffRenamed    = lipgloss.Color("18")  // blue — "Renamed to" file message
 )
 
 // ── Diff view styles ─────────────────────────────────────────────────────────

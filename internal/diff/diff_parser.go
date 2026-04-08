@@ -54,7 +54,11 @@ func Parse(raw string) []File {
 	sections := splitDiffSections(raw)
 	files := make([]File, 0, len(sections))
 	for _, section := range sections {
-		files = append(files, parseFileSection(section))
+		f := parseFileSection(section)
+		if f.Name == "" {
+			continue
+		}
+		files = append(files, f)
 	}
 	return files
 }
@@ -85,6 +89,9 @@ func splitDiffSections(raw string) []string {
 // parseFileSection parses a single file's diff section into a File.
 func parseFileSection(section string) File {
 	lines := strings.Split(section, "\n")
+	if len(lines) == 0 || lines[0] == "" {
+		return File{}
+	}
 	f := File{Type: Normal}
 
 	aName, bName := parseGitHeader(lines[0])

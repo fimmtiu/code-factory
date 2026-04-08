@@ -16,10 +16,10 @@ func TestNewModel_HasFiveViews(t *testing.T) {
 	}
 }
 
-func TestNewModel_ViewDiffsIsDiffView(t *testing.T) {
+func TestNewModel_ViewDiffIsDiffView(t *testing.T) {
 	m := NewModel(nil, nil, 5)
-	if _, ok := m.views[ViewDiffs].(DiffView); !ok {
-		t.Errorf("views[ViewDiffs] is %T, want DiffView", m.views[ViewDiffs])
+	if _, ok := m.views[ViewDiff].(DiffView); !ok {
+		t.Errorf("views[ViewDiff] is %T, want DiffView", m.views[ViewDiff])
 	}
 }
 
@@ -32,8 +32,8 @@ func TestF5SwitchesToDiffsView(t *testing.T) {
 
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyF5})
 	model := updated.(Model)
-	if model.activeView != ViewDiffs {
-		t.Errorf("after F5, activeView = %d, want %d (ViewDiffs)", model.activeView, ViewDiffs)
+	if model.activeView != ViewDiff {
+		t.Errorf("after F5, activeView = %d, want %d (ViewDiff)", model.activeView, ViewDiff)
 	}
 }
 
