@@ -85,6 +85,9 @@ func splitDiffSections(raw string) []string {
 // parseFileSection parses a single file's diff section into a File.
 func parseFileSection(section string) File {
 	lines := strings.Split(section, "\n")
+	if len(lines) == 0 || lines[0] == "" {
+		return File{}
+	}
 	f := File{Type: Normal}
 
 	aName, bName := parseGitHeader(lines[0])

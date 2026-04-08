@@ -163,6 +163,48 @@ func TestRenderDiff_RenamedFile(t *testing.T) {
 	}
 }
 
+// TestRenderDiff_RenamedFileWithHunks verifies that a rename with content
+// changes (similarity < 100%) renders hunks after the rename message.
+func TestRenderDiff_RenamedFileWithHunks(t *testing.T) {
+	files := []diff.File{
+		{
+			Name:     "old_name.go",
+			Type:     diff.Rename,
+			RenameTo: "new_name.go",
+			Hunks: []diff.Hunk{
+				{
+					Context:  "func example()",
+					NewStart: 1,
+					NewCount: 3,
+					Lines: []diff.Line{
+						{Type: diff.LineContext, Content: "func example() {"},
+						{Type: diff.LineRemoved, Content: "\treturn 1"},
+						{Type: diff.LineAdded, Content: "\treturn 2"},
+						{Type: diff.LineContext, Content: "}"},
+					},
+				},
+			},
+		},
+	}
+
+	result := renderDiff(files, 60)
+	if !strings.Contains(result, "Renamed to") {
+		t.Error("expected 'Renamed to' for renamed file")
+	}
+	if !strings.Contains(result, "new_name.go") {
+		t.Error("expected new filename in output")
+	}
+	if !strings.Contains(result, "@@") {
+		t.Error("expected hunk header for renamed file with content changes")
+	}
+	if !strings.Contains(result, "return 1") {
+		t.Error("expected removed content in renamed file hunks")
+	}
+	if !strings.Contains(result, "return 2") {
+		t.Error("expected added content in renamed file hunks")
+	}
+}
+
 // TestRenderDiff_NewFile verifies new files are treated like normal files
 // (showing diff hunks).
 func TestRenderDiff_NewFile(t *testing.T) {
@@ -435,7 +477,7 @@ func TestFileStartLines(t *testing.T) {
 	}
 
 	rendered := renderDiff(files, 60)
-	starts := fileStartLines(rendered, files)
+	starts := fileStartLines(files, 60)
 
 	if len(starts) != 3 {
 		t.Fatalf("expected 3 start lines, got %d", len(starts))
@@ -475,7 +517,7 @@ func TestFileStartLines(t *testing.T) {
 
 // TestFileStartLines_Empty handles empty input.
 func TestFileStartLines_Empty(t *testing.T) {
-	starts := fileStartLines("", nil)
+	starts := fileStartLines(nil, 60)
 	if len(starts) != 0 {
 		t.Errorf("expected empty slice, got %v", starts)
 	}

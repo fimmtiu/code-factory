@@ -10,57 +10,89 @@ import (
 
 // Diff rendering styles.
 var (
-	diffHunkHeaderStyle = lipgloss.NewStyle().Background(lipgloss.Color("159"))
-	diffAddedStyle      = lipgloss.NewStyle().Background(lipgloss.Color("156"))
-	diffRemovedStyle    = lipgloss.NewStyle().Background(lipgloss.Color("219"))
+	diffHunkHeaderStyle = lipgloss.NewStyle().Background(colourDiffHunkHeader)
+	diffAddedStyle      = lipgloss.NewStyle().Background(colourDiffAdded)
+	diffRemovedStyle    = lipgloss.NewStyle().Background(colourDiffRemoved)
 	diffFileHeaderStyle = lipgloss.NewStyle().Bold(true)
-	diffDeletedMsgStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("52"))
-	diffRenamedMsgStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("18"))
+	diffDeletedMsgStyle = lipgloss.NewStyle().Bold(true).Foreground(colourDiffDeleted)
+	diffRenamedMsgStyle = lipgloss.NewStyle().Bold(true).Foreground(colourDiffRenamed)
 )
+
+// renderedDiff holds the formatted diff output together with the line offsets
+// where each file section starts. Computing offsets during rendering avoids
+// fragile re-parsing of the output string.
+type renderedDiff struct {
+	text       string // the formatted diff output
+	fileStarts []int  // line offset where each file's blank-separator line begins
+}
 
 // renderDiff produces a formatted diff string from parsed diff files.
 // Each file begins with a blank line (including the first file). paneWidth
 // controls the full-width background padding for hunk headers and
 // added/removed lines.
 func renderDiff(files []diff.File, paneWidth int) string {
+	return renderDiffResult(files, paneWidth).text
+}
+
+// renderDiffResult is the full-featured renderer that returns both the
+// formatted text and per-file start offsets.
+func renderDiffResult(files []diff.File, paneWidth int) renderedDiff {
 	if len(files) == 0 {
-		return ""
+		return renderedDiff{}
 	}
 
 	var sb strings.Builder
+	lineCount := 0 // tracks the current line number in the output
+	fileStarts := make([]int, 0, len(files))
+
 	for _, f := range files {
+		fileStarts = append(fileStarts, lineCount)
 		sb.WriteString("\n") // blank line before each file (including the first)
+		lineCount++
 		sb.WriteString(diffFileHeaderStyle.Render(f.Name + ":"))
 		sb.WriteString("\n")
+		lineCount++
 
 		switch f.Type {
 		case diff.Binary:
 			sb.WriteString("  ")
 			sb.WriteString(emptyStateStyle.Render("(binary stuff)"))
 			sb.WriteString("\n")
+			lineCount++
 		case diff.Delete:
 			sb.WriteString("  ")
 			sb.WriteString(diffDeletedMsgStyle.Render("Deleted"))
 			sb.WriteString("\n")
+			lineCount++
 		case diff.Rename:
 			sb.WriteString("  ")
 			sb.WriteString(diffRenamedMsgStyle.Render("Renamed to "))
 			sb.WriteString(f.RenameTo)
 			sb.WriteString("\n")
+			lineCount++
+			for _, h := range f.Hunks {
+				lineCount += renderHunk(&sb, h, paneWidth)
+			}
 		default:
 			// Normal and New files: render hunks.
 			for _, h := range f.Hunks {
-				renderHunk(&sb, h, paneWidth)
+				lineCount += renderHunk(&sb, h, paneWidth)
 			}
 		}
 	}
 
 	// Trim the trailing newline so callers get clean output.
-	return strings.TrimRight(sb.String(), "\n")
+	return renderedDiff{
+		text:       strings.TrimRight(sb.String(), "\n"),
+		fileStarts: fileStarts,
+	}
 }
 
 // renderHunk renders a single hunk: the @@ header followed by content lines.
-func renderHunk(sb *strings.Builder, h diff.Hunk, paneWidth int) {
+// It returns the number of lines written.
+func renderHunk(sb *strings.Builder, h diff.Hunk, paneWidth int) int {
+	lines := 0
+
 	// Hunk header.
 	header := "@@"
 	if h.Context != "" {
@@ -68,6 +100,7 @@ func renderHunk(sb *strings.Builder, h diff.Hunk, paneWidth int) {
 	}
 	sb.WriteString(padToWidth(diffHunkHeaderStyle, header, paneWidth))
 	sb.WriteString("\n")
+	lines++
 
 	// Determine the line-number column width from the max line number in this hunk.
 	maxLineNum := h.NewStart + h.NewCount
@@ -94,15 +127,17 @@ func renderHunk(sb *strings.Builder, h diff.Hunk, paneWidth int) {
 			lineNum++
 		}
 		sb.WriteString("\n")
+		lines++
 	}
+	return lines
 }
 
 // padToWidth pads text with spaces to fill paneWidth, then applies the style.
 // This ensures background colours extend to the full pane width.
 func padToWidth(style lipgloss.Style, text string, paneWidth int) string {
-	textLen := len([]rune(text))
-	if textLen < paneWidth {
-		text += strings.Repeat(" ", paneWidth-textLen)
+	textWidth := lipgloss.Width(text)
+	if textWidth < paneWidth {
+		text += strings.Repeat(" ", paneWidth-textWidth)
 	}
 	return style.Render(text)
 }
@@ -131,25 +166,7 @@ func fileNamesFromDiff(files []diff.File) []string {
 
 // fileStartLines returns the line offset where each file begins in the
 // rendered output. Each file's section starts with its blank separator line.
-func fileStartLines(rendered string, files []diff.File) []int {
-	if len(files) == 0 {
-		return nil
-	}
-
-	lines := strings.Split(rendered, "\n")
-	starts := make([]int, 0, len(files))
-	fileIdx := 0
-
-	for i, line := range lines {
-		if fileIdx >= len(files) {
-			break
-		}
-		// Each file starts with a blank line, followed by the bold filename.
-		if line == "" && i+1 < len(lines) && strings.Contains(lines[i+1], files[fileIdx].Name) {
-			starts = append(starts, i)
-			fileIdx++
-		}
-	}
-
-	return starts
+// It delegates to renderDiffResult to compute offsets during rendering.
+func fileStartLines(files []diff.File, paneWidth int) []int {
+	return renderDiffResult(files, paneWidth).fileStarts
 }

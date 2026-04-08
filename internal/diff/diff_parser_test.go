@@ -317,6 +317,19 @@ index abc1234..def5678 100644
 	}
 }
 
+// TestParseFileSection_EmptyInput verifies that parseFileSection does not panic
+// on empty or blank input.
+func TestParseFileSection_EmptyInput(t *testing.T) {
+	// Empty string should not panic and should return a zero-value File.
+	f := parseFileSection("")
+	if f.Name != "" {
+		t.Errorf("expected empty name, got %q", f.Name)
+	}
+	if f.Type != Normal {
+		t.Errorf("expected Normal type, got %v", f.Type)
+	}
+}
+
 func TestParseRange_MalformedInput(t *testing.T) {
 	tests := []struct {
 		name      string
