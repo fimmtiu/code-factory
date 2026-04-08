@@ -1,58 +1,58 @@
-package ui
+package diff
 
 import (
-	"fmt"
+	"strconv"
 	"strings"
 )
 
-// DiffFileType classifies the kind of change a file underwent.
-type DiffFileType int
+// FileType classifies the kind of change a file underwent.
+type FileType int
 
 const (
-	DiffNormal DiffFileType = iota
-	DiffBinary
-	DiffDelete
-	DiffRename
-	DiffNew
+	Normal FileType = iota
+	Binary
+	Delete
+	Rename
+	New
 )
 
-// DiffLineType classifies a single line within a hunk.
-type DiffLineType int
+// LineType classifies a single line within a hunk.
+type LineType int
 
 const (
-	DiffLineContext DiffLineType = iota
-	DiffLineAdded
-	DiffLineRemoved
+	LineContext LineType = iota
+	LineAdded
+	LineRemoved
 )
 
-// DiffFile represents a single file entry in a unified diff.
-type DiffFile struct {
+// File represents a single file entry in a unified diff.
+type File struct {
 	Name     string
-	Type     DiffFileType
+	Type     FileType
 	RenameTo string
-	Hunks    []DiffHunk
+	Hunks    []Hunk
 }
 
-// DiffHunk represents one @@ section within a file diff.
-type DiffHunk struct {
+// Hunk represents one @@ section within a file diff.
+type Hunk struct {
 	Context  string
 	OldStart int
 	OldCount int
 	NewStart int
 	NewCount int
-	Lines    []DiffLine
+	Lines    []Line
 }
 
-// DiffLine represents a single content line within a hunk.
-type DiffLine struct {
-	Type    DiffLineType
+// Line represents a single content line within a hunk.
+type Line struct {
+	Type    LineType
 	Content string
 }
 
-// parseDiff splits raw `git diff` output into structured DiffFile values.
-func parseDiff(raw string) []DiffFile {
+// Parse splits raw `git diff` output into structured File values.
+func Parse(raw string) []File {
 	sections := splitDiffSections(raw)
-	files := make([]DiffFile, 0, len(sections))
+	files := make([]File, 0, len(sections))
 	for _, section := range sections {
 		files = append(files, parseFileSection(section))
 	}
@@ -82,15 +82,15 @@ func splitDiffSections(raw string) []string {
 	return sections
 }
 
-// parseFileSection parses a single file's diff section into a DiffFile.
-func parseFileSection(section string) DiffFile {
+// parseFileSection parses a single file's diff section into a File.
+func parseFileSection(section string) File {
 	lines := strings.Split(section, "\n")
-	f := DiffFile{Type: DiffNormal}
+	f := File{Type: Normal}
 
 	aName, bName := parseGitHeader(lines[0])
 	f.Name = aName
 
-	if detectFileType(&f, lines[1:], aName, bName) {
+	if f.detectFileType(lines[1:], bName) {
 		return f // binary file — no hunks to parse
 	}
 
@@ -101,7 +101,7 @@ func parseFileSection(section string) DiffFile {
 // detectFileType scans the header lines before the first @@ to determine the
 // file's change type (binary, delete, new, rename). It returns true when the
 // caller should stop processing (binary files have no hunks).
-func detectFileType(f *DiffFile, headerLines []string, aName, bName string) bool {
+func (f *File) detectFileType(headerLines []string, bName string) bool {
 	hasSimilarityIndex := false
 	for _, line := range headerLines {
 		if strings.HasPrefix(line, "@@") {
@@ -109,14 +109,14 @@ func detectFileType(f *DiffFile, headerLines []string, aName, bName string) bool
 		}
 		switch {
 		case strings.HasPrefix(line, "Binary files"):
-			f.Type = DiffBinary
+			f.Type = Binary
 			return true
 		case strings.HasPrefix(line, "deleted file mode"):
-			f.Type = DiffDelete
+			f.Type = Delete
 		case strings.HasPrefix(line, "new file mode"):
-			f.Type = DiffNew
+			f.Type = New
 		case strings.HasPrefix(line, "rename from"):
-			f.Type = DiffRename
+			f.Type = Rename
 		case strings.HasPrefix(line, "rename to "):
 			f.RenameTo = strings.TrimPrefix(line, "rename to ")
 		case strings.HasPrefix(line, "similarity index"):
@@ -124,8 +124,8 @@ func detectFileType(f *DiffFile, headerLines []string, aName, bName string) bool
 		}
 	}
 
-	if hasSimilarityIndex && aName != bName {
-		f.Type = DiffRename
+	if hasSimilarityIndex && f.Name != bName {
+		f.Type = Rename
 		if f.RenameTo == "" {
 			f.RenameTo = bName
 		}
@@ -134,16 +134,15 @@ func detectFileType(f *DiffFile, headerLines []string, aName, bName string) bool
 }
 
 // parseGitHeader extracts the two filenames from a "diff --git a/X b/Y" line.
-// It handles filenames that may contain spaces by splitting at " b/" boundaries
-// starting from the right side of the line.
+// It handles filenames that may contain spaces by scanning left-to-right for
+// the first " b/" separator after the "a/" prefix.
 func parseGitHeader(header string) (aName, bName string) {
 	// Strip the "diff --git " prefix.
 	rest := strings.TrimPrefix(header, "diff --git ")
 
 	// The line is "a/<path> b/<path>". We need to find the split point between
 	// the two paths. Because paths can contain spaces, we look for " b/" as
-	// the separator, scanning from the middle outward. The a/ path starts at
-	// index 2 (after "a/"), and " b/" appears somewhere after.
+	// the separator. The a/ path starts at index 2 (after "a/").
 	sep := " b/"
 	// Start searching after "a/" (at least position 2).
 	idx := strings.Index(rest[2:], sep)
@@ -157,10 +156,10 @@ func parseGitHeader(header string) (aName, bName string) {
 	return aName, bName
 }
 
-// parseHunks extracts all DiffHunk values from the lines of a file section.
-func parseHunks(lines []string) []DiffHunk {
-	var hunks []DiffHunk
-	var current *DiffHunk
+// parseHunks extracts all Hunk values from the lines of a file section.
+func parseHunks(lines []string) []Hunk {
+	var hunks []Hunk
+	var current *Hunk
 
 	for _, line := range lines {
 		if strings.HasPrefix(line, "@@") {
@@ -182,8 +181,8 @@ func parseHunks(lines []string) []DiffHunk {
 }
 
 // parseHunkHeader parses an "@@ -old,count +new,count @@ context" line.
-func parseHunkHeader(line string) DiffHunk {
-	var h DiffHunk
+func parseHunkHeader(line string) Hunk {
+	var h Hunk
 	// Find the closing "@@" after the opening one.
 	rest := line[2:] // skip leading "@@"
 	end := strings.Index(rest, "@@")
@@ -208,31 +207,40 @@ func parseHunkHeader(line string) DiffHunk {
 func parseRange(s string) (int, int) {
 	// Strip the leading - or +.
 	s = strings.TrimLeft(s, "-+")
-	var start, count int
 	if strings.Contains(s, ",") {
-		fmt.Sscanf(s, "%d,%d", &start, &count)
-	} else {
-		fmt.Sscanf(s, "%d", &start)
-		count = 1
+		parts := strings.SplitN(s, ",", 2)
+		start, err := strconv.Atoi(parts[0])
+		if err != nil {
+			return 0, 0
+		}
+		count, err := strconv.Atoi(parts[1])
+		if err != nil {
+			return start, 0
+		}
+		return start, count
 	}
-	return start, count
+	start, err := strconv.Atoi(s)
+	if err != nil {
+		return 0, 1
+	}
+	return start, 1
 }
 
 // classifyLine determines the type of a diff content line. It returns false
 // for lines that are not part of the diff content (e.g. "\ No newline at end
 // of file").
-func classifyLine(line string) (DiffLine, bool) {
+func classifyLine(line string) (Line, bool) {
 	if len(line) == 0 {
-		return DiffLine{}, false
+		return Line{}, false
 	}
 	switch line[0] {
 	case '+':
-		return DiffLine{Type: DiffLineAdded, Content: line[1:]}, true
+		return Line{Type: LineAdded, Content: line[1:]}, true
 	case '-':
-		return DiffLine{Type: DiffLineRemoved, Content: line[1:]}, true
+		return Line{Type: LineRemoved, Content: line[1:]}, true
 	case ' ':
-		return DiffLine{Type: DiffLineContext, Content: line[1:]}, true
+		return Line{Type: LineContext, Content: line[1:]}, true
 	default:
-		return DiffLine{}, false
+		return Line{}, false
 	}
 }
