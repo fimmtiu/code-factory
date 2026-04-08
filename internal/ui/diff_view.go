@@ -90,6 +90,11 @@ type DiffView struct {
 	anchor int
 	offset int // first visible row in the commit list
 
+	// lastMoved tracks which end of the selection moved most recently:
+	// "cursor" or "anchor". Used by currentCommit() to display the stat
+	// for the end the user just moved.
+	lastMoved string
+
 	// Right pane: cached git show --stat output
 	statOutput string
 	statHash   string // hash for which statOutput was fetched
@@ -222,10 +227,13 @@ func (v DiffView) selectionRange() (int, int) {
 	return lo, hi
 }
 
-// currentCommit returns the commit entry at the cursor position. This is
-// always the actively-moving end of the selection, used for stat display.
+// currentCommit returns the commit at whichever end of the selection moved
+// most recently, used for stat display. Falls back to cursor if unset.
 func (v DiffView) currentCommit() *commitEntry {
 	idx := v.cursor
+	if v.lastMoved == "anchor" {
+		idx = v.anchor
+	}
 	if idx < 0 || idx >= len(v.rows) || v.rows[idx].separator {
 		return nil
 	}
@@ -267,6 +275,7 @@ func (v *DiffView) moveDown(n int) {
 	}
 	v.cursor = v.advanceCursor(v.cursor, n, 1)
 	v.anchor = v.cursor
+	v.lastMoved = "cursor"
 	v.clampScroll()
 }
 
@@ -278,6 +287,7 @@ func (v *DiffView) moveUp(n int) {
 	}
 	v.cursor = v.advanceCursor(v.cursor, n, -1)
 	v.anchor = v.cursor
+	v.lastMoved = "cursor"
 	v.clampScroll()
 }
 
@@ -287,6 +297,7 @@ func (v *DiffView) extendRangeDown(n int) {
 		return
 	}
 	v.cursor = v.advanceCursor(v.cursor, n, 1)
+	v.lastMoved = "cursor"
 	v.clampScroll()
 }
 
@@ -296,6 +307,7 @@ func (v *DiffView) extendRangeUp(n int) {
 		return
 	}
 	v.anchor = v.advanceCursor(v.anchor, n, -1)
+	v.lastMoved = "anchor"
 	v.clampScroll()
 }
 
@@ -464,7 +476,8 @@ func (v DiffView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (v DiffView) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	prevStart := v.cursor
+	prevCursor := v.cursor
+	prevAnchor := v.anchor
 
 	switch msg.String() {
 	case "up":
@@ -485,8 +498,8 @@ func (v DiffView) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return v, nil
 	}
 
-	// If the cursor moved to a different commit, fetch its stat.
-	if v.cursor != prevStart {
+	// If either end of the selection changed, refresh the stat.
+	if v.cursor != prevCursor || v.anchor != prevAnchor {
 		return v, v.fetchStatForCurrent()
 	}
 	return v, nil

@@ -3,6 +3,8 @@ package ui
 import (
 	"strings"
 	"testing"
+
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 // makeCommit creates a test commitEntry with the given hash and message.
@@ -379,6 +381,96 @@ func TestExtendRangeUp_ClampsAtStart(t *testing.T) {
 	v.extendRangeUp(10)
 	if v.cursor != 1 || v.anchor != 0 {
 		t.Errorf("after extendRangeUp clamp: start=%d end=%d, want 1,0", v.cursor, v.anchor)
+	}
+}
+
+// ── Stat refresh tests ───────────────────────────────────────────────────────
+
+// TestHandleKey_ShiftUpTriggersStatRefresh verifies that shift+up triggers a
+// stat refresh even though it only moves the anchor, not the cursor.
+func TestHandleKey_ShiftUpTriggersStatRefresh(t *testing.T) {
+	rows := buildCommitRows([]commitEntry{
+		makeCommit("aaaa", "newest"),
+		makeCommit("bbbb", "middle"),
+		makeCommit("cccc", "oldest"),
+	}, -1, false)
+	v := DiffView{
+		rows:       rows,
+		width:      80,
+		height:     24,
+		cursor:     2,
+		anchor:     2,
+		identifier: "proj/ticket",
+		statHash:   "cccc", // stat is cached for current cursor
+	}
+
+	updated, cmd := v.handleKey(fakeKeyMsg("shift+up"))
+	dv := updated.(DiffView)
+	// anchor should have moved, cursor should not.
+	if dv.cursor != 2 {
+		t.Errorf("shift+up moved cursor: got %d, want 2", dv.cursor)
+	}
+	if dv.anchor != 1 {
+		t.Errorf("shift+up did not move anchor: got %d, want 1", dv.anchor)
+	}
+	// A stat refresh should have been triggered.
+	if cmd == nil {
+		t.Error("shift+up should trigger stat refresh, got nil cmd")
+	}
+}
+
+// TestHandleKey_ShiftDownTriggersStatRefresh verifies shift+down also triggers
+// a stat refresh (cursor moves).
+func TestHandleKey_ShiftDownTriggersStatRefresh(t *testing.T) {
+	rows := buildCommitRows([]commitEntry{
+		makeCommit("aaaa", "newest"),
+		makeCommit("bbbb", "middle"),
+		makeCommit("cccc", "oldest"),
+	}, -1, false)
+	v := DiffView{
+		rows:       rows,
+		width:      80,
+		height:     24,
+		cursor:     0,
+		anchor:     0,
+		identifier: "proj/ticket",
+		statHash:   "aaaa",
+	}
+
+	updated, cmd := v.handleKey(fakeKeyMsg("shift+down"))
+	dv := updated.(DiffView)
+	if dv.cursor != 1 {
+		t.Errorf("shift+down: cursor got %d, want 1", dv.cursor)
+	}
+	if dv.anchor != 0 {
+		t.Errorf("shift+down: anchor got %d, want 0", dv.anchor)
+	}
+	if cmd == nil {
+		t.Error("shift+down should trigger stat refresh, got nil cmd")
+	}
+}
+
+// fakeKeyMsg creates a tea.KeyMsg for testing.
+func fakeKeyMsg(key string) tea.KeyMsg {
+	switch key {
+	case "shift+up":
+		return tea.KeyMsg{Type: tea.KeyShiftUp}
+	case "shift+down":
+		return tea.KeyMsg{Type: tea.KeyShiftDown}
+	case "up":
+		return tea.KeyMsg{Type: tea.KeyUp}
+	case "down":
+		return tea.KeyMsg{Type: tea.KeyDown}
+	case "pgup":
+		return tea.KeyMsg{Type: tea.KeyPgUp}
+	case "pgdown":
+		return tea.KeyMsg{Type: tea.KeyPgDown}
+	case "tab":
+		return tea.KeyMsg{Type: tea.KeyTab}
+	case "enter":
+		return tea.KeyMsg{Type: tea.KeyEnter}
+	default:
+		return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(key)}
 	}
 }
 
