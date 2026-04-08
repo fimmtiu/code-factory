@@ -582,8 +582,67 @@ func (d *DB) markTicketDone(ticketID int64, identifier string, projectID sql.Nul
 		return fmt.Errorf("update ticket: %w", err)
 	}
 
+	if err := d.unblockDependents(workUnitTypeTicket, ticketID); err != nil {
+		return fmt.Errorf("unblock dependents: %w", err)
+	}
+
 	if err := d.git.RemoveWorktree(d.repoRoot, d.worktreePath(identifier), identifier); err != nil {
 		return fmt.Errorf("remove worktree: %w", err)
+	}
+	return nil
+}
+
+// unblockDependents finds all blocked tickets that depended on the just-completed
+// work unit (identified by type and id) and transitions any whose dependencies
+// are now ALL done from "blocked" to "implement/idle".
+func (d *DB) unblockDependents(completedType int, completedID int64) error {
+	// Find blocked tickets that list the completed work unit as a dependency.
+	rows, err := d.db.Query(`
+		SELECT DISTINCT d.work_unit_id
+		FROM dependencies d
+		JOIN tickets t ON t.id = d.work_unit_id
+		WHERE d.work_unit_type = 1
+		  AND d.dependency_type = ?
+		  AND d.dependency_id = ?
+		  AND t.phase = 'blocked'
+	`, completedType, completedID)
+	if err != nil {
+		return fmt.Errorf("unblockDependents: query dependents: %w", err)
+	}
+	defer rows.Close()
+
+	var candidateIDs []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return fmt.Errorf("unblockDependents: scan: %w", err)
+		}
+		candidateIDs = append(candidateIDs, id)
+	}
+
+	for _, ticketID := range candidateIDs {
+		// Check whether ALL dependencies of this ticket are now done.
+		var pending int
+		err := d.db.QueryRow(`
+			SELECT COUNT(*) FROM dependencies d
+			WHERE d.work_unit_type = 1 AND d.work_unit_id = ?
+			  AND NOT (
+			    (d.dependency_type = 1 AND EXISTS (SELECT 1 FROM tickets WHERE id = d.dependency_id AND phase = 'done'))
+			    OR
+			    (d.dependency_type = 2 AND EXISTS (SELECT 1 FROM projects WHERE id = d.dependency_id AND phase = 'done'))
+			  )
+		`, ticketID).Scan(&pending)
+		if err != nil {
+			return fmt.Errorf("unblockDependents: check pending for ticket %d: %w", ticketID, err)
+		}
+		if pending == 0 {
+			if _, err := d.db.Exec(
+				`UPDATE tickets SET phase = ?, status = ? WHERE id = ?`,
+				string(models.PhaseImplement), string(models.StatusIdle), ticketID,
+			); err != nil {
+				return fmt.Errorf("unblockDependents: unblock ticket %d: %w", ticketID, err)
+			}
+		}
 	}
 	return nil
 }
@@ -1097,7 +1156,12 @@ func (d *DB) SetProjectPhase(identifier, phase string) error {
 		}
 	}
 
-	return d.withTx(func(tx *sql.Tx) error {
+	var projectID int64
+	if err := d.db.QueryRow(`SELECT id FROM projects WHERE identifier = ?`, identifier).Scan(&projectID); err != nil {
+		return fmt.Errorf("project %q not found", identifier)
+	}
+
+	if err := d.withTx(func(tx *sql.Tx) error {
 		res, err := tx.Exec(
 			`UPDATE projects SET phase = ?, last_updated = ? WHERE identifier = ?`,
 			phase, time.Now().Unix(), identifier,
@@ -1113,7 +1177,16 @@ func (d *DB) SetProjectPhase(identifier, phase string) error {
 			return fmt.Errorf("project %q not found", identifier)
 		}
 		return nil
-	})
+	}); err != nil {
+		return err
+	}
+
+	if phase == string(models.ProjectPhaseDone) {
+		if err := d.unblockDependents(workUnitTypeProject, projectID); err != nil {
+			return fmt.Errorf("unblock dependents: %w", err)
+		}
+	}
+	return nil
 }
 
 // AllChildrenDone reports whether all direct children (tickets and subprojects)
