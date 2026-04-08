@@ -30,7 +30,7 @@ func renderDiff(files []diff.File, paneWidth int) string {
 	var sb strings.Builder
 	for _, f := range files {
 		sb.WriteString("\n") // blank line before each file (including the first)
-		sb.WriteString(renderFileHeader(f))
+		sb.WriteString(diffFileHeaderStyle.Render(f.Name + ":"))
 		sb.WriteString("\n")
 
 		switch f.Type {
@@ -57,11 +57,6 @@ func renderDiff(files []diff.File, paneWidth int) string {
 
 	// Trim the trailing newline so callers get clean output.
 	return strings.TrimRight(sb.String(), "\n")
-}
-
-// renderFileHeader returns the bold "filename:" header line.
-func renderFileHeader(f diff.File) string {
-	return diffFileHeaderStyle.Render(f.Name + ":")
 }
 
 // renderHunk renders a single hunk: the @@ header followed by content lines.
