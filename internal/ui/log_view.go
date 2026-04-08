@@ -422,8 +422,8 @@ func (v LogView) renderRow(e *models.LogEntry, selected bool) string {
 	}
 	msgW := v.messageWidth()
 
-	// Build the message segment. If the entry has a logfile, prepend a subtle marker.
-	msg := e.Message
+	// Collapse newlines to spaces so multi-line messages don't break the layout.
+	msg := strings.ReplaceAll(e.Message, "\n", " ")
 	if e.Logfile != "" {
 		marker := "◆ "
 		markerRunes := []rune(marker)
