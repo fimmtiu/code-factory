@@ -41,6 +41,13 @@ func (w *Worker) run(ctx context.Context, pollIntervalSecs int) {
 func (w *Worker) processTicket(ctx context.Context, ticket *models.WorkUnit) {
 	identifier := ticket.Identifier
 
+	// Create a per-task context so housekeeping can abort just this task
+	// without tearing down the entire pool.
+	taskCtx, taskCancel := context.WithCancel(ctx)
+	w.setCancel(taskCancel)
+	defer w.clearCancel()
+	defer taskCancel()
+
 	w.SetCurrentTicket(string(ticket.Phase) + " " + identifier)
 	w.Status = StatusBusy
 	if err := w.database.SetStatus(identifier, ticket.Phase, models.StatusInProgress); err != nil {
@@ -63,7 +70,7 @@ func (w *Worker) processTicket(ctx context.Context, ticket *models.WorkUnit) {
 		return
 	}
 
-	acpErr := w.workFn(ctx, w, w.database, w.logCh, WorkParams{
+	acpErr := w.workFn(taskCtx, w, w.database, w.logCh, WorkParams{
 		WorktreePath: worktreePath,
 		Identifier:   identifier,
 		Phase:        ticket.Phase,
@@ -71,12 +78,24 @@ func (w *Worker) processTicket(ctx context.Context, ticket *models.WorkUnit) {
 		LogfilePath:  logfilePath,
 	})
 
-	// On graceful shutdown the context is cancelled before the work finishes.
-	// Reset the ticket to idle so it is re-processed on the next run rather
-	// than incorrectly advancing to user-review.
-	if ctx.Err() != nil {
-		_ = w.database.SetStatus(identifier, ticket.Phase, models.StatusIdle)
-		w.releaseTicket(identifier)
+	// If the task context was cancelled (either by housekeeping aborting this
+	// specific task or by a pool-wide shutdown), reset the ticket to idle so
+	// it is re-processed on the next run rather than incorrectly advancing to
+	// user-review.
+	if taskCtx.Err() != nil {
+		// Only reset the DB if the ticket is still ours. Housekeeping may
+		// have already reset it, in which case another worker may have
+		// claimed it — we must not touch it.
+		if ctx.Err() != nil {
+			// Pool-wide shutdown: the ticket is still ours, reset it.
+			_ = w.database.SetStatus(identifier, ticket.Phase, models.StatusIdle)
+			w.releaseTicket(identifier)
+		} else {
+			// Housekeeping abort: ticket was already reset in DB. Just
+			// clean up our local state.
+			w.SetCurrentTicket("")
+			w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("aborted stale ticket %s", identifier))
+		}
 		w.Status = StatusIdle
 		return
 	}

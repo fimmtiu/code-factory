@@ -98,12 +98,13 @@ func (p *Pool) Stop() {
 }
 
 // StartHousekeeping launches the background goroutine that releases stale
-// tickets. It shares the pool's context so Stop() also terminates it.
+// tickets and aborts their owning workers. It shares the pool's context so
+// Stop() also terminates it.
 func (p *Pool) StartHousekeeping(database *db.DB) {
 	p.wg.Add(1)
 	go func() {
 		defer p.wg.Done()
-		runHousekeeping(p.ctx, database, p.LogChannel)
+		runHousekeeping(p.ctx, p, database, p.LogChannel)
 	}()
 }
 

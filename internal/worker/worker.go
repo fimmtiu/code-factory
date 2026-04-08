@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"context"
 	"sync"
 
 	"github.com/fimmtiu/code-factory/internal/db"
@@ -56,8 +57,13 @@ type Worker struct {
 	// user response, or nil if none is pending. Protected by mu.
 	pendingPermission *PendingPermissionRequest
 
-	// mu guards CurrentTicket, LastOutput, and pendingPermission for concurrent
-	// access between the worker goroutine (writer) and the UI goroutine (reader).
+	// cancelWork cancels the per-task context, aborting the current subprocess.
+	// nil when the worker is idle. Protected by mu.
+	cancelWork context.CancelFunc
+
+	// mu guards CurrentTicket, LastOutput, pendingPermission, and cancelWork
+	// for concurrent access between the worker goroutine (writer) and the UI
+	// goroutine (reader).
 	mu sync.RWMutex
 
 	// database, logCh, notifCh, ticketsDir, and workFn are set by Pool.Start
@@ -127,6 +133,31 @@ func (w *Worker) SetPendingPermission(req *PendingPermissionRequest) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.pendingPermission = req
+}
+
+// AbortWork cancels the worker's current subprocess, if any. This is called
+// by housekeeping when a stale ticket is being reclaimed. The worker's main
+// loop will handle the context cancellation and clean up.
+func (w *Worker) AbortWork() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.cancelWork != nil {
+		w.cancelWork()
+	}
+}
+
+// setCancel stores the cancel function for the current per-task context.
+func (w *Worker) setCancel(cancel context.CancelFunc) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.cancelWork = cancel
+}
+
+// clearCancel removes the cancel function after a task completes.
+func (w *Worker) clearCancel() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.cancelWork = nil
 }
 
 // SendResponse sends a response message to the worker and marks it as busy.

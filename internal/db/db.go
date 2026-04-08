@@ -938,7 +938,7 @@ func (d *DB) InsertLog(workerNumber int, message string, logfile string) error {
 func (d *DB) FindStaleTickets(thresholdMinutes int) ([]*models.WorkUnit, error) {
 	cutoff := time.Now().Add(-time.Duration(thresholdMinutes) * time.Minute).Unix()
 	rows, err := d.db.Query(`
-		SELECT identifier, description, phase, status, last_updated
+		SELECT identifier, description, phase, status, claimed_by, last_updated
 		FROM tickets
 		WHERE status = 'in-progress' AND last_updated < ?
 	`, cutoff)
@@ -950,8 +950,9 @@ func (d *DB) FindStaleTickets(thresholdMinutes int) ([]*models.WorkUnit, error) 
 	var tickets []*models.WorkUnit
 	for rows.Next() {
 		var identifier, description, phase, status string
+		var claimedBy sql.NullString
 		var lastUpdated int64
-		if err := rows.Scan(&identifier, &description, &phase, &status, &lastUpdated); err != nil {
+		if err := rows.Scan(&identifier, &description, &phase, &status, &claimedBy, &lastUpdated); err != nil {
 			return nil, fmt.Errorf("scan stale ticket: %w", err)
 		}
 		tickets = append(tickets, &models.WorkUnit{
@@ -959,6 +960,7 @@ func (d *DB) FindStaleTickets(thresholdMinutes int) ([]*models.WorkUnit, error) 
 			Description: description,
 			Phase:       models.TicketPhase(phase),
 			Status:      models.TicketStatus(status),
+			ClaimedBy:   claimedBy.String,
 			LastUpdated: time.Unix(lastUpdated, 0),
 			IsProject:   false,
 		})
