@@ -12,3 +12,21 @@ var (
 	colourMuted     = lipgloss.Color("240") // grey — hints, unfocused borders, dimmed text
 	colourOnPrimary = lipgloss.Color("230") // near-white — text on primary/blue backgrounds
 )
+
+// ── Diff view styles ─────────────────────────────────────────────────────────
+
+var (
+	// diffSelectedStyle highlights the currently focused commit row.
+	diffSelectedStyle = lipgloss.NewStyle().
+				Background(colourPrimary).
+				Foreground(colourOnPrimary)
+
+	// diffRangeStyle highlights other commits in the selected range.
+	diffRangeStyle = lipgloss.NewStyle().
+			Background(colourAccent).
+			Foreground(colourOnPrimary)
+
+	// diffSeparatorStyle renders the fork-point separator line.
+	diffSeparatorStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("245")) // medium grey
+)

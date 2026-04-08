@@ -755,3 +755,5 @@ func (v CommandView) KeyBindings() []KeyBinding {
 		{Key: "G", Description: "Open GitHub compare page", Hidden: !isGitHubRepo()},
 	}
 }
+
+func (v CommandView) Label() string { return "F2:Commands" }
