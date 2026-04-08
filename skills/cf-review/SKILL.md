@@ -49,7 +49,7 @@ Spawn a **Task subagent** with:
 ---BEGIN PROMPT---
 You are an experienced senior software developer, and you're reviewing changes on a branch which you've never seen before. The author describes the purpose of this branch as: "PURPOSE"
 
-Run `git diff BRANCHPOINT` to examine the changes. Decide whether the code changes actually fulfill the stated purpose.
+Run `git diff BRANCHPOINT` to examine the changes. Decide whether the code changes actually fulfill the stated purpose. (Whitespace changes are an exception -- we can include whitespace changes in any unrelated PR.)
 
 Use the Unblocked MCP (`unblocked_context_engine` tool) to gather context about the modified code.
 
