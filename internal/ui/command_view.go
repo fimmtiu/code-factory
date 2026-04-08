@@ -39,6 +39,7 @@ var (
 
 type commandRefreshMsg struct {
 	tickets []*models.WorkUnit
+	fetched bool // true when this is a DB fetch result (even if tickets is nil/empty)
 }
 
 type openMergeConflictDialogMsg struct {
@@ -47,8 +48,7 @@ type openMergeConflictDialogMsg struct {
 }
 
 type respondToAgentDoneMsg struct {
-	errMsg     string
-	identifier string // ticket that was responded to; used for optimistic removal
+	errMsg string
 }
 
 // ── listRow ───────────────────────────────────────────────────────────────────
@@ -103,7 +103,7 @@ func (v CommandView) fetchCmd() tea.Cmd {
 		if err != nil {
 			tickets = nil
 		}
-		return commandRefreshMsg{tickets: tickets}
+		return commandRefreshMsg{tickets: tickets, fetched: true}
 	}
 }
 
@@ -155,7 +155,7 @@ func (v CommandView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return v, nil
 
 	case commandRefreshMsg:
-		if msg.tickets == nil {
+		if !msg.fetched {
 			// Tick ping: fetch real data.
 			return v, v.fetchCmd()
 		}
@@ -198,20 +198,6 @@ func (v CommandView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return v, nil
 		}
 		v.errorMsg = ""
-		// Optimistically remove the ticket from the list immediately so the
-		// view updates without waiting for the DB round-trip to complete.
-		if msg.identifier != "" {
-			filtered := v.rows[:0]
-			for _, row := range v.rows {
-				if !row.separator && row.wu.Identifier == msg.identifier {
-					continue
-				}
-				filtered = append(filtered, row)
-			}
-			v.rows = filtered
-			v.clampSelected()
-			v.clampScroll()
-		}
 		return v, v.fetchCmd()
 
 	case tea.KeyMsg:

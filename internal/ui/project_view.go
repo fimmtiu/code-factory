@@ -82,8 +82,9 @@ const statusPaneWidth = 28
 // ── Messages ─────────────────────────────────────────────────────────────────
 
 type projectRefreshMsg struct {
-	units []*models.WorkUnit
-	stats db.TicketStats
+	units   []*models.WorkUnit
+	stats   db.TicketStats
+	fetched bool // true when this is a DB fetch result (even if units is nil/empty)
 }
 
 type projectDescriptionSavedMsg struct{}
@@ -159,7 +160,7 @@ func (v ProjectView) fetchCmd() tea.Cmd {
 		if err != nil {
 			stats = db.TicketStats{}
 		}
-		return projectRefreshMsg{units: units, stats: stats}
+		return projectRefreshMsg{units: units, stats: stats, fetched: true}
 	}
 }
 
@@ -347,8 +348,7 @@ func (v ProjectView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return v, nil
 
 	case projectRefreshMsg:
-		// If this is a ticker ping (empty units), fetch real data.
-		if msg.units == nil && msg.stats == (db.TicketStats{}) {
+		if !msg.fetched {
 			return v, v.fetchCmd()
 		}
 		v.units = msg.units

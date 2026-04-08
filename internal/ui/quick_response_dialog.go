@@ -172,7 +172,7 @@ func sendResponseToWorker(wu *models.WorkUnit, database *db.DB, pool *worker.Poo
 	}
 	w.SendResponse(text)
 	_ = database.SetStatus(wu.Identifier, wu.Phase, models.StatusInProgress)
-	return respondToAgentDoneMsg{identifier: wu.Identifier}
+	return respondToAgentDoneMsg{}
 }
 
 // respondToAgentViaEditor opens the full blocking editor pre-filled with the

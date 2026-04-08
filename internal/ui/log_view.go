@@ -58,6 +58,7 @@ const (
 // is a tick ping that triggers a real fetch.
 type logRefreshMsg struct {
 	entries []models.LogEntry
+	fetched bool // true when this is a DB fetch result (even if entries is nil/empty)
 }
 
 // logActivatedMsg is sent by the root model when the user switches to the log
@@ -102,7 +103,7 @@ func (v LogView) fetchCmd() tea.Cmd {
 		if err != nil {
 			entries = nil
 		}
-		return logRefreshMsg{entries: entries}
+		return logRefreshMsg{entries: entries, fetched: true}
 	}
 }
 
@@ -129,7 +130,7 @@ func (v LogView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return v, v.fetchCmd()
 
 	case logRefreshMsg:
-		if msg.entries == nil {
+		if !msg.fetched {
 			// Tick ping: fetch real data.
 			return v, v.fetchCmd()
 		}
