@@ -583,7 +583,7 @@ func (d *DB) markTicketDone(ticketID int64, identifier string, projectID sql.Nul
 	}
 
 	if err := d.git.RemoveWorktree(d.repoRoot, d.worktreePath(identifier), identifier); err != nil {
-		panic(err)
+		return fmt.Errorf("remove worktree: %w", err)
 	}
 	return nil
 }

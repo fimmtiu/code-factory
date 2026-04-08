@@ -106,7 +106,7 @@ func (g *RealGitClient) RemoveWorktree(repoRoot, worktreePath, branchName string
 		return fmt.Errorf("RemoveWorktree(%q, %q): %w", repoRoot, worktreePath, err)
 	}
 
-	if err := runGit("-C", repoRoot, "branch", "-d", safeBranchName); err != nil {
+	if err := runGit("-C", repoRoot, "branch", "-D", safeBranchName); err != nil {
 		return fmt.Errorf("RemoveWorktree: delete branch %q: %w", safeBranchName, err)
 	}
 
