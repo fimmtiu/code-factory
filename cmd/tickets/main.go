@@ -12,6 +12,12 @@ func main() {
 	}
 
 	subcommand := os.Args[1]
+
+	if subcommand == "--help" || subcommand == "-h" {
+		printUsage()
+		os.Exit(0)
+	}
+
 	args := os.Args[2:]
 
 	if err := runCommand(subcommand, args); err != nil {
