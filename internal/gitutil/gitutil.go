@@ -83,12 +83,13 @@ func (g *RealGitClient) CreateWorktree(repoRoot, worktreePath, branchName string
 // worktreeDir using --no-ff. The caller is responsible for ensuring worktreeDir
 // is already on the desired target branch.
 func (g *RealGitClient) MergeBranch(worktreeDir, fromBranch string) error {
+	safeBranchName := strings.ReplaceAll(fromBranch, "/", "_")
 	intoBranch, err := runGitOutput("-C", worktreeDir, "rev-parse", "--abbrev-ref", "HEAD")
 	if err != nil {
 		return fmt.Errorf("MergeBranch: could not determine current branch: %w", err)
 	}
-	mergeMsg := fmt.Sprintf("merge %s into %s", fromBranch, intoBranch)
-	return runGit("-C", worktreeDir, "merge", "--no-ff", fromBranch, "-m", mergeMsg)
+	mergeMsg := fmt.Sprintf("merge %s into %s", safeBranchName, intoBranch)
+	return runGit("-C", worktreeDir, "merge", "--no-ff", safeBranchName, "-m", mergeMsg)
 }
 
 // GetHeadCommit returns the abbreviated HEAD commit hash for the git
@@ -100,12 +101,13 @@ func (g *RealGitClient) GetHeadCommit(path string) (string, error) {
 // RemoveWorktree removes the linked worktree at worktreePath and deletes its
 // associated branch branchName.
 func (g *RealGitClient) RemoveWorktree(repoRoot, worktreePath, branchName string) error {
+	safeBranchName := strings.ReplaceAll(branchName, "/", "_")
 	if err := runGit("-C", repoRoot, "worktree", "remove", "--force", worktreePath); err != nil {
 		return fmt.Errorf("RemoveWorktree(%q, %q): %w", repoRoot, worktreePath, err)
 	}
 
-	if err := runGit("-C", repoRoot, "branch", "-d", branchName); err != nil {
-		return fmt.Errorf("RemoveWorktree: delete branch %q: %w", branchName, err)
+	if err := runGit("-C", repoRoot, "branch", "-d", safeBranchName); err != nil {
+		return fmt.Errorf("RemoveWorktree: delete branch %q: %w", safeBranchName, err)
 	}
 
 	return nil
