@@ -48,7 +48,7 @@ type Model struct {
 	height int
 
 	activeView ViewID
-	views      [5]viewModel
+	views      [viewCount]viewModel
 
 	dialog        dialog // nil when no dialog is open
 	editorWaiting bool   // true while a blocking editor is open
@@ -71,7 +71,7 @@ func NewModel(pool *worker.Pool, database *db.DB, waitSecs int) Model {
 		pool:       pool,
 		db:         database,
 		activeView: ViewProject,
-		views: [5]viewModel{
+		views: [viewCount]viewModel{
 			ViewProject: NewProjectView(database, waitSecs),
 			ViewCommand: NewCommandView(database, pool, waitSecs),
 			ViewWorker:  NewWorkerView(pool),
@@ -401,31 +401,12 @@ func (m Model) View() string {
 
 // renderHeader returns the tab bar showing the active view.
 func (m Model) renderHeader() string {
-	tabs := make([]string, 5)
-	for i, name := range []string{
-		viewNames[ViewProject],
-		viewNames[ViewCommand],
-		viewNames[ViewWorker],
-		viewNames[ViewLog],
-		viewNames[ViewDiff],
-	} {
-		label := name
-		switch ViewID(i) {
-		case ViewProject:
-			label = "F1:" + name
-		case ViewCommand:
-			label = "F2:" + name
-		case ViewWorker:
-			label = "F3:" + name
-		case ViewLog:
-			label = "F4:" + name
-		case ViewDiff:
-			label = "F5:" + name
-		}
+	tabs := make([]string, len(m.views))
+	for i, v := range m.views {
 		if ViewID(i) == m.activeView {
-			tabs[i] = activeTabStyle.Render(label)
+			tabs[i] = activeTabStyle.Render(v.Label())
 		} else {
-			tabs[i] = inactiveTabStyle.Render(label)
+			tabs[i] = inactiveTabStyle.Render(v.Label())
 		}
 	}
 	return headerStyle.Render(strings.Join(tabs, "  "))

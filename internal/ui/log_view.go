@@ -510,3 +510,5 @@ func (v LogView) KeyBindings() []KeyBinding {
 		{Key: "/", Description: "Filter entries by substring"},
 	}
 }
+
+func (v LogView) Label() string { return "F4:Log" }

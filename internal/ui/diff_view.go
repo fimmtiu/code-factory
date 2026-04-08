@@ -648,3 +648,5 @@ func (v DiffView) KeyBindings() []KeyBinding {
 		{Key: "Tab/Enter", Description: "View diff"},
 	}
 }
+
+func (v DiffView) Label() string { return "F5:Diffs" }
