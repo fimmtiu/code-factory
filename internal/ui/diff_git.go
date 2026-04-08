@@ -5,6 +5,10 @@ import (
 	"strings"
 )
 
+// UncommittedRef is the sentinel value passed as fromCommit to fetchDiff
+// to request a diff of uncommitted changes against HEAD.
+const UncommittedRef = "uncommitted"
+
 // DiffCommit represents a single commit in the diff viewer's commit list.
 type DiffCommit struct {
 	Hash          string
@@ -46,11 +50,11 @@ func fetchShowStat(worktreePath, commitHash string) (string, error) {
 	return gitOutput(worktreePath, "show", "--stat", commitHash)
 }
 
-// fetchDiff returns the raw diff between two commits. If fromCommit is the
-// special value "uncommitted", it returns the diff of uncommitted changes
-// against HEAD instead.
+// fetchDiff returns the raw diff between two commits. If fromCommit is
+// UncommittedRef, it returns the diff of uncommitted changes against HEAD
+// instead.
 func fetchDiff(worktreePath, fromCommit, toCommit string) (string, error) {
-	if fromCommit == "uncommitted" {
+	if fromCommit == UncommittedRef {
 		return gitOutput(worktreePath, "diff", "HEAD")
 	}
 	return gitOutput(worktreePath, "diff", fromCommit+".."+toCommit)

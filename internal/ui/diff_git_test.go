@@ -4,12 +4,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
 // setupTestRepo creates a temporary bare repo and a worktree clone with several
-// commits on a feature branch forked from "main". Returns the worktree path and
-// a cleanup function.
+// commits on a feature branch forked from "main". Returns the worktree path.
 func setupTestRepo(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -138,7 +138,7 @@ func TestFetchShowStat(t *testing.T) {
 		t.Error("expected non-empty stat output")
 	}
 	// Should contain the commit message and file change summary.
-	if !contains(stat, "third feature commit") {
+	if !strings.Contains(stat, "third feature commit") {
 		t.Errorf("stat should contain commit message, got:\n%s", stat)
 	}
 }
@@ -158,7 +158,7 @@ func TestFetchDiff(t *testing.T) {
 		t.Error("expected non-empty diff")
 	}
 	// The diff should mention the files added in the feature commits.
-	if !contains(diff, "file0.txt") {
+	if !strings.Contains(diff, "file0.txt") {
 		t.Errorf("diff should contain file0.txt, got:\n%s", diff)
 	}
 }
@@ -169,11 +169,11 @@ func TestFetchDiff_Uncommitted(t *testing.T) {
 	// Create an uncommitted change.
 	os.WriteFile(filepath.Join(wt, "file0.txt"), []byte("modified\n"), 0644)
 
-	diff, err := fetchDiff(wt, "uncommitted", "")
+	diff, err := fetchDiff(wt, UncommittedRef, "")
 	if err != nil {
 		t.Fatalf("fetchDiff uncommitted: %v", err)
 	}
-	if !contains(diff, "modified") {
+	if !strings.Contains(diff, "modified") {
 		t.Errorf("uncommitted diff should contain 'modified', got:\n%s", diff)
 	}
 }
@@ -215,18 +215,4 @@ func TestHasUncommittedChanges_UntrackedFile(t *testing.T) {
 	if !has {
 		t.Error("expected uncommitted changes with untracked file")
 	}
-}
-
-// contains is a test helper for substring matching.
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && containsSubstr(s, substr)
-}
-
-func containsSubstr(s, substr string) bool {
-	for i := 0; i+len(substr) <= len(s); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }
