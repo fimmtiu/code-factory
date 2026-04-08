@@ -54,7 +54,11 @@ func Parse(raw string) []File {
 	sections := splitDiffSections(raw)
 	files := make([]File, 0, len(sections))
 	for _, section := range sections {
-		files = append(files, parseFileSection(section))
+		f := parseFileSection(section)
+		if f.Name == "" {
+			continue
+		}
+		files = append(files, f)
 	}
 	return files
 }
