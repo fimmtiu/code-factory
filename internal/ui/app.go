@@ -168,6 +168,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.dialog = NewTicketDialog(m.db, msg.wu, m.width, m.height)
 		return m, nil
 
+	case openPhasePickerMsg:
+		m.dialog = NewPhasePickerDialog(m.db, msg.wu)
+		return m, nil
+
 	case openQuickResponseMsg:
 		// If the worker has a structured permission request pending, show the
 		// options chooser; otherwise fall back to the free-text input.

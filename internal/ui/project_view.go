@@ -363,6 +363,9 @@ func (v ProjectView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case projectDescriptionSavedMsg:
 		return v, v.fetchCmd()
 
+	case phaseSetMsg:
+		return v, v.fetchCmd()
+
 	case tea.KeyMsg:
 		switch v.focus {
 		case focusTree:
@@ -417,6 +420,8 @@ func (v ProjectView) updateTreeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return v.openTerminal()
 	case "e", "E":
 		return v.openEditor()
+	case "p", "P":
+		return v.openPhasePicker()
 	case "/":
 		v.filtering = true
 		return v, nil
@@ -465,6 +470,18 @@ func (v ProjectView) openTicketDialog() (tea.Model, tea.Cmd) {
 		return v, nil
 	}
 	return v, func() tea.Msg { return openTicketDialogMsg{wu: wu} }
+}
+
+func (v ProjectView) openPhasePicker() (tea.Model, tea.Cmd) {
+	nodes := v.filteredTreeNodes()
+	if len(nodes) == 0 {
+		return v, nil
+	}
+	wu := nodes[v.treeSelected].wu
+	if wu.IsProject || (wu.Status != models.StatusIdle && wu.Status != models.StatusUserReview) {
+		return v, nil
+	}
+	return v, func() tea.Msg { return openPhasePickerMsg{wu: wu} }
 }
 
 func (v ProjectView) openTerminal() (tea.Model, tea.Cmd) {
@@ -894,6 +911,7 @@ func (v ProjectView) KeyBindings() []KeyBinding {
 		{Key: "Enter", Description: "Open ticket dialog (tickets only)"},
 		{Key: "T", Description: "Open terminal in work unit worktree"},
 		{Key: "E", Description: "Edit work unit description"},
+		{Key: "P", Description: "Set phase (idle tickets only)"},
 		{Key: "/", Description: "Filter tree by substring"},
 	}
 }
