@@ -33,4 +33,3 @@ func TestMainToWorkerKindConstants(t *testing.T) {
 		t.Errorf("MsgResponse = %q, want %q", MsgResponse, "response")
 	}
 }
-

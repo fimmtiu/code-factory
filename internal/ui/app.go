@@ -48,7 +48,7 @@ type Model struct {
 	height int
 
 	activeView ViewID
-	views      [4]viewModel
+	views      [5]viewModel
 
 	dialog        dialog // nil when no dialog is open
 	editorWaiting bool   // true while a blocking editor is open
@@ -71,11 +71,12 @@ func NewModel(pool *worker.Pool, database *db.DB, waitSecs int) Model {
 		pool:       pool,
 		db:         database,
 		activeView: ViewProject,
-		views: [4]viewModel{
+		views: [5]viewModel{
 			ViewProject: NewProjectView(database, waitSecs),
 			ViewCommand: NewCommandView(database, pool, waitSecs),
 			ViewWorker:  NewWorkerView(pool),
 			ViewLog:     NewLogView(database),
+			ViewDiffs:   NewDiffView(),
 		},
 	}
 }
@@ -227,6 +228,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "f4":
 			m.activeView = ViewLog
 			return m, func() tea.Msg { return logActivatedMsg{} }
+		case "f5":
+			m.activeView = ViewDiffs
+			return m, nil
 
 		case "shift+tab":
 			m.activeView = nextView(m.activeView)
@@ -394,12 +398,13 @@ func (m Model) View() string {
 
 // renderHeader returns the tab bar showing the active view.
 func (m Model) renderHeader() string {
-	tabs := make([]string, 4)
+	tabs := make([]string, 5)
 	for i, name := range []string{
 		viewNames[ViewProject],
 		viewNames[ViewCommand],
 		viewNames[ViewWorker],
 		viewNames[ViewLog],
+		viewNames[ViewDiffs],
 	} {
 		label := name
 		switch ViewID(i) {
@@ -411,6 +416,8 @@ func (m Model) renderHeader() string {
 			label = "F3:" + name
 		case ViewLog:
 			label = "F4:" + name
+		case ViewDiffs:
+			label = "F5:" + name
 		}
 		if ViewID(i) == m.activeView {
 			tabs[i] = activeTabStyle.Render(label)
