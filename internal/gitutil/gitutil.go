@@ -19,6 +19,13 @@ type GitClient interface {
 	// GetHeadCommit returns the abbreviated HEAD commit hash for the git
 	// repository rooted at path.
 	GetHeadCommit(path string) (string, error)
+	// GetCurrentBranch returns the name of the branch currently checked out
+	// at the given path.
+	GetCurrentBranch(path string) (string, error)
+	// RebaseOnto rebases the branch checked out at worktreeDir onto
+	// ontoBranch. If the rebase fails (e.g. conflicts), it is aborted so
+	// the worktree is left in its original state.
+	RebaseOnto(worktreeDir, ontoBranch string) error
 }
 
 // RealGitClient implements GitClient using actual git commands.
@@ -96,6 +103,22 @@ func (g *RealGitClient) MergeBranch(worktreeDir, fromBranch string) error {
 // repository at path.
 func (g *RealGitClient) GetHeadCommit(path string) (string, error) {
 	return runGitOutput("-C", path, "rev-parse", "--short", "HEAD")
+}
+
+// GetCurrentBranch returns the name of the branch currently checked out at path.
+func (g *RealGitClient) GetCurrentBranch(path string) (string, error) {
+	return runGitOutput("-C", path, "rev-parse", "--abbrev-ref", "HEAD")
+}
+
+// RebaseOnto rebases the branch checked out at worktreeDir onto ontoBranch.
+// If the rebase fails (e.g. due to conflicts), the rebase is aborted so the
+// worktree is left in its original state.
+func (g *RealGitClient) RebaseOnto(worktreeDir, ontoBranch string) error {
+	if err := runGit("-C", worktreeDir, "rebase", ontoBranch); err != nil {
+		_ = runGit("-C", worktreeDir, "rebase", "--abort")
+		return err
+	}
+	return nil
 }
 
 // RemoveWorktree removes the linked worktree at worktreePath and deletes its

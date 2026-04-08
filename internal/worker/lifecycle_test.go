@@ -15,15 +15,6 @@ import (
 
 // --- Test DB helpers ---
 
-type fakeGitClient struct{}
-
-func (f *fakeGitClient) CreateWorktree(_, worktreePath, _ string) error { return nil }
-func (f *fakeGitClient) MergeBranch(_, _ string) error                  { return nil }
-func (f *fakeGitClient) RemoveWorktree(_, _, _ string) error            { return nil }
-func (f *fakeGitClient) GetHeadCommit(_ string) (string, error)         { return "", nil }
-
-var _ gitutil.GitClient = (*fakeGitClient)(nil)
-
 func openTestDB(t *testing.T) (*db.DB, string) {
 	t.Helper()
 	dir := t.TempDir()
@@ -31,7 +22,7 @@ func openTestDB(t *testing.T) (*db.DB, string) {
 	if err != nil {
 		t.Fatalf("db.Open: %v", err)
 	}
-	d.SetGitClient(&fakeGitClient{})
+	d.SetGitClient(&gitutil.FakeGitClient{})
 	t.Cleanup(func() { d.Close() })
 	return d, dir
 }

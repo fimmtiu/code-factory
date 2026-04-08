@@ -11,33 +11,17 @@ import (
 	"github.com/fimmtiu/code-factory/internal/models"
 )
 
-// fakeGitClient implements gitutil.GitClient without invoking real git.
-// It records the worktree paths passed to CreateWorktree.
-type fakeGitClient struct {
-	worktreesCreated []string
-}
-
-func (f *fakeGitClient) CreateWorktree(_, worktreePath, _ string) error {
-	f.worktreesCreated = append(f.worktreesCreated, worktreePath)
-	return nil
-}
-func (f *fakeGitClient) MergeBranch(_, _ string) error          { return nil }
-func (f *fakeGitClient) RemoveWorktree(_, _, _ string) error    { return nil }
-func (f *fakeGitClient) GetHeadCommit(_ string) (string, error) { return "", nil }
-
-var _ gitutil.GitClient = (*fakeGitClient)(nil) // compile-time interface check
-
 // openTestDB creates a temporary directory, opens a fresh DB in it, and
 // injects a fake git client so tests don't require a real git repository.
 // It returns the DB handle, the ticketsDir path, and the fake client.
-func openTestDB(t *testing.T) (*db.DB, string, *fakeGitClient) {
+func openTestDB(t *testing.T) (*db.DB, string, *gitutil.FakeGitClient) {
 	t.Helper()
 	dir := t.TempDir()
 	d, err := db.Open(dir, dir)
 	if err != nil {
 		t.Fatalf("db.Open: %v", err)
 	}
-	git := &fakeGitClient{}
+	git := &gitutil.FakeGitClient{}
 	d.SetGitClient(git)
 	t.Cleanup(func() { d.Close() })
 	return d, dir, git
@@ -93,12 +77,12 @@ func TestCreateProject_CreatesWorktree(t *testing.T) {
 		t.Fatalf("CreateProject: %v", err)
 	}
 
-	if len(git.worktreesCreated) != 1 {
-		t.Fatalf("expected 1 worktree created, got %d", len(git.worktreesCreated))
+	if len(git.WorktreesCreated) != 1 {
+		t.Fatalf("expected 1 worktree created, got %d", len(git.WorktreesCreated))
 	}
 	want := filepath.Join(ticketsDir, "my-proj", "worktree")
-	if git.worktreesCreated[0] != want {
-		t.Errorf("worktree path: got %q, want %q", git.worktreesCreated[0], want)
+	if git.WorktreesCreated[0] != want {
+		t.Errorf("worktree path: got %q, want %q", git.WorktreesCreated[0], want)
 	}
 }
 
@@ -110,16 +94,16 @@ func TestCreateProject_EachSubprojectGetsOwnWorktree(t *testing.T) {
 		}
 	}
 
-	if len(git.worktreesCreated) != 2 {
-		t.Fatalf("expected 2 worktrees created, got %d", len(git.worktreesCreated))
+	if len(git.WorktreesCreated) != 2 {
+		t.Fatalf("expected 2 worktrees created, got %d", len(git.WorktreesCreated))
 	}
 	wantPaths := []string{
 		filepath.Join(ticketsDir, "proj", "worktree"),
 		filepath.Join(ticketsDir, "proj", "sub", "worktree"),
 	}
 	for i, want := range wantPaths {
-		if git.worktreesCreated[i] != want {
-			t.Errorf("worktree[%d]: got %q, want %q", i, git.worktreesCreated[i], want)
+		if git.WorktreesCreated[i] != want {
+			t.Errorf("worktree[%d]: got %q, want %q", i, git.WorktreesCreated[i], want)
 		}
 	}
 }

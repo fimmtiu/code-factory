@@ -557,6 +557,28 @@ func (d *DB) SetStatus(identifier string, phase models.TicketPhase, status model
 	})
 }
 
+// RebaseTicketOnParent rebases the ticket's worktree branch onto the current
+// HEAD of its parent's branch. For tickets under a project, this is the
+// project's worktree branch; for top-level tickets, it is whatever branch is
+// checked out at the repo root (typically main). This pulls in work from
+// sibling tickets that have already been merged into the parent.
+func (d *DB) RebaseTicketOnParent(identifier, parentIdentifier string) error {
+	worktreePath := d.worktreePath(identifier)
+
+	var ontoBranch string
+	if parentIdentifier != "" {
+		ontoBranch = strings.ReplaceAll(parentIdentifier, "/", "_")
+	} else {
+		branch, err := d.git.GetCurrentBranch(d.repoRoot)
+		if err != nil {
+			return fmt.Errorf("rebase: detect default branch: %w", err)
+		}
+		ontoBranch = branch
+	}
+
+	return d.git.RebaseOnto(worktreePath, ontoBranch)
+}
+
 // markTicketDone merges the ticket's branch into the parent project's worktree
 // (or repoRoot if there is no parent), updates the DB, and removes the worktree.
 func (d *DB) markTicketDone(ticketID int64, identifier string, projectID sql.NullInt64) error {

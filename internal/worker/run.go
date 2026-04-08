@@ -59,6 +59,14 @@ func (w *Worker) processTicket(ctx context.Context, ticket *models.WorkUnit) {
 
 	w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("claimed ticket %s", identifier))
 
+	// At the start of the implement phase, rebase onto the parent branch so
+	// the ticket sees work from sibling tickets that have already been merged.
+	if ticket.Phase == models.PhaseImplement {
+		if err := w.database.RebaseTicketOnParent(identifier, ticket.Parent); err != nil {
+			w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("warning: rebase failed for %s, continuing on stale base: %v", identifier, err))
+		}
+	}
+
 	worktreePath := storage.TicketWorktreePathIn(w.ticketsDir, identifier)
 	logfilePath := NextLogfilePath(w.ticketsDir, identifier, string(ticket.Phase))
 

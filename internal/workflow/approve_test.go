@@ -9,16 +9,6 @@ import (
 	"github.com/fimmtiu/code-factory/internal/workflow"
 )
 
-// fakeGitClient implements gitutil.GitClient without invoking real git.
-type fakeGitClient struct{}
-
-func (f *fakeGitClient) CreateWorktree(_, _, _ string) error    { return nil }
-func (f *fakeGitClient) MergeBranch(_, _ string) error          { return nil }
-func (f *fakeGitClient) RemoveWorktree(_, _, _ string) error    { return nil }
-func (f *fakeGitClient) GetHeadCommit(_ string) (string, error) { return "", nil }
-
-var _ gitutil.GitClient = (*fakeGitClient)(nil)
-
 // openTestDB creates a temporary in-memory-like DB for testing.
 func openTestDB(t *testing.T) *db.DB {
 	t.Helper()
@@ -27,7 +17,7 @@ func openTestDB(t *testing.T) *db.DB {
 	if err != nil {
 		t.Fatalf("db.Open: %v", err)
 	}
-	d.SetGitClient(&fakeGitClient{})
+	d.SetGitClient(&gitutil.FakeGitClient{})
 	t.Cleanup(func() { d.Close() })
 	return d
 }

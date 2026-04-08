@@ -8,15 +8,8 @@ import (
 	"testing"
 
 	"github.com/fimmtiu/code-factory/internal/db"
+	"github.com/fimmtiu/code-factory/internal/gitutil"
 )
-
-// noopGitClient implements gitutil.GitClient without invoking real git.
-type noopGitClient struct{}
-
-func (noopGitClient) CreateWorktree(_, _, _ string) error    { return nil }
-func (noopGitClient) MergeBranch(_, _ string) error          { return nil }
-func (noopGitClient) RemoveWorktree(_, _, _ string) error    { return nil }
-func (noopGitClient) GetHeadCommit(_ string) (string, error) { return "", nil }
 
 // openTestDB creates a temporary directory and opens a fresh DB in it,
 // with a no-op git client so tests don't require a real git repository.
@@ -27,7 +20,7 @@ func openTestDB(t *testing.T) *db.DB {
 	if err != nil {
 		t.Fatalf("openTestDB: %v", err)
 	}
-	d.SetGitClient(noopGitClient{})
+	d.SetGitClient(&gitutil.FakeGitClient{})
 	t.Cleanup(func() { d.Close() })
 	return d
 }
