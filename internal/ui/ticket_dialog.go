@@ -102,7 +102,7 @@ func (it tdItem) selectable() bool {
 
 var (
 	tdSelectedStyle  = lipgloss.NewStyle().Background(colourPrimary).Foreground(colourOnPrimary)
-	tdDismissedStyle = lipgloss.NewStyle().Foreground(colourMuted)
+	tdDismissedStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
 	tdClosedStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("22"))
 	tdSectionStyle   = lipgloss.NewStyle().Bold(true)
 )
