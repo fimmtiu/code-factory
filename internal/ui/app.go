@@ -161,7 +161,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case openMergeConflictDialogMsg:
-		m.dialog = NewMergeConflictDialog(msg.worktreePath)
+		m.dialog = NewMergeConflictDialog(msg.worktreePath, msg.branch)
 		return m, nil
 
 	case openTicketDialogMsg:

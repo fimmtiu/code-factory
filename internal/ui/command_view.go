@@ -43,6 +43,7 @@ type commandRefreshMsg struct {
 
 type openMergeConflictDialogMsg struct {
 	worktreePath string
+	branch       string
 }
 
 type respondToAgentDoneMsg struct {
@@ -182,7 +183,7 @@ func (v CommandView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			var mergeErr *db.MergeConflictError
 			if errors.As(msg.err, &mergeErr) {
 				return v, func() tea.Msg {
-					return openMergeConflictDialogMsg{worktreePath: mergeErr.WorktreePath}
+					return openMergeConflictDialogMsg{worktreePath: mergeErr.WorktreePath, branch: mergeErr.Branch}
 				}
 			}
 			v.errorMsg = fmt.Sprintf("approve error: %s", msg.err)

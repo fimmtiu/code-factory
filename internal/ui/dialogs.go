@@ -181,11 +181,12 @@ const (
 // terminal in the conflicted worktree so the user can resolve the conflict.
 type MergeConflictDialog struct {
 	worktreePath string
+	branch       string
 	focused      mergeConflictFocused
 }
 
-func NewMergeConflictDialog(worktreePath string) MergeConflictDialog {
-	return MergeConflictDialog{worktreePath: worktreePath, focused: mergeFocusFix}
+func NewMergeConflictDialog(worktreePath, branch string) MergeConflictDialog {
+	return MergeConflictDialog{worktreePath: worktreePath, branch: branch, focused: mergeFocusFix}
 }
 
 func (d MergeConflictDialog) Init() tea.Cmd { return nil }
@@ -223,7 +224,7 @@ func (d MergeConflictDialog) View() string {
 
 	body := lipgloss.JoinVertical(lipgloss.Left,
 		dialogTitleStyle.Render("Merge Conflict"),
-		"A merge failed in:",
+		"Merging "+detailLabelStyle.Render(d.branch)+" failed in:",
 		detailLabelStyle.Render(d.worktreePath),
 		"",
 		"Resolve the conflict, then try approving again.",

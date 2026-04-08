@@ -27,6 +27,7 @@ const (
 // exists so the UI can offer to open a terminal there.
 type MergeConflictError struct {
 	WorktreePath string
+	Branch       string
 	Err          error
 }
 
@@ -568,7 +569,7 @@ func (d *DB) markTicketDone(ticketID int64, identifier string, projectID sql.Nul
 	}
 
 	if err := d.git.MergeBranch(mergeTarget, identifier); err != nil {
-		return &MergeConflictError{WorktreePath: mergeTarget, Err: err}
+		return &MergeConflictError{WorktreePath: mergeTarget, Branch: identifier, Err: err}
 	}
 
 	if err := d.withTx(func(tx *sql.Tx) error {
@@ -1092,7 +1093,7 @@ func (d *DB) SetProjectPhase(identifier, phase string) error {
 			}
 		}
 		if err := d.git.MergeBranch(mergeTarget, identifier); err != nil {
-			return &MergeConflictError{WorktreePath: mergeTarget, Err: err}
+			return &MergeConflictError{WorktreePath: mergeTarget, Branch: identifier, Err: err}
 		}
 	}
 

@@ -31,7 +31,7 @@ Before starting, run through ALL of the following steps in order:
    git diff --stat BRANCHPOINT
    ```
    If there's no output, tell the user "No changes found on this branch" and stop.
-6. **What does it do?**: Examine the commit messages between HEAD and BRANCHPOINT and generate a summary of what you think the branch does. Ask the user whether your guess is correct; if not, prompt them to provide a short description. Store the result as `PURPOSE`.
+6. **What does it do?**: Examine the commit messages between HEAD and BRANCHPOINT and generate a summary of what you think the branch does. Store the result as `PURPOSE`.
 
 ## Running the Phases
 
