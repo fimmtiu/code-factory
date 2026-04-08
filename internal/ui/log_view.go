@@ -249,8 +249,10 @@ func (v LogView) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return v.openLogfile()
 	case "c", "C":
 		return v.copyLogfilePath()
-	case "g", "G":
-		return v.gitDiff()
+	case "g":
+		return v.terminalGitDiff()
+	case "G":
+		return v.githubCompare()
 	case "/":
 		v.filtering = true
 		return v, nil
@@ -319,9 +321,7 @@ func (v LogView) openLogfile() (tea.Model, tea.Cmd) {
 	})
 }
 
-// gitDiff opens a GitHub compare page or terminal git diff for the ticket
-// associated with the selected log entry's logfile.
-func (v LogView) gitDiff() (tea.Model, tea.Cmd) {
+func (v LogView) terminalGitDiff() (tea.Model, tea.Cmd) {
 	entry := v.selectedEntry()
 	if entry == nil || entry.Logfile == "" {
 		return v, nil
@@ -330,7 +330,20 @@ func (v LogView) gitDiff() (tea.Model, tea.Cmd) {
 	if identifier == "" {
 		return v, nil
 	}
-	openGitDiff(identifier)
+	openTerminalGitDiff(identifier)
+	return v, nil
+}
+
+func (v LogView) githubCompare() (tea.Model, tea.Cmd) {
+	entry := v.selectedEntry()
+	if entry == nil || entry.Logfile == "" {
+		return v, nil
+	}
+	identifier := identifierFromLogfile(entry.Logfile)
+	if identifier == "" {
+		return v, nil
+	}
+	openGitHubCompare(identifier)
 	return v, nil
 }
 
@@ -492,7 +505,8 @@ func (v LogView) KeyBindings() []KeyBinding {
 		{Key: "PgUp/PgDn", Description: "Page navigate"},
 		{Key: "E", Description: "Open logfile in $EDITOR"},
 		{Key: "C", Description: "Copy logfile path to clipboard"},
-		{Key: "G", Description: "Open git diff (GitHub compare or terminal)"},
+		{Key: "g", Description: "Open git diff in terminal"},
+		{Key: "G", Description: "Open GitHub compare page", Hidden: !isGitHubRepo()},
 		{Key: "/", Description: "Filter entries by substring"},
 	}
 }

@@ -146,6 +146,9 @@ func (d HelpDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (d HelpDialog) View() string {
 	var sb strings.Builder
 	for _, kb := range d.bindings {
+		if kb.Hidden {
+			continue
+		}
 		if kb.Key == "" {
 			sb.WriteString("\n")
 			continue

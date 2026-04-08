@@ -1,9 +1,11 @@
 package ui
 
 // KeyBinding associates a key name with a human-readable description.
+// When Hidden is true, the binding is omitted from the help dialog.
 type KeyBinding struct {
 	Key         string
 	Description string
+	Hidden      bool
 }
 
 // globalKeyBindings are the key bindings that apply in every view.

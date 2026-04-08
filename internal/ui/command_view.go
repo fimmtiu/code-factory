@@ -244,8 +244,10 @@ func (v CommandView) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return v.openEditorNonblocking()
 	case "a", "A":
 		return v.approveTicket()
-	case "g", "G":
-		return v.gitDiff()
+	case "g":
+		return v.terminalGitDiff()
+	case "G":
+		return v.githubCompare()
 	case "d", "D":
 		return v.debugPrompt()
 	}
@@ -624,12 +626,21 @@ func (v CommandView) renderRow(wu *models.WorkUnit, selected bool) string {
 	return line
 }
 
-func (v CommandView) gitDiff() (tea.Model, tea.Cmd) {
+func (v CommandView) terminalGitDiff() (tea.Model, tea.Cmd) {
 	wu := v.selectedTicket()
 	if wu == nil {
 		return v, nil
 	}
-	openGitDiff(wu.Identifier)
+	openTerminalGitDiff(wu.Identifier)
+	return v, nil
+}
+
+func (v CommandView) githubCompare() (tea.Model, tea.Cmd) {
+	wu := v.selectedTicket()
+	if wu == nil {
+		return v, nil
+	}
+	openGitHubCompare(wu.Identifier)
 	return v, nil
 }
 
@@ -740,6 +751,7 @@ func (v CommandView) KeyBindings() []KeyBinding {
 		{Key: "T", Description: "Open terminal in worktree"},
 		{Key: "E", Description: "Open worktree in Cursor"},
 		{Key: "A", Description: "Approve ticket (user-review tickets)"},
-		{Key: "G", Description: "Open git diff (GitHub compare or terminal)"},
+		{Key: "g", Description: "Open git diff in terminal"},
+		{Key: "G", Description: "Open GitHub compare page", Hidden: !isGitHubRepo()},
 	}
 }

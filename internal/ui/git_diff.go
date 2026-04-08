@@ -4,43 +4,57 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/fimmtiu/code-factory/internal/storage"
 )
 
-// openGitDiff opens a GitHub compare page if the repo's origin remote is on
-// github.com, otherwise opens a terminal in the worktree and runs git diff
-// against the fork point.
-func openGitDiff(identifier string) {
+// openTerminalGitDiff opens a terminal in the ticket's worktree and runs
+// git diff against the fork point of the default branch.
+func openTerminalGitDiff(identifier string) {
 	worktreePath, err := storage.WorktreePathForIdentifier(identifier)
 	if err != nil {
 		return
 	}
-
-	// Determine the default branch (main or master).
 	defaultBranch := detectDefaultBranch(worktreePath)
+	diffCmd := "git diff $(git merge-base --fork-point '" + defaultBranch + "')"
+	_ = openTerminalWithCommand(worktreePath, diffCmd)
+}
 
-	// Get the current branch name in the worktree.
+// openGitHubCompare opens a GitHub compare page for the ticket's branch
+// against the default branch.
+func openGitHubCompare(identifier string) {
+	worktreePath, err := storage.WorktreePathForIdentifier(identifier)
+	if err != nil {
+		return
+	}
+	defaultBranch := detectDefaultBranch(worktreePath)
 	branchName, err := gitOutput(worktreePath, "branch", "--show-current")
 	if err != nil || branchName == "" {
 		return
 	}
-
-	// Check if origin is a GitHub remote.
-	originURL, err := gitOutput(worktreePath, "remote", "get-url", "origin")
-	if err == nil && strings.Contains(originURL, "github.com") {
-		repo := extractGitHubRepo(originURL)
-		if repo != "" {
-			url := "https://github.com/" + repo + "/compare/" + defaultBranch + "..." + branchName
-			_ = exec.Command("open", url).Start()
-			return
-		}
+	originURL, _ := gitOutput(worktreePath, "remote", "get-url", "origin")
+	repo := extractGitHubRepo(originURL)
+	if repo == "" {
+		return
 	}
-
-	// Fallback: open a terminal in the worktree and run git diff against the fork point.
-	diffCmd := "git diff $(git merge-base --fork-point '" + defaultBranch + "')"
-	_ = openTerminalWithCommand(worktreePath, diffCmd)
+	url := "https://github.com/" + repo + "/compare/" + defaultBranch + "..." + branchName
+	_ = exec.Command("open", url).Start()
 }
+
+// isGitHubRepo returns true if the repository's origin remote points to
+// github.com. The result is computed once and cached.
+var isGitHubRepo = sync.OnceValue(func() bool {
+	repoRoot, err := storage.FindRepoRoot(".")
+	if err != nil {
+		return false
+	}
+	originURL, err := gitOutput(repoRoot, "remote", "get-url", "origin")
+	if err != nil {
+		return false
+	}
+	return strings.Contains(originURL, "github.com")
+})
 
 // openTerminalWithCommand opens iTerm2 in dir and runs cmd.
 func openTerminalWithCommand(dir, cmd string) error {
