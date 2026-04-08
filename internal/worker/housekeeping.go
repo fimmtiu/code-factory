@@ -47,7 +47,13 @@ func releaseStaleTickets(pool *Pool, database *db.DB, logCh chan<- LogMessage, t
 	now := time.Now()
 	for _, ticket := range tickets {
 		logfile := LatestLogfilePath(ticketsDir, ticket.Identifier, string(ticket.Phase))
-		if !IsLogfileStale(logfile, now) {
+		if logfile == "" {
+			// No logfile for this phase yet (the worker may have just started
+			// and not created the file). Fall back to the DB timestamp.
+			if now.Sub(ticket.LastUpdated) < staleThreshold {
+				continue
+			}
+		} else if !IsLogfileStale(logfile, now) {
 			continue
 		}
 
@@ -68,7 +74,7 @@ func releaseStaleTickets(pool *Pool, database *db.DB, logCh chan<- LogMessage, t
 	}
 }
 
-// isLogfileStale returns true if the logfile is missing or has not been
+// IsLogfileStale returns true if the logfile is missing or has not been
 // modified within staleThreshold of now.
 func IsLogfileStale(logfile string, now time.Time) bool {
 	if logfile == "" {
