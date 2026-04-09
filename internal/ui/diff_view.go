@@ -742,7 +742,7 @@ func (v DiffView) KeyBindings() []KeyBinding {
 // The root model calls this instead of inspecting DiffView internals.
 func (v DiffView) HintPairs() []string {
 	if v.viewer != nil {
-		return []string{"↑/↓", "scroll", "PgUp/Dn", "page", "Tab/Esc/Enter", "back"}
+		return []string{"↑/↓", "scroll", "PgUp/Dn", "page", "C", "collapse/expand", "Tab/Esc/Enter", "back"}
 	}
 	return []string{"↑/↓", "navigate", "PgUp/Dn", "page", "Shift+↑/↓", "extend range", "Tab", "view diff"}
 }

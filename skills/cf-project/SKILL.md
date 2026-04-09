@@ -23,6 +23,7 @@ Terminology for the `tickets` system:
 
 ## The Job
 
+0. Run `tickets init` in the root directory of the git repository we're in
 1. Read the user-provided specification for the work to be done
 2. Divide the work into logical pieces, each with a short identifier (preferably less than 30 characters, following the identifier rules above). Each of these will become a Code Factory project.
 3. Collect all clarifying questions across all projects and present them to the user in a single batch (see "How to ask clarifying questions" below). Wait for answers before proceeding. If nothing is ambiguous, skip this step.

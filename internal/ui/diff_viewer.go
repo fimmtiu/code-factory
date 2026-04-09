@@ -35,6 +35,10 @@ type DiffViewerModel struct {
 	fileNames  []string
 	offset     int // first visible line in the viewer pane
 
+	// Collapse state: stored so we can re-render when the user toggles a file.
+	files     []diff.File
+	collapsed []bool
+
 	// Content-pane dimensions (excluding status bar, separator, and chrome).
 	// Set by DiffView on creation and resize via setSize.
 	paneWidth  int
@@ -48,6 +52,8 @@ func newDiffViewerModel(files []diff.File, paneWidth, paneHeight int) *DiffViewe
 	m := &DiffViewerModel{
 		paneWidth:  paneWidth,
 		paneHeight: paneHeight,
+		files:      files,
+		collapsed:  make([]bool, len(files)),
 	}
 
 	if len(files) == 0 {
@@ -58,7 +64,7 @@ func newDiffViewerModel(files []diff.File, paneWidth, paneHeight int) *DiffViewe
 	if w < 1 {
 		w = 1
 	}
-	rd := renderDiffResult(files, w)
+	rd := renderDiffResult(files, w, m.collapsed)
 	m.text = rd.text
 	m.fileStarts = rd.fileStarts
 	m.fileNames = fileNamesFromDiff(files)
@@ -128,6 +134,39 @@ func (m *DiffViewerModel) currentFileIndex() int {
 	return idx
 }
 
+// ── Collapse/expand ─────────────────────────────────────────────────────────
+
+// toggleCollapse toggles the collapsed state of the current file.
+// It is a no-op for files with no hunks to display.
+func (m *DiffViewerModel) toggleCollapse() {
+	idx := m.currentFileIndex()
+	if idx < 0 || idx >= len(m.files) {
+		return
+	}
+	if len(m.files[idx].Hunks) == 0 {
+		return
+	}
+	m.collapsed[idx] = !m.collapsed[idx]
+	m.rerender()
+	// Scroll to the toggled file's header so the user sees the change.
+	if idx < len(m.fileStarts) {
+		m.offset = m.fileStarts[idx]
+	}
+	m.clampScroll()
+}
+
+// rerender re-renders the diff text from the stored files and collapse state.
+func (m *DiffViewerModel) rerender() {
+	w := m.paneWidth - viewBorderOverhead
+	if w < 1 {
+		w = 1
+	}
+	rd := renderDiffResult(m.files, w, m.collapsed)
+	m.text = rd.text
+	m.fileStarts = rd.fileStarts
+	m.clampScroll()
+}
+
 // ── Left-truncation ──────────────────────────────────────────────────────────
 
 // leftTruncateFilename truncates a filename from the left with an ellipsis
@@ -171,6 +210,8 @@ func (m *DiffViewerModel) handleKey(msg tea.KeyMsg) tea.Cmd {
 		m.scrollUp(m.paneHeight)
 	case "pgdown", " ":
 		m.scrollDown(m.paneHeight)
+	case "c", "C":
+		m.toggleCollapse()
 	}
 	return nil
 }
@@ -247,6 +288,7 @@ func (m *DiffViewerModel) KeyBindings() []KeyBinding {
 	return []KeyBinding{
 		{Key: "↑/↓", Description: "Scroll"},
 		{Key: "PgUp/PgDn", Description: "Page scroll"},
+		{Key: "C", Description: "Collapse/expand file"},
 		{Key: "Tab/Esc/Enter", Description: "Back to selector"},
 	}
 }

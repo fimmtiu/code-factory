@@ -595,3 +595,74 @@ func TestViewerStatusBarWidth(t *testing.T) {
 		t.Errorf("first status bar line width %d, expected ~80", firstLineWidth)
 	}
 }
+
+// ── Collapse/expand tests ───────────────────────────────────────────────────
+
+// TestToggleCollapse_HidesHunkContent verifies that toggling collapse hides
+// the hunk content and reduces the total line count.
+func TestToggleCollapse_HidesHunkContent(t *testing.T) {
+	m := makeViewerModel(sampleFiles(), 80, 24)
+	totalBefore := m.totalLines()
+	if totalBefore == 0 {
+		t.Fatal("expected non-zero total lines before collapse")
+	}
+
+	m.toggleCollapse() // collapse first file
+	totalAfter := m.totalLines()
+	if totalAfter >= totalBefore {
+		t.Errorf("expected fewer lines after collapse: before=%d, after=%d", totalBefore, totalAfter)
+	}
+
+	// The rendered text should contain the ▶ indicator.
+	if !strings.Contains(m.text, "▶") {
+		t.Error("expected ▶ indicator in collapsed output")
+	}
+}
+
+// TestToggleCollapse_ExpandRestoresContent verifies that toggling twice
+// restores the original content.
+func TestToggleCollapse_ExpandRestoresContent(t *testing.T) {
+	m := makeViewerModel(sampleFiles(), 80, 24)
+	totalBefore := m.totalLines()
+
+	m.toggleCollapse() // collapse
+	m.toggleCollapse() // expand
+	totalAfter := m.totalLines()
+	if totalAfter != totalBefore {
+		t.Errorf("expected same lines after expand: before=%d, after=%d", totalBefore, totalAfter)
+	}
+}
+
+// TestToggleCollapse_NoOpForHunklessFile verifies collapse is a no-op for
+// files with no hunks (e.g., binary, deleted).
+func TestToggleCollapse_NoOpForHunklessFile(t *testing.T) {
+	files := []diff.File{
+		{Name: "binary.dat", Type: diff.Binary},
+	}
+	m := makeViewerModel(files, 80, 24)
+	totalBefore := m.totalLines()
+
+	m.toggleCollapse()
+	if m.totalLines() != totalBefore {
+		t.Errorf("expected no change for hunkless file: before=%d, after=%d", totalBefore, m.totalLines())
+	}
+	if m.collapsed[0] {
+		t.Error("expected collapsed to remain false for hunkless file")
+	}
+}
+
+// TestToggleCollapse_IndicatorPrefix verifies that all file headers have the
+// ▽ indicator by default.
+func TestToggleCollapse_IndicatorPrefix(t *testing.T) {
+	m := makeViewerModel(sampleFiles(), 80, 24)
+	lines := strings.Split(m.text, "\n")
+	found := 0
+	for _, line := range lines {
+		if strings.Contains(line, "▽") {
+			found++
+		}
+	}
+	if found != len(sampleFiles()) {
+		t.Errorf("expected %d ▽ indicators, found %d", len(sampleFiles()), found)
+	}
+}

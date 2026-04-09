@@ -476,7 +476,7 @@ func TestFileStartLines(t *testing.T) {
 		},
 	}
 
-	rd := renderDiffResult(files, 60)
+	rd := renderDiffResult(files, 60, nil)
 	rendered := rd.text
 	starts := rd.fileStarts
 
@@ -518,7 +518,7 @@ func TestFileStartLines(t *testing.T) {
 
 // TestFileStartLines_Empty handles empty input.
 func TestFileStartLines_Empty(t *testing.T) {
-	starts := renderDiffResult(nil, 60).fileStarts
+	starts := renderDiffResult(nil, 60, nil).fileStarts
 	if len(starts) != 0 {
 		t.Errorf("expected empty slice, got %v", starts)
 	}

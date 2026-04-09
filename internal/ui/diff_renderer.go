@@ -31,12 +31,13 @@ type renderedDiff struct {
 // controls the full-width background padding for hunk headers and
 // added/removed lines.
 func renderDiff(files []diff.File, paneWidth int) string {
-	return renderDiffResult(files, paneWidth).text
+	return renderDiffResult(files, paneWidth, nil).text
 }
 
 // renderDiffResult is the full-featured renderer that returns both the
-// formatted text and per-file start offsets.
-func renderDiffResult(files []diff.File, paneWidth int) renderedDiff {
+// formatted text and per-file start offsets. collapsed controls per-file
+// collapse state; nil means all expanded.
+func renderDiffResult(files []diff.File, paneWidth int, collapsed []bool) renderedDiff {
 	if len(files) == 0 {
 		return renderedDiff{}
 	}
@@ -45,13 +46,23 @@ func renderDiffResult(files []diff.File, paneWidth int) renderedDiff {
 	lineCount := 0 // tracks the current line number in the output
 	fileStarts := make([]int, 0, len(files))
 
-	for _, f := range files {
+	for i, f := range files {
+		isCollapsed := len(collapsed) > i && collapsed[i]
 		fileStarts = append(fileStarts, lineCount)
 		sb.WriteString("\n") // blank line before each file (including the first)
 		lineCount++
-		sb.WriteString(diffFileHeaderStyle.Render(f.Name + ":"))
+
+		indicator := "▽ "
+		if isCollapsed {
+			indicator = "▶ "
+		}
+		sb.WriteString(diffFileHeaderStyle.Render(indicator + f.Name + ":"))
 		sb.WriteString("\n")
 		lineCount++
+
+		if isCollapsed {
+			continue
+		}
 
 		switch f.Type {
 		case diff.Binary:
