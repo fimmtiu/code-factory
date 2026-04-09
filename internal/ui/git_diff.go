@@ -9,18 +9,6 @@ import (
 	"github.com/fimmtiu/code-factory/internal/storage"
 )
 
-// openTerminalGitDiff opens a terminal in the ticket's worktree and runs
-// git diff against the fork point of the default branch.
-func openTerminalGitDiff(identifier string) {
-	worktreePath, err := storage.WorktreePathForIdentifier(identifier)
-	if err != nil {
-		return
-	}
-	defaultBranch := detectDefaultBranch(worktreePath)
-	diffCmd := "git diff $(git merge-base --fork-point '" + defaultBranch + "')"
-	_ = openTerminalWithCommand(worktreePath, diffCmd)
-}
-
 // openGitHubCompare opens a GitHub compare page for the ticket's branch
 // against the default branch.
 func openGitHubCompare(identifier string) {
@@ -122,6 +110,23 @@ func identifierFromLogfile(logfile string) string {
 	for i, p := range parts {
 		if p == ".tickets" && i+3 < len(parts) {
 			return parts[i+1] + "/" + parts[i+2]
+		}
+	}
+	return ""
+}
+
+// phaseFromLogfile extracts the phase name from a logfile path.
+// Logfiles live at .tickets/<project>/<ticket>/<phase>.log (optionally
+// numbered as <phase>.log.N), so the phase is the filename base before ".log".
+func phaseFromLogfile(logfile string) string {
+	parts := strings.Split(filepath.ToSlash(logfile), "/")
+	for i, p := range parts {
+		if p == ".tickets" && i+3 < len(parts) {
+			filename := parts[i+3]
+			// Strip ".log" or ".log.N" suffix to get the phase.
+			if idx := strings.Index(filename, ".log"); idx > 0 {
+				return filename[:idx]
+			}
 		}
 	}
 	return ""

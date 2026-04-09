@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -10,8 +11,18 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/fimmtiu/code-factory/internal/db"
+	"github.com/fimmtiu/code-factory/internal/storage"
 	"github.com/fimmtiu/code-factory/internal/worker"
 )
+
+// ── Messages ─────────────────────────────────────────────────────────────────
+
+// openDiffViewMsg is emitted by CommandView and LogView when the user presses
+// 'g' to open the diff viewer for a ticket.
+type openDiffViewMsg struct {
+	identifier string
+	phase      string
+}
 
 // ── Styles ───────────────────────────────────────────────────────────────────
 
@@ -196,6 +207,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, func() tea.Msg { return msg.result }
 		}
 		return m, nil
+
+	case openDiffViewMsg:
+		dv := m.views[ViewDiff].(DiffView)
+		dv.identifier = msg.identifier
+		dv.phase = msg.phase
+		dv.cursor = 0
+		dv.anchor = 0
+		dv.viewer = nil
+		wp, err := storage.WorktreePathForIdentifier(msg.identifier)
+		if err != nil {
+			dv.errorMsg = fmt.Sprintf("worktree error: %s", err)
+			dv.worktreePath = ""
+			m.views[ViewDiff] = dv
+			m.activeView = ViewDiff
+			return m, nil
+		}
+		dv.errorMsg = ""
+		dv.worktreePath = wp
+		m.views[ViewDiff] = dv
+		m.activeView = ViewDiff
+		return m, fetchCommitsCmd(wp)
 
 	case tea.KeyMsg:
 		if m.editorWaiting {
