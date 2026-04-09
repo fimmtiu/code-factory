@@ -593,6 +593,44 @@ func TestParseGitLog_LimitsTo100(t *testing.T) {
 	}
 }
 
+// ── switchToDiffViewer guard tests ────────────────────────────────────────────
+
+// TestSwitchToDiffViewer_AllSeparators returns nil cmd when all rows are separators.
+func TestSwitchToDiffViewer_AllSeparators(t *testing.T) {
+	v := DiffView{
+		rows: []commitRow{
+			{separator: true},
+			{separator: true},
+		},
+		width:  80,
+		height: 24,
+		cursor: 0,
+		anchor: 1,
+	}
+	_, cmd := v.switchToDiffViewer()
+	if cmd != nil {
+		t.Error("expected nil cmd when all rows in selection are separators")
+	}
+}
+
+// TestSwitchToDiffViewer_ValidSelection returns a non-nil cmd for valid commits.
+func TestSwitchToDiffViewer_ValidSelection(t *testing.T) {
+	v := DiffView{
+		rows: []commitRow{
+			{commit: makeCommit("aaaa", "first")},
+			{commit: makeCommit("bbbb", "second")},
+		},
+		width:  80,
+		height: 24,
+		cursor: 0,
+		anchor: 1,
+	}
+	_, cmd := v.switchToDiffViewer()
+	if cmd == nil {
+		t.Error("expected non-nil cmd for valid commit selection")
+	}
+}
+
 // ── Error display tests ──────────────────────────────────────────────────────
 
 // TestRenderStatusBar_WithError verifies the error is shown in the status bar.

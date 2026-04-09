@@ -566,6 +566,10 @@ func (v DiffView) switchToDiffViewer() (tea.Model, tea.Cmd) {
 			break
 		}
 	}
+	// Guard: if no non-separator commits were found, do nothing.
+	if startC.Hash == "" || endC.Hash == "" {
+		return v, nil
+	}
 	return v, func() tea.Msg {
 		return switchToDiffViewerMsg{startCommit: startC, endCommit: endC}
 	}
