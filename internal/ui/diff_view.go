@@ -73,7 +73,8 @@ type switchToDiffViewerMsg struct {
 
 // DiffView implements the Diffs view (F5). It has two sub-screens:
 // a commit selector (two-pane layout) and a diff viewer (scrollable diff).
-// The viewerActive flag controls which sub-screen is shown.
+// When viewer is non-nil, the viewer sub-screen is shown; otherwise, the
+// commit selector is shown.
 type DiffView struct {
 	width  int
 	height int
