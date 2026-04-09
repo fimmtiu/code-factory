@@ -243,7 +243,7 @@ func resolveDependencyID(tx *sql.Tx, identifier string) (int, int64, error) {
 }
 
 // Status returns all work units (projects and tickets) with their dependencies
-// and comment threads populated.
+// and change requests populated.
 func (d *DB) Status() ([]*models.WorkUnit, error) {
 	projectByID, err := d.loadProjects()
 	if err != nil {
