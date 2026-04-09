@@ -420,6 +420,8 @@ func (v ProjectView) updateTreeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return v.openTerminal()
 	case "e", "E":
 		return v.openEditor()
+	case "g", "G":
+		return v.openDiffView()
 	case "p", "P":
 		return v.openPhasePicker()
 	case "/":
@@ -456,6 +458,8 @@ func (v ProjectView) updateDetailKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return v.openTerminal()
 	case "e", "E":
 		return v.openEditor()
+	case "g", "G":
+		return v.openDiffView()
 	}
 	return v, nil
 }
@@ -496,6 +500,19 @@ func (v ProjectView) openTerminal() (tea.Model, tea.Cmd) {
 	}
 	_ = util.OpenTerminal(dir)
 	return v, nil
+}
+
+func (v ProjectView) openDiffView() (tea.Model, tea.Cmd) {
+	nodes := v.filteredTreeNodes()
+	if len(nodes) == 0 {
+		return v, nil
+	}
+	wu := nodes[v.treeSelected].wu
+	identifier := wu.Identifier
+	phase := string(wu.Phase)
+	return v, func() tea.Msg {
+		return openDiffViewMsg{identifier: identifier, phase: phase}
+	}
 }
 
 func (v ProjectView) openEditor() (tea.Model, tea.Cmd) {
@@ -911,6 +928,7 @@ func (v ProjectView) KeyBindings() []KeyBinding {
 		{Key: "Enter", Description: "Open ticket dialog (tickets only)"},
 		{Key: "T", Description: "Open terminal in work unit worktree"},
 		{Key: "E", Description: "Edit work unit description"},
+		{Key: "G", Description: "View diff"},
 		{Key: "P", Description: "Set phase (idle tickets only)"},
 		{Key: "/", Description: "Filter tree by substring"},
 	}

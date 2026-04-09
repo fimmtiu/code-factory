@@ -15,8 +15,8 @@ import (
 
 // ── Messages ─────────────────────────────────────────────────────────────────
 
-// openDiffViewMsg is emitted by CommandView and LogView when the user presses
-// 'g' to open the diff viewer for a ticket.
+// openDiffViewMsg is emitted by ProjectView, CommandView, and LogView when the
+// user presses 'g' to open the diff viewer for a work unit.
 type openDiffViewMsg struct {
 	identifier string
 	phase      string
