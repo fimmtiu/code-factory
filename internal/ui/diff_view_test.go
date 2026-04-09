@@ -656,7 +656,7 @@ func TestRenderStatusBar_WithError(t *testing.T) {
 		height:     24,
 		errorMsg:   "worktree error: path not found",
 	}
-	bar := v.renderStatusBar()
+	bar := v.renderStatusBar(v.width)
 	if !strings.Contains(bar, "worktree error: path not found") {
 		t.Errorf("status bar should contain error message, got %q", bar)
 	}
@@ -680,14 +680,14 @@ func TestRenderStatusBar_ErrorClearedOnSuccess(t *testing.T) {
 		}, -1, false),
 	}
 	// Verify error is shown initially.
-	bar := v.renderStatusBar()
+	bar := v.renderStatusBar(v.width)
 	if !strings.Contains(bar, "worktree error") {
 		t.Error("expected error in status bar initially")
 	}
 
 	// Clear the error and verify it's gone.
 	v.errorMsg = ""
-	bar = v.renderStatusBar()
+	bar = v.renderStatusBar(v.width)
 	if strings.Contains(bar, "worktree error") {
 		t.Error("expected error to be cleared from status bar")
 	}
@@ -711,7 +711,7 @@ func TestRenderStatusBar(t *testing.T) {
 			makeCommit("aaaa", "one"),
 		}, -1, false),
 	}
-	bar := v.renderStatusBar()
+	bar := v.renderStatusBar(v.width)
 	if !strings.Contains(bar, "project/ticket-1") {
 		t.Errorf("status bar should contain identifier, got %q", bar)
 	}
@@ -738,7 +738,7 @@ func TestRenderStatusBar_Range(t *testing.T) {
 			makeCommit("cccc", "three"),
 		}, -1, false),
 	}
-	bar := v.renderStatusBar()
+	bar := v.renderStatusBar(v.width)
 	if !strings.Contains(bar, "3 commit(s) selected") {
 		t.Errorf("status bar should show 3 selected, got %q", bar)
 	}
@@ -750,7 +750,7 @@ func TestRenderStatusBar_Range(t *testing.T) {
 func TestCommitListHeight(t *testing.T) {
 	v := DiffView{width: 80, height: 24}
 	h := v.commitListHeight()
-	// height - chromeHeight - statusBarHeight(1) - separator(1) - viewBorderOverhead
+	// height - chromeHeight - statusBarHeight(1) - statusBarBorderHeight(1) - viewBorderOverhead
 	expected := 24 - chromeHeight - 1 - 1 - viewBorderOverhead
 	if h != expected {
 		t.Errorf("commitListHeight: got %d, want %d", h, expected)

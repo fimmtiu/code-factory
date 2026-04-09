@@ -36,4 +36,11 @@ var (
 	// diffSeparatorStyle renders the fork-point separator line.
 	diffSeparatorStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("245")) // medium grey
+
+	// diffStatusBarStyle wraps the status bar with a three-sided blue border
+	// (top, left, right — no bottom) so it sits flush against the panes below.
+	diffStatusBarStyle = lipgloss.NewStyle().
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(lipgloss.Color("12")).
+				BorderBottom(false)
 )

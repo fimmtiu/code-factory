@@ -14,12 +14,12 @@ import (
 // maxCommits is the maximum number of commits shown in the selector.
 const maxCommits = 100
 
-// statusBarHeight is the number of lines consumed by the status bar and its
-// horizontal separator.
+// statusBarHeight is the number of content lines in the selector status bar.
 const statusBarHeight = 1
 
-// separatorLineHeight is the line separating the status bar from the panes.
-const separatorLineHeight = 1
+// statusBarBorderHeight is the top border line of the status bar, which
+// replaces the old horizontal separator between the status bar and panes.
+const statusBarBorderHeight = 1
 
 // ── Data types ───────────────────────────────────────────────────────────────
 
@@ -181,7 +181,7 @@ func (v DiffView) rightPaneWidth() int {
 
 // commitListHeight returns the number of visible rows in the commit list body.
 func (v DiffView) commitListHeight() int {
-	h := v.height - chromeHeight - statusBarHeight - separatorLineHeight - viewBorderOverhead
+	h := v.height - chromeHeight - statusBarHeight - statusBarBorderHeight - viewBorderOverhead
 	if h < 1 {
 		h = 1
 	}
@@ -191,7 +191,7 @@ func (v DiffView) commitListHeight() int {
 // viewerPaneHeight returns the content-pane height available to the viewer,
 // after accounting for the app chrome, viewer status bar, and separator.
 func (v DiffView) viewerPaneHeight() int {
-	h := v.height - chromeHeight - viewerStatusBarHeight - separatorLineHeight - viewBorderOverhead
+	h := v.height - chromeHeight - viewerStatusBarHeight - statusBarBorderHeight - viewBorderOverhead
 	if h < 1 {
 		h = 1
 	}
@@ -549,10 +549,11 @@ func (v DiffView) switchToDiffViewer() (tea.Model, tea.Cmd) {
 
 func (v DiffView) View() string {
 	if v.viewer != nil {
-		statusBar := renderViewerStatusBar(v.width, v.identifier, v.phase, v.viewer)
-		separator := strings.Repeat("─", v.width)
-		pane := v.viewer.renderPane()
-		return lipgloss.JoinVertical(lipgloss.Left, statusBar, separator, pane)
+		innerW := v.width - viewBorderOverhead
+		statusBar := renderViewerStatusBar(innerW, v.identifier, v.phase, v.viewer)
+		styledBar := diffStatusBarStyle.Width(innerW).Render(statusBar)
+		pane := connectPaneTop(v.viewer.renderPane(), true, true)
+		return lipgloss.JoinVertical(lipgloss.Left, styledBar, pane)
 	}
 
 	if v.identifier == "" {
@@ -566,25 +567,46 @@ func (v DiffView) View() string {
 				emptyStateStyle.Render("No ticket selected")))
 	}
 
-	statusBar := v.renderStatusBar()
-	separator := strings.Repeat("─", v.width)
-	leftPane := v.renderLeftPane()
-	rightPane := v.renderRightPane()
+	innerW := v.width - viewBorderOverhead
+	statusBar := v.renderStatusBar(innerW)
+	styledBar := diffStatusBarStyle.Width(innerW).Render(statusBar)
+	leftPane := connectPaneTop(v.renderLeftPane(), true, false)
+	rightPane := connectPaneTop(v.renderRightPane(), false, true)
 	panes := lipgloss.JoinHorizontal(lipgloss.Top, leftPane, rightPane)
 
-	return lipgloss.JoinVertical(lipgloss.Left, statusBar, separator, panes)
+	return lipgloss.JoinVertical(lipgloss.Left, styledBar, panes)
+}
+
+// connectPaneTop replaces the top-left and/or top-right rounded corners of a
+// bordered pane with T-junctions so the pane visually connects to the status
+// bar border directly above it.
+func connectPaneTop(rendered string, left, right bool) string {
+	lines := strings.SplitN(rendered, "\n", 2)
+	if len(lines) == 0 {
+		return rendered
+	}
+	if left {
+		lines[0] = strings.Replace(lines[0], "╭", "├", 1)
+	}
+	if right {
+		if idx := strings.LastIndex(lines[0], "╮"); idx >= 0 {
+			lines[0] = lines[0][:idx] + "┤" + lines[0][idx+len("╮"):]
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 // diffErrorStyle renders error messages in the diff view status bar.
 var diffErrorStyle = lipgloss.NewStyle().Foreground(colourDanger)
 
 // renderStatusBar renders the status bar with ticket info and selection count.
-func (v DiffView) renderStatusBar() string {
+// width is the inner content width (excluding border overhead).
+func (v DiffView) renderStatusBar(width int) string {
 	left := fmt.Sprintf("Ticket: %s (%s)", v.identifier, v.phase)
 
 	if v.errorMsg != "" {
 		errText := diffErrorStyle.Render(v.errorMsg)
-		spacer := v.width - lipgloss.Width(left) - lipgloss.Width(errText)
+		spacer := width - lipgloss.Width(left) - lipgloss.Width(errText)
 		if spacer < 2 {
 			spacer = 2
 		}
@@ -593,7 +615,7 @@ func (v DiffView) renderStatusBar() string {
 
 	right := fmt.Sprintf("%d commit(s) selected", v.selectedCount())
 
-	spacer := v.width - lipgloss.Width(left) - lipgloss.Width(right)
+	spacer := width - lipgloss.Width(left) - lipgloss.Width(right)
 	if spacer < 2 {
 		spacer = 2
 	}
