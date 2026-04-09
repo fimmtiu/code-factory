@@ -990,6 +990,24 @@ func (d *DB) UpdateChangeRequestDescription(id int64, description string) error 
 	})
 }
 
+// AppendChangeRequestDescription appends text to the description of the
+// change request with the given id, separated by a newline and "---" divider.
+func (d *DB) AppendChangeRequestDescription(id int64, text string) error {
+	return d.withTx(func(tx *sql.Tx) error {
+		var current string
+		err := tx.QueryRow(`SELECT description FROM change_requests WHERE id = ?`, id).Scan(&current)
+		if err == sql.ErrNoRows {
+			return fmt.Errorf("change request %d not found", id)
+		}
+		if err != nil {
+			return err
+		}
+		updated := current + "\n\n---\n" + text
+		_, err = tx.Exec(`UPDATE change_requests SET description = ? WHERE id = ?`, updated, id)
+		return err
+	})
+}
+
 const maxLogEntries = 200
 
 // InsertLog inserts a log entry with the current timestamp and prunes entries
