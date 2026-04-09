@@ -307,7 +307,7 @@ func (m Model) View() string {
 			if pv, ok := m.views[ViewProject].(ProjectView); ok && pv.filtering {
 				rightPairs = []string{"Esc", "clear filter"}
 			} else {
-				rightPairs = []string{"E", "edit", "T", "open terminal", "Tab", "switch", "Enter", "view", "/", "filter"}
+				rightPairs = []string{"E", "edit", "g", "git-diff", "T", "open terminal", "Tab", "switch", "Enter", "view", "/", "filter"}
 			}
 		case ViewCommand:
 			rightPairs = []string{"A", "approve", "g", "git-diff"}
