@@ -109,9 +109,10 @@ func renderHunk(sb *strings.Builder, h diff.Hunk, paneWidth int) int {
 	if h.Context != "" {
 		header += " " + h.Context
 	}
-	sb.WriteString(padToWidth(diffHunkHeaderStyle, header, paneWidth))
+	styled, n := padToWidth(diffHunkHeaderStyle, header, paneWidth)
+	sb.WriteString(styled)
 	sb.WriteString("\n")
-	lines++
+	lines += n
 
 	// Determine the line-number column width from the max line number in this hunk.
 	maxLineNum := h.NewStart + h.NewCount
@@ -125,33 +126,67 @@ func renderHunk(sb *strings.Builder, h diff.Hunk, paneWidth int) int {
 			// Blank line-number space, then content with pink background.
 			prefix := strings.Repeat(" ", numWidth) + " "
 			content := prefix + text
-			sb.WriteString(padToWidth(diffRemovedStyle, content, paneWidth))
+			styled, n := padToWidth(diffRemovedStyle, content, paneWidth)
+			sb.WriteString(styled)
+			lines += n
 		case diff.LineAdded:
 			// Line number on the left, then content with green background.
 			prefix := fmt.Sprintf("%*d ", numWidth, lineNum)
 			content := prefix + text
-			sb.WriteString(padToWidth(diffAddedStyle, content, paneWidth))
+			styled, n := padToWidth(diffAddedStyle, content, paneWidth)
+			sb.WriteString(styled)
+			lines += n
 			lineNum++
 		case diff.LineContext:
 			// Line number on the left, plain text (no background).
 			prefix := fmt.Sprintf("%*d ", numWidth, lineNum)
 			sb.WriteString(prefix + text)
+			lines++
 			lineNum++
 		}
 		sb.WriteString("\n")
-		lines++
 	}
 	return lines
 }
 
 // padToWidth pads text with spaces to fill paneWidth, then applies the style.
-// This ensures background colours extend to the full pane width.
-func padToWidth(style lipgloss.Style, text string, paneWidth int) string {
-	textWidth := lipgloss.Width(text)
-	if textWidth < paneWidth {
-		text += strings.Repeat(" ", paneWidth-textWidth)
+// If the text is wider than paneWidth, it wraps into multiple lines so that
+// background colours extend to the full pane width on every visual line.
+// Returns the styled text and the number of visual lines it occupies.
+func padToWidth(style lipgloss.Style, text string, paneWidth int) (string, int) {
+	if paneWidth <= 0 {
+		return style.Render(text), 1
 	}
-	return style.Render(text)
+	textWidth := lipgloss.Width(text)
+	if textWidth <= paneWidth {
+		if textWidth < paneWidth {
+			text += strings.Repeat(" ", paneWidth-textWidth)
+		}
+		return style.Render(text), 1
+	}
+	// Text is wider than the pane: wrap into multiple lines, each padded
+	// to paneWidth, so the background colour fills every visual line.
+	var parts []string
+	runes := []rune(text)
+	for len(runes) > 0 {
+		end := 0
+		for end < len(runes) {
+			if lipgloss.Width(string(runes[:end+1])) > paneWidth {
+				break
+			}
+			end++
+		}
+		if end == 0 {
+			end = 1 // at least one rune per line
+		}
+		chunk := string(runes[:end])
+		runes = runes[end:]
+		if w := lipgloss.Width(chunk); w < paneWidth {
+			chunk += strings.Repeat(" ", paneWidth-w)
+		}
+		parts = append(parts, style.Render(chunk))
+	}
+	return strings.Join(parts, "\n"), len(parts)
 }
 
 // digitCount returns the number of decimal digits in n.
