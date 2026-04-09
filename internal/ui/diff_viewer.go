@@ -169,7 +169,7 @@ func (m *DiffViewerModel) handleKey(msg tea.KeyMsg) tea.Cmd {
 		m.scrollDown(1)
 	case "pgup":
 		m.scrollUp(m.paneHeight)
-	case "pgdown":
+	case "pgdown", " ":
 		m.scrollDown(m.paneHeight)
 	}
 	return nil

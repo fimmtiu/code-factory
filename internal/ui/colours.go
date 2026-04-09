@@ -14,8 +14,8 @@ var (
 
 	// Diff view colours.
 	colourDiffHunkHeader = lipgloss.Color("159") // light blue — @@ hunk headers
-	colourDiffAdded      = lipgloss.Color("156") // green — added lines
-	colourDiffRemoved    = lipgloss.Color("219") // pink — removed lines
+	colourDiffAdded      = lipgloss.Color("194") // green — added lines
+	colourDiffRemoved    = lipgloss.Color("224") // pink — removed lines
 	colourDiffDeleted    = lipgloss.Color("52")  // dark red — "Deleted" file message
 	colourDiffRenamed    = lipgloss.Color("18")  // blue — "Renamed to" file message
 )
