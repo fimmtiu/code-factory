@@ -1030,20 +1030,23 @@ func (d *DB) FindInProgressTickets() ([]*models.WorkUnit, error) {
 	var tickets []*models.WorkUnit
 	for rows.Next() {
 		var identifier, description, phase, status string
-		var claimedBy sql.NullString
+		var claimedBy sql.NullInt64
 		var lastUpdated int64
 		if err := rows.Scan(&identifier, &description, &phase, &status, &claimedBy, &lastUpdated); err != nil {
 			return nil, fmt.Errorf("scan in-progress ticket: %w", err)
 		}
-		tickets = append(tickets, &models.WorkUnit{
+		wu := &models.WorkUnit{
 			Identifier:  identifier,
 			Description: description,
 			Phase:       models.TicketPhase(phase),
 			Status:      models.TicketStatus(status),
-			ClaimedBy:   claimedBy.String,
 			LastUpdated: time.Unix(lastUpdated, 0),
 			IsProject:   false,
-		})
+		}
+		if claimedBy.Valid {
+			wu.ClaimedBy = strconv.FormatInt(claimedBy.Int64, 10)
+		}
+		tickets = append(tickets, wu)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("scan in-progress tickets: %w", err)
