@@ -1152,6 +1152,110 @@ func (d *DB) ActionableTickets() ([]*models.WorkUnit, error) {
 	return tickets, nil
 }
 
+// GetTicket returns a single ticket by identifier with its dependencies and
+// change requests populated. It is more efficient than Status() when only one
+// ticket is needed.
+func (d *DB) GetTicket(identifier string) (*models.WorkUnit, error) {
+	var id int64
+	var description, phase, status string
+	var claimedBy sql.NullInt64
+	var lastUpdated int64
+	var projectID sql.NullInt64
+	err := d.db.QueryRow(
+		`SELECT id, description, phase, status, claimed_by, last_updated, project_id
+		 FROM tickets WHERE identifier = ?`, identifier,
+	).Scan(&id, &description, &phase, &status, &claimedBy, &lastUpdated, &projectID)
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("ticket %q not found", identifier)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get ticket: %w", err)
+	}
+
+	wu := &models.WorkUnit{
+		Identifier:   identifier,
+		Description:  description,
+		Phase:        models.TicketPhase(phase),
+		Status:       models.TicketStatus(status),
+		IsProject:    false,
+		LastUpdated:  time.Unix(lastUpdated, 0),
+		Dependencies: []string{},
+	}
+	if claimedBy.Valid {
+		wu.ClaimedBy = strconv.FormatInt(claimedBy.Int64, 10)
+	}
+	if projectID.Valid {
+		var parentIdent string
+		err := d.db.QueryRow(`SELECT identifier FROM projects WHERE id = ?`, projectID.Int64).Scan(&parentIdent)
+		if err == nil {
+			wu.Parent = parentIdent
+		}
+	}
+
+	// Load dependencies for this ticket.
+	depRows, err := d.db.Query(
+		`SELECT dependency_type, dependency_id FROM dependencies
+		 WHERE work_unit_type = ? AND work_unit_id = ?`,
+		workUnitTypeTicket, id,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("get ticket dependencies: %w", err)
+	}
+	defer depRows.Close()
+	for depRows.Next() {
+		var depType, depID int64
+		if err := depRows.Scan(&depType, &depID); err != nil {
+			return nil, fmt.Errorf("scan ticket dependency: %w", err)
+		}
+		var depIdentifier string
+		switch depType {
+		case workUnitTypeTicket:
+			err = d.db.QueryRow(`SELECT identifier FROM tickets WHERE id = ?`, depID).Scan(&depIdentifier)
+		case workUnitTypeProject:
+			err = d.db.QueryRow(`SELECT identifier FROM projects WHERE id = ?`, depID).Scan(&depIdentifier)
+		}
+		if err == nil && depIdentifier != "" {
+			wu.Dependencies = append(wu.Dependencies, depIdentifier)
+		}
+	}
+	if err := depRows.Err(); err != nil {
+		return nil, fmt.Errorf("scan ticket dependencies: %w", err)
+	}
+
+	// Load change requests for this ticket.
+	crRows, err := d.db.Query(
+		`SELECT id, filename, line_number, commit_hash, status, date, author, description
+		 FROM change_requests WHERE ticket_id = ? ORDER BY date ASC`, id,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("get ticket change requests: %w", err)
+	}
+	defer crRows.Close()
+	for crRows.Next() {
+		var crID int64
+		var filename, commitHash, cstatus, author, crDescription string
+		var lineNumber int
+		var date int64
+		if err := crRows.Scan(&crID, &filename, &lineNumber, &commitHash, &cstatus, &date, &author, &crDescription); err != nil {
+			return nil, fmt.Errorf("scan ticket change request: %w", err)
+		}
+		wu.ChangeRequests = append(wu.ChangeRequests, models.ChangeRequest{
+			ID:           strconv.FormatInt(crID, 10),
+			CommitHash:   commitHash,
+			CodeLocation: fmt.Sprintf("%s:%d", filename, lineNumber),
+			Status:       cstatus,
+			Date:         time.Unix(date, 0),
+			Author:       author,
+			Description:  crDescription,
+		})
+	}
+	if err := crRows.Err(); err != nil {
+		return nil, fmt.Errorf("scan ticket change requests: %w", err)
+	}
+
+	return wu, nil
+}
+
 // GetTicketPhase returns the current phase of the ticket with the given
 // identifier, or an error if it is not found.
 func (d *DB) GetTicketPhase(identifier string) (models.TicketPhase, error) {

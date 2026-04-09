@@ -355,16 +355,11 @@ func (v CommandView) openQuickResponseDialog(wu *models.WorkUnit) (tea.Model, te
 	identifier := wu.Identifier
 	return v, func() tea.Msg {
 		// Fetch fresh work unit so ClaimedBy is current.
-		units, err := database.Status()
+		fresh, err := database.GetTicket(identifier)
 		if err != nil {
 			return openQuickResponseMsg{wu: wu}
 		}
-		for _, u := range units {
-			if u.Identifier == identifier && !u.IsProject {
-				return openQuickResponseMsg{wu: u}
-			}
-		}
-		return openQuickResponseMsg{wu: wu}
+		return openQuickResponseMsg{wu: fresh}
 	}
 }
 
@@ -463,16 +458,11 @@ func (v CommandView) openTicketDialog() (tea.Model, tea.Cmd) {
 	database := v.database
 	identifier := wu.Identifier
 	return v, func() tea.Msg {
-		units, err := database.Status()
+		fresh, err := database.GetTicket(identifier)
 		if err != nil {
 			return nil
 		}
-		for _, u := range units {
-			if u.Identifier == identifier && !u.IsProject {
-				return openTicketDialogMsg{wu: u}
-			}
-		}
-		return nil
+		return openTicketDialogMsg{wu: fresh}
 	}
 }
 

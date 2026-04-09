@@ -299,3 +299,59 @@ func TestActionableTickets_ReturnsOnlyActionable(t *testing.T) {
 		t.Errorf("expected second ticket status user-review, got %q", tickets[1].Status)
 	}
 }
+
+func TestGetTicket_ReturnsSingleTicket(t *testing.T) {
+	d, _, _ := openTestDB(t)
+	if err := d.CreateProject("proj", "A project", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj/dep", "A dependency", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj/ticket", "A ticket", []string{"proj/dep"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.SetStatus("proj/ticket", "implement", "in-progress"); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.AddChangeRequest("proj/ticket", "main.go:42", "alice", "fix this"); err != nil {
+		t.Fatal(err)
+	}
+
+	wu, err := d.GetTicket("proj/ticket")
+	if err != nil {
+		t.Fatalf("GetTicket: %v", err)
+	}
+	if wu.Identifier != "proj/ticket" {
+		t.Errorf("expected identifier proj/ticket, got %q", wu.Identifier)
+	}
+	if wu.Description != "A ticket" {
+		t.Errorf("expected description 'A ticket', got %q", wu.Description)
+	}
+	if wu.Status != "in-progress" {
+		t.Errorf("expected status in-progress, got %q", wu.Status)
+	}
+	if wu.IsProject {
+		t.Error("expected IsProject to be false")
+	}
+	if wu.Parent != "proj" {
+		t.Errorf("expected parent proj, got %q", wu.Parent)
+	}
+	if len(wu.Dependencies) != 1 || wu.Dependencies[0] != "proj/dep" {
+		t.Errorf("expected dependencies [proj/dep], got %v", wu.Dependencies)
+	}
+	if len(wu.ChangeRequests) != 1 {
+		t.Fatalf("expected 1 change request, got %d", len(wu.ChangeRequests))
+	}
+	if wu.ChangeRequests[0].Author != "alice" {
+		t.Errorf("expected change request author alice, got %q", wu.ChangeRequests[0].Author)
+	}
+}
+
+func TestGetTicket_NotFound(t *testing.T) {
+	d, _, _ := openTestDB(t)
+	_, err := d.GetTicket("nonexistent")
+	if err == nil {
+		t.Fatal("expected error for nonexistent ticket")
+	}
+}
