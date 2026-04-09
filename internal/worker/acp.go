@@ -257,6 +257,37 @@ func (c *acpWorkerClient) WaitForTerminalExit(_ context.Context, _ acp.WaitForTe
 // Ensure acpWorkerClient satisfies the acp.Client interface at compile time.
 var _ acp.Client = (*acpWorkerClient)(nil)
 
+// awaitPromptCompletion waits for either the ACP prompt to complete or the
+// subprocess to exit. If the subprocess exits before the prompt completes, it
+// returns an error — even if the exit status is zero — because the ACP
+// protocol requires a prompt response before the session ends. When both
+// channels are ready simultaneously, the prompt result is preferred.
+func awaitPromptCompletion(promptCh <-chan error, waitCh <-chan error) (err error, procExited bool) {
+	select {
+	case promptErr := <-promptCh:
+		if promptErr != nil {
+			return fmt.Errorf("ACP prompt: %w", promptErr), false
+		}
+		return nil, false
+	case procErr := <-waitCh:
+		// The process exited first. Check whether the prompt also
+		// completed (the two channels may have raced).
+		select {
+		case promptErr := <-promptCh:
+			if promptErr != nil {
+				return fmt.Errorf("ACP prompt: %w", promptErr), true
+			}
+			return nil, true
+		default:
+		}
+		// Subprocess died before the prompt completed.
+		if procErr != nil {
+			return fmt.Errorf("ACP subprocess exited before prompt completed: %w", procErr), true
+		}
+		return fmt.Errorf("ACP subprocess exited before prompt completed"), true
+	}
+}
+
 // runACP launches Claude Code as an ACP subprocess in the ticket's worktree
 // directory, sends the prompt, and streams all output to the logfile.
 // It returns after the prompt completes or the context is cancelled.
@@ -360,14 +391,7 @@ func runACP(
 		waitCh <- cmd.Wait()
 	}()
 
-	// Whichever finishes first unblocks us.
-	var promptErr error
-	var procExited bool
-	select {
-	case promptErr = <-promptCh:
-	case <-waitCh:
-		procExited = true
-	}
+	resultErr, procExited := awaitPromptCompletion(promptCh, waitCh)
 
 	// Tear down the subprocess and its children.
 	_ = stdin.Close()
@@ -379,10 +403,7 @@ func runACP(
 		<-waitCh
 	}
 
-	if promptErr != nil {
-		return fmt.Errorf("ACP prompt: %w", promptErr)
-	}
-	return nil
+	return resultErr
 }
 
 // prefixWriter prepends a prefix string to every line written to the
