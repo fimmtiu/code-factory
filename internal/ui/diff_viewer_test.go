@@ -263,6 +263,36 @@ func TestLeftTruncateFilename_VerySmallWidth(t *testing.T) {
 	}
 }
 
+// TestLeftTruncateFilename_WidthOne returns the full ellipsis character.
+func TestLeftTruncateFilename_WidthOne(t *testing.T) {
+	result := leftTruncateFilename("internal/long/path.go", 1)
+	if result != "…" {
+		t.Errorf("expected full ellipsis for maxWidth=1, got %q", result)
+	}
+	// Verify it is valid UTF-8.
+	for i, r := range result {
+		if r == '\uFFFD' && i == 0 {
+			t.Error("result contains replacement character, indicating invalid UTF-8")
+		}
+	}
+}
+
+// TestLeftTruncateFilename_WidthZero returns empty string.
+func TestLeftTruncateFilename_WidthZero(t *testing.T) {
+	result := leftTruncateFilename("internal/long/path.go", 0)
+	if result != "" {
+		t.Errorf("expected empty string for maxWidth=0, got %q", result)
+	}
+}
+
+// TestLeftTruncateFilename_NegativeWidth returns empty string.
+func TestLeftTruncateFilename_NegativeWidth(t *testing.T) {
+	result := leftTruncateFilename("internal/long/path.go", -1)
+	if result != "" {
+		t.Errorf("expected empty string for negative maxWidth, got %q", result)
+	}
+}
+
 // ── Scroll navigation tests ─────────────────────────────────────────────────
 
 // TestViewerScrollDown verifies scrolling down by 1.

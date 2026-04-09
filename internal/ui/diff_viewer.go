@@ -129,12 +129,15 @@ func (v DiffView) currentFileIndex() int {
 // leftTruncateFilename truncates a filename from the left with an ellipsis
 // if it exceeds maxWidth runes.
 func leftTruncateFilename(name string, maxWidth int) string {
+	if maxWidth <= 0 {
+		return ""
+	}
 	runes := []rune(name)
 	if len(runes) <= maxWidth {
 		return name
 	}
-	if maxWidth <= 1 {
-		return "…"[:maxWidth]
+	if maxWidth == 1 {
+		return "…"
 	}
 	// Keep the rightmost (maxWidth-1) runes plus ellipsis.
 	return "…" + string(runes[len(runes)-(maxWidth-1):])
