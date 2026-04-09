@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -191,5 +192,49 @@ func TestSessionUpdate_EachEventUpdatesLastActivityAt(t *testing.T) {
 	t3 := w.GetLastActivityAt()
 	if t3.Before(t2) {
 		t.Error("LastActivityAt did not advance after message chunk")
+	}
+}
+
+// --- Partial line flushing ---
+
+func TestSessionUpdate_ToolCallFlushesPartialLine(t *testing.T) {
+	c, w := newTestClient()
+
+	// Stream a message chunk without a trailing newline.
+	_ = c.SessionUpdate(context.Background(), sessionNotification(
+		acp.UpdateAgentMessageText("some streaming text"),
+	))
+
+	// A tool call should start on its own line, not appended to the partial.
+	_ = c.SessionUpdate(context.Background(), sessionNotification(
+		acp.StartToolCall("call-1", "Bash", acp.WithStartStatus(acp.ToolCallStatusInProgress)),
+	))
+
+	output := w.GetLastOutput()
+	for _, line := range output {
+		if strings.Contains(line, "some streaming text") && strings.Contains(line, "[tool]") {
+			t.Errorf("tool call was appended to streaming text instead of starting a new line: %q", line)
+		}
+	}
+}
+
+func TestSessionUpdate_ToolCallUpdateFlushesPartialLine(t *testing.T) {
+	c, w := newTestClient()
+
+	// Stream a thought chunk without a trailing newline.
+	_ = c.SessionUpdate(context.Background(), sessionNotification(
+		acp.UpdateAgentThoughtText("considering..."),
+	))
+
+	// A tool-update should start on its own line.
+	_ = c.SessionUpdate(context.Background(), sessionNotification(
+		acp.UpdateToolCall("call-1", acp.WithUpdateStatus(acp.ToolCallStatusCompleted)),
+	))
+
+	output := w.GetLastOutput()
+	for _, line := range output {
+		if strings.Contains(line, "considering...") && strings.Contains(line, "[tool-update]") {
+			t.Errorf("tool-update was appended to streaming text instead of starting a new line: %q", line)
+		}
 	}
 }

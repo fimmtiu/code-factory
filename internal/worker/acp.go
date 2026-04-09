@@ -44,6 +44,18 @@ type dbInterface interface {
 	SetStatus(identifier string, phase models.TicketPhase, status models.TicketStatus) error
 }
 
+// flushPartialLine terminates any in-progress streaming text with a newline
+// so that subsequent structured lines (like [tool] or [tool-update]) start on
+// their own line in the logfile. Must be called without logMu held.
+func (c *acpWorkerClient) flushPartialLine() {
+	c.logMu.Lock()
+	needsFlush := c.partialLine != ""
+	c.logMu.Unlock()
+	if needsFlush {
+		c.appendOutput("\n")
+	}
+}
+
 // appendOutput writes text to the logfile and updates LastOutput on the worker.
 // Streaming text is accumulated in partialLine until a newline arrives, so the
 // display always shows full lines rather than individual streaming fragments.
@@ -108,6 +120,7 @@ func (c *acpWorkerClient) SessionUpdate(_ context.Context, params acp.SessionNot
 		} else {
 			c.w.SetActivity("tool: " + title)
 		}
+		c.flushPartialLine()
 		c.appendOutput(fmt.Sprintf("[tool] %s (%s)\n", title, u.ToolCall.Status))
 	case u.ToolCallUpdate != nil:
 		if u.ToolCallUpdate.Status != nil {
@@ -120,6 +133,7 @@ func (c *acpWorkerClient) SessionUpdate(_ context.Context, params acp.SessionNot
 		if u.ToolCallUpdate.Status != nil {
 			status = string(*u.ToolCallUpdate.Status)
 		}
+		c.flushPartialLine()
 		c.appendOutput(fmt.Sprintf("[tool-update] %s: %s\n", u.ToolCallUpdate.ToolCallId, status))
 	}
 	return nil
