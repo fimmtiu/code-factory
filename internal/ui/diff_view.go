@@ -682,10 +682,12 @@ func (v DiffView) renderRightPane() string {
 		content = emptyStateStyle.Render("(no preview)")
 	}
 
-	// Truncate lines to fit the pane width.
+	// Strip leading spaces (git --stat indents each line) and truncate
+	// to fit the pane width. Trimming avoids a first-line indent mismatch
+	// caused by lipgloss stripping leading whitespace from the first line.
 	lines := strings.Split(content, "\n")
 	for i, line := range lines {
-		lines[i] = truncateLine(line, w)
+		lines[i] = truncateLine(strings.TrimLeft(line, " "), w)
 	}
 	content = strings.Join(lines, "\n")
 
