@@ -23,7 +23,6 @@ const separatorLineHeight = 1
 
 // ── Data types ───────────────────────────────────────────────────────────────
 
-
 // commitRow represents one row in the commit list. If separator is true, the
 // row is a non-selectable divider above the fork-point commit (same pattern
 // as the CommandView separator between status groups).
