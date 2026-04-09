@@ -25,6 +25,12 @@ func HangingWorkFn(ctx context.Context, _ *Worker, _ dbInterface, _ chan<- LogMe
 	return ctx.Err()
 }
 
+// ErrorWorkFn is a WorkFn that returns an error immediately, simulating an
+// ACP subprocess failure.
+func ErrorWorkFn(_ context.Context, _ *Worker, _ dbInterface, _ chan<- LogMessage, _ WorkParams) error {
+	return fmt.Errorf("simulated ACP failure")
+}
+
 // mockScript is the sequence of output lines the mock worker emits.
 // The first batch is emitted before the needs-attention pause; the second
 // batch after the user responds.

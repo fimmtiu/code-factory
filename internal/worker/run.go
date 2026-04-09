@@ -93,9 +93,15 @@ func (w *Worker) processTicket(ctx context.Context, ticket *models.WorkUnit) {
 
 	if acpErr != nil {
 		w.logCh <- NewLogMessageWithFile(w.Number, fmt.Sprintf("ACP error on %s: %v", identifier, acpErr), logfilePath)
+		if err := w.database.SetStatus(identifier, ticket.Phase, models.StatusIdle); err != nil {
+			w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("error resetting %s after ACP error: %v", identifier, err))
+		}
+		w.releaseTicket(identifier)
+		w.Status = StatusIdle
+		return
 	}
-	w.logCh <- NewLogMessageWithFile(w.Number, fmt.Sprintf("completed processing ticket %s", identifier), logfilePath)
 
+	w.logCh <- NewLogMessageWithFile(w.Number, fmt.Sprintf("completed processing ticket %s", identifier), logfilePath)
 	if err := w.database.SetStatus(identifier, ticket.Phase, models.StatusUserReview); err != nil {
 		w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("error setting user-review on %s: %v", identifier, err))
 	}

@@ -143,6 +143,7 @@ func TestWorker_LogsClaimAndCompletion(t *testing.T) {
 	createTicket(t, d, "proj/ticket-1")
 
 	pool := worker.NewPool(1, 1)
+	pool.WorkFn = worker.NoopWorkFn
 	pool.Start(d, ticketsDir)
 
 	msgs := map[string]bool{}
@@ -174,6 +175,7 @@ func TestWorker_MultipleTickets(t *testing.T) {
 	createTicket(t, d, "proj/t2")
 
 	pool := worker.NewPool(1, 1)
+	pool.WorkFn = worker.NoopWorkFn
 	pool.Start(d, ticketsDir)
 
 	// Both tickets should be released.
@@ -617,4 +619,38 @@ func TestRecoverOrphanedTickets_NothingToRecover(t *testing.T) {
 	if count != 0 {
 		t.Errorf("expected 0 recovered tickets, got %d", count)
 	}
+}
+
+// --- WorkFn error handling ---
+
+func TestWorker_AcpError_DoesNotAdvanceToUserReview(t *testing.T) {
+	d, ticketsDir := openTestDB(t)
+	createProject(t, d, "proj")
+	createTicket(t, d, "proj/fail-ticket")
+
+	pool := worker.NewPool(1, 1)
+	pool.WorkFn = worker.ErrorWorkFn
+	pool.Start(d, ticketsDir)
+
+	// Wait for the error to be processed and the ticket released.
+	if !waitForLog(pool.LogChannel, "released ticket proj/fail-ticket", 5*time.Second) {
+		pool.Stop()
+		t.Fatal("ticket was not released within 5 seconds")
+	}
+	pool.Stop()
+
+	// The ticket must NOT have been advanced to user-review.
+	units, err := d.Status()
+	if err != nil {
+		t.Fatalf("d.Status(): %v", err)
+	}
+	for _, u := range units {
+		if u.Identifier == "proj/fail-ticket" {
+			if u.Status == models.StatusUserReview {
+				t.Errorf("ticket status = %q after ACP error; must not advance to user-review", u.Status)
+			}
+			return
+		}
+	}
+	t.Fatal("ticket proj/fail-ticket not found in status output")
 }
