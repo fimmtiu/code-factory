@@ -6,8 +6,6 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-
-	"github.com/fimmtiu/code-factory/internal/storage"
 )
 
 // maxCommits is the maximum number of commits shown in the selector.
@@ -71,12 +69,6 @@ type switchToDiffViewerMsg struct {
 	endCommit   commitEntry
 }
 
-// setDiffTicketMsg is sent to configure the DiffView with a ticket's context.
-type setDiffTicketMsg struct {
-	identifier string
-	phase      string
-}
-
 // ── DiffView ─────────────────────────────────────────────────────────────────
 
 // DiffView implements the Diffs view (F5). It has two sub-screens:
@@ -124,6 +116,24 @@ func NewDiffView() DiffView {
 // Init returns nil; the view loads data when a ticket is set.
 func (v DiffView) Init() tea.Cmd {
 	return nil
+}
+
+// resetForTicket prepares the DiffView to display a new ticket's commits.
+// It resets selection state and resolves the worktree path. The caller should
+// check errorMsg after calling; if empty, worktreePath is valid.
+func (v *DiffView) resetForTicket(identifier, phase, worktreePath string, err error) {
+	v.identifier = identifier
+	v.phase = phase
+	v.cursor = 0
+	v.anchor = 0
+	v.viewer = nil
+	if err != nil {
+		v.errorMsg = fmt.Sprintf("worktree error: %s", err)
+		v.worktreePath = ""
+	} else {
+		v.errorMsg = ""
+		v.worktreePath = worktreePath
+	}
 }
 
 // ── Row building ─────────────────────────────────────────────────────────────
@@ -425,18 +435,6 @@ func (v DiffView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			v.viewer.Update(msg)
 		}
 		return v, nil
-
-	case setDiffTicketMsg:
-		v.identifier = msg.identifier
-		v.phase = msg.phase
-		wp, err := storage.WorktreePathForIdentifier(v.identifier)
-		if err != nil {
-			v.errorMsg = fmt.Sprintf("worktree error: %s", err)
-			return v, nil
-		}
-		v.errorMsg = ""
-		v.worktreePath = wp
-		return v, fetchCommitsCmd(v.worktreePath)
 
 	case diffCommitListMsg:
 		v.rows = buildCommitRows(msg.commits, msg.forkPointIdx, msg.hasUncommit)

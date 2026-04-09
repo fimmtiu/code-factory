@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -210,23 +209,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case openDiffViewMsg:
 		dv := m.views[ViewDiff].(DiffView)
-		dv.identifier = msg.identifier
-		dv.phase = msg.phase
-		dv.cursor = 0
-		dv.anchor = 0
-		dv.viewer = nil
 		wp, err := storage.WorktreePathForIdentifier(msg.identifier)
-		if err != nil {
-			dv.errorMsg = fmt.Sprintf("worktree error: %s", err)
-			dv.worktreePath = ""
-			m.views[ViewDiff] = dv
-			m.activeView = ViewDiff
-			return m, nil
-		}
-		dv.errorMsg = ""
-		dv.worktreePath = wp
+		dv.resetForTicket(msg.identifier, msg.phase, wp, err)
 		m.views[ViewDiff] = dv
 		m.activeView = ViewDiff
+		if err != nil {
+			return m, nil
+		}
 		return m, fetchCommitsCmd(wp)
 
 	case tea.KeyMsg:
