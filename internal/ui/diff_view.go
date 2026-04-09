@@ -127,6 +127,10 @@ func (v *DiffView) resetForTicket(identifier, phase, worktreePath string, err er
 	v.phase = phase
 	v.cursor = 0
 	v.anchor = 0
+	v.offset = 0
+	v.rows = nil
+	v.statOutput = ""
+	v.statHash = ""
 	v.viewer = nil
 	if err != nil {
 		v.errorMsg = fmt.Sprintf("worktree error: %s", err)

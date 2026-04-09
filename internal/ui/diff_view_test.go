@@ -706,3 +706,58 @@ func TestLeftPaneWidth(t *testing.T) {
 		t.Errorf("leftPaneWidth for width=90: got %d, want 30", w)
 	}
 }
+
+// ── resetForTicket tests ─────────────────────────────────────────────────────
+
+// TestResetForTicket_ClearsStaleState verifies that resetForTicket clears
+// all fields from the previous ticket, preventing stale-state flash.
+func TestResetForTicket_ClearsStaleState(t *testing.T) {
+	v := DiffView{
+		width:      80,
+		height:     24,
+		identifier: "old/ticket",
+		phase:      "implement",
+		rows: buildCommitRows([]commitEntry{
+			makeCommit("aaaa", "old commit"),
+		}, -1, false),
+		cursor:     1,
+		anchor:     1,
+		offset:     5,
+		statOutput: "old stat output",
+		statHash:   "aaaa",
+		viewer:     &DiffViewerModel{},
+	}
+
+	v.resetForTicket("new/ticket", "review", "/tmp/worktree", nil)
+
+	if v.identifier != "new/ticket" {
+		t.Errorf("identifier = %q, want %q", v.identifier, "new/ticket")
+	}
+	if v.phase != "review" {
+		t.Errorf("phase = %q, want %q", v.phase, "review")
+	}
+	if len(v.rows) != 0 {
+		t.Errorf("rows should be cleared, got %d rows", len(v.rows))
+	}
+	if v.cursor != 0 {
+		t.Errorf("cursor = %d, want 0", v.cursor)
+	}
+	if v.anchor != 0 {
+		t.Errorf("anchor = %d, want 0", v.anchor)
+	}
+	if v.offset != 0 {
+		t.Errorf("offset = %d, want 0", v.offset)
+	}
+	if v.statOutput != "" {
+		t.Errorf("statOutput = %q, want empty", v.statOutput)
+	}
+	if v.statHash != "" {
+		t.Errorf("statHash = %q, want empty", v.statHash)
+	}
+	if v.viewer != nil {
+		t.Error("viewer should be nil")
+	}
+	if v.errorMsg != "" {
+		t.Errorf("errorMsg = %q, want empty", v.errorMsg)
+	}
+}
