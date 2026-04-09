@@ -546,53 +546,6 @@ func TestRenderCommitLabel_ShortHash(t *testing.T) {
 	}
 }
 
-// ── Parse tests ──────────────────────────────────────────────────────────────
-
-// TestParseGitLog_Normal verifies parsing of standard git log output.
-func TestParseGitLog_Normal(t *testing.T) {
-	log := "abc123 Fix the thing\ndef456 Add feature\n"
-	commits := parseGitLog(log)
-	if len(commits) != 2 {
-		t.Fatalf("expected 2 commits, got %d", len(commits))
-	}
-	if commits[0].Hash != "abc123" || commits[0].Message != "Fix the thing" {
-		t.Errorf("commit 0: got %+v", commits[0])
-	}
-	if commits[1].Hash != "def456" || commits[1].Message != "Add feature" {
-		t.Errorf("commit 1: got %+v", commits[1])
-	}
-}
-
-// TestParseGitLog_Empty returns nil for empty input.
-func TestParseGitLog_Empty(t *testing.T) {
-	commits := parseGitLog("")
-	if len(commits) != 0 {
-		t.Errorf("expected 0 commits, got %d", len(commits))
-	}
-}
-
-// TestParseGitLog_Whitespace handles trailing whitespace and blank lines.
-func TestParseGitLog_Whitespace(t *testing.T) {
-	log := "abc123 Fix\n\n  \n"
-	commits := parseGitLog(log)
-	if len(commits) != 1 {
-		t.Fatalf("expected 1 commit, got %d", len(commits))
-	}
-}
-
-// TestParseGitLog_LimitsTo100 verifies that at most 100 commits are returned.
-func TestParseGitLog_LimitsTo100(t *testing.T) {
-	var lines []string
-	for i := 0; i < 150; i++ {
-		lines = append(lines, "abcdef1 commit message")
-	}
-	log := strings.Join(lines, "\n")
-	commits := parseGitLog(log)
-	if len(commits) != maxCommits {
-		t.Errorf("expected %d commits, got %d", maxCommits, len(commits))
-	}
-}
-
 // ── switchToDiffViewer guard tests ────────────────────────────────────────────
 
 // TestSwitchToDiffViewer_AllSeparators returns nil cmd when all rows are separators.

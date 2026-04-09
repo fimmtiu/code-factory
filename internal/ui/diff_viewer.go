@@ -240,19 +240,7 @@ func viewerKeyBindings() []KeyBinding {
 // fetchDiffCmd runs git diff between two commits and parses the result.
 func fetchDiffCmd(worktreePath string, startCommit, endCommit commitEntry) tea.Cmd {
 	return func() tea.Msg {
-		var raw string
-		var err error
-
-		if startCommit.Hash == uncommittedHash && endCommit.Hash == uncommittedHash {
-			// Both are uncommitted — show working tree diff.
-			raw, err = gitOutput(worktreePath, "diff")
-		} else if endCommit.Hash == uncommittedHash {
-			// Range from a commit to uncommitted changes.
-			raw, err = gitOutput(worktreePath, "diff", startCommit.Hash)
-		} else {
-			// Normal range: parent of start to end.
-			raw, err = gitOutput(worktreePath, "diff", startCommit.Hash+"^.."+endCommit.Hash)
-		}
+		raw, err := fetchDiff(worktreePath, startCommit, endCommit)
 		if err != nil {
 			return diffContentMsg{files: nil}
 		}

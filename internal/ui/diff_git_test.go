@@ -130,9 +130,25 @@ func TestFetchShowStat(t *testing.T) {
 	if stat == "" {
 		t.Error("expected non-empty stat output")
 	}
-	// Should contain the commit message and file change summary.
-	if !strings.Contains(stat, "third feature commit") {
-		t.Errorf("stat should contain commit message, got:\n%s", stat)
+	// With --format=, the commit message header is suppressed, but file
+	// change summary should still be present.
+	if !strings.Contains(stat, "file2.txt") {
+		t.Errorf("stat should contain file change info, got:\n%s", stat)
+	}
+}
+
+func TestFetchShowStat_Uncommitted(t *testing.T) {
+	wt := setupTestRepo(t)
+
+	// Create an uncommitted change.
+	os.WriteFile(filepath.Join(wt, "file0.txt"), []byte("modified\n"), 0644)
+
+	stat, err := fetchShowStat(wt, uncommittedHash)
+	if err != nil {
+		t.Fatalf("fetchShowStat uncommitted: %v", err)
+	}
+	if !strings.Contains(stat, "file0.txt") {
+		t.Errorf("uncommitted stat should mention file0.txt, got:\n%s", stat)
 	}
 }
 
@@ -140,19 +156,21 @@ func TestFetchDiff(t *testing.T) {
 	wt := setupTestRepo(t)
 
 	commits, _ := fetchCommitList(wt, 10)
-	forkPoint := commits[len(commits)-1].Hash
-	head := commits[0].Hash
+	// Use the second feature commit as start and the newest as end.
+	// Avoid using the root commit, since <root>^ has no parent.
+	start := commits[1] // "second feature commit"
+	end := commits[0]   // "third feature commit"
 
-	diff, err := fetchDiff(wt, forkPoint, head)
+	d, err := fetchDiff(wt, start, end)
 	if err != nil {
 		t.Fatalf("fetchDiff: %v", err)
 	}
-	if diff == "" {
+	if d == "" {
 		t.Error("expected non-empty diff")
 	}
-	// The diff should mention the files added in the feature commits.
-	if !strings.Contains(diff, "file0.txt") {
-		t.Errorf("diff should contain file0.txt, got:\n%s", diff)
+	// The diff from second^ to third should include file2.txt (added in third commit).
+	if !strings.Contains(d, "file2.txt") {
+		t.Errorf("diff should contain file2.txt, got:\n%s", d)
 	}
 }
 
@@ -162,12 +180,32 @@ func TestFetchDiff_Uncommitted(t *testing.T) {
 	// Create an uncommitted change.
 	os.WriteFile(filepath.Join(wt, "file0.txt"), []byte("modified\n"), 0644)
 
-	diff, err := fetchDiff(wt, UncommittedRef, "")
+	uncommitted := commitEntry{Hash: uncommittedHash, Message: "Uncommitted changes"}
+	d, err := fetchDiff(wt, uncommitted, uncommitted)
 	if err != nil {
 		t.Fatalf("fetchDiff uncommitted: %v", err)
 	}
-	if !strings.Contains(diff, "modified") {
-		t.Errorf("uncommitted diff should contain 'modified', got:\n%s", diff)
+	if !strings.Contains(d, "modified") {
+		t.Errorf("uncommitted diff should contain 'modified', got:\n%s", d)
+	}
+}
+
+func TestFetchDiff_RangeToUncommitted(t *testing.T) {
+	wt := setupTestRepo(t)
+
+	// Create an uncommitted change.
+	os.WriteFile(filepath.Join(wt, "file0.txt"), []byte("modified\n"), 0644)
+
+	commits, _ := fetchCommitList(wt, 10)
+	start := commits[0]
+	uncommitted := commitEntry{Hash: uncommittedHash, Message: "Uncommitted changes"}
+
+	d, err := fetchDiff(wt, start, uncommitted)
+	if err != nil {
+		t.Fatalf("fetchDiff range to uncommitted: %v", err)
+	}
+	if !strings.Contains(d, "modified") {
+		t.Errorf("diff should contain 'modified', got:\n%s", d)
 	}
 }
 

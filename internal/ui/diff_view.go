@@ -166,32 +166,6 @@ func renderCommitLabel(c commitEntry) string {
 	return h + " " + c.Message
 }
 
-// ── Parse helpers ────────────────────────────────────────────────────────────
-
-// parseGitLog parses "git log --format='%H %s'" output into commitEntry slices.
-// It limits the result to maxCommits entries.
-func parseGitLog(output string) []commitEntry {
-	lines := strings.Split(strings.TrimSpace(output), "\n")
-	var commits []commitEntry
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-		parts := strings.SplitN(line, " ", 2)
-		hash := parts[0]
-		msg := ""
-		if len(parts) > 1 {
-			msg = parts[1]
-		}
-		commits = append(commits, commitEntry{Hash: hash, Message: msg})
-		if len(commits) >= maxCommits {
-			break
-		}
-	}
-	return commits
-}
-
 // ── Dimension helpers ────────────────────────────────────────────────────────
 
 // leftPaneWidth returns the width of the commit list pane (~1/3 of terminal).
@@ -395,29 +369,15 @@ func (v *DiffView) clampSelected() {
 // fetchCommitsCmd fetches the commit list and fork point asynchronously.
 func fetchCommitsCmd(worktreePath string) tea.Cmd {
 	return func() tea.Msg {
-		// Fetch non-merge commits.
-		logOutput, err := gitOutput(worktreePath, "log", "--no-merges", "--format=%H %s", fmt.Sprintf("-%d", maxCommits))
+		commits, err := fetchCommitList(worktreePath, maxCommits)
 		if err != nil {
 			return diffCommitListMsg{forkPointIdx: -1}
 		}
-		commits := parseGitLog(logOutput)
 
-		// Detect fork point.
 		defaultBranch := detectDefaultBranch(worktreePath)
-		forkHash, err := gitOutput(worktreePath, "merge-base", "--fork-point", defaultBranch)
-		forkPointIdx := -1
-		if err == nil && forkHash != "" {
-			for i, c := range commits {
-				if c.Hash == forkHash {
-					forkPointIdx = i
-					break
-				}
-			}
-		}
+		forkPointIdx := matchForkPoint(commits, worktreePath, defaultBranch)
 
-		// Check for uncommitted changes.
-		statusOut, err := gitOutput(worktreePath, "status", "--porcelain")
-		hasUncommit := err == nil && strings.TrimSpace(statusOut) != ""
+		hasUncommit, _ := hasUncommittedChanges(worktreePath)
 
 		return diffCommitListMsg{
 			commits:      commits,
@@ -427,19 +387,29 @@ func fetchCommitsCmd(worktreePath string) tea.Cmd {
 	}
 }
 
+// matchForkPoint finds the index in commits that matches the fork point of
+// the given branch, or -1 if not found.
+func matchForkPoint(commits []commitEntry, worktreePath, defaultBranch string) int {
+	forkHash, err := fetchForkPoint(worktreePath, defaultBranch)
+	if err != nil || forkHash == "" {
+		return -1
+	}
+	for i, c := range commits {
+		if c.Hash == forkHash {
+			return i
+		}
+	}
+	return -1
+}
+
 // fetchShowStatCmd fetches `git show --stat` output for a commit.
 func fetchShowStatCmd(worktreePath, hash string) tea.Cmd {
 	return func() tea.Msg {
-		if hash == uncommittedHash {
-			out, err := gitOutput(worktreePath, "diff", "--stat")
-			if err != nil {
+		out, err := fetchShowStat(worktreePath, hash)
+		if err != nil {
+			if hash == uncommittedHash {
 				return diffShowStatMsg{hash: hash, output: "(no changes)"}
 			}
-			return diffShowStatMsg{hash: hash, output: out}
-		}
-
-		out, err := gitOutput(worktreePath, "show", "--stat", "--format=", hash)
-		if err != nil {
 			return diffShowStatMsg{hash: hash, output: "(error)"}
 		}
 		return diffShowStatMsg{hash: hash, output: out}
