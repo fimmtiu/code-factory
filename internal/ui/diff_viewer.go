@@ -60,13 +60,7 @@ func newDiffViewerModel(files []diff.File, paneWidth, paneHeight int) *DiffViewe
 		return m
 	}
 
-	w := paneWidth - viewBorderOverhead
-	if w < 1 {
-		w = 1
-	}
-	rd := renderDiffResult(files, w, m.collapsed)
-	m.text = rd.text
-	m.fileStarts = rd.fileStarts
+	m.rerender()
 	m.fileNames = fileNamesFromDiff(files)
 	return m
 }
