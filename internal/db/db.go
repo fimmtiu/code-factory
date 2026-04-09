@@ -279,12 +279,12 @@ func (d *DB) loadProjects() (map[int64]*models.WorkUnit, error) {
 	if err != nil {
 		return nil, fmt.Errorf("load projects: %w", err)
 	}
+	defer rows.Close()
 	for rows.Next() {
 		var id int64
 		var identifier, description, phase string
 		var lastUpdated int64
 		if err := rows.Scan(&id, &identifier, &description, &lastUpdated, &phase); err != nil {
-			rows.Close()
 			return nil, fmt.Errorf("scan project: %w", err)
 		}
 		projectByID[id] = &models.WorkUnit{
@@ -297,10 +297,8 @@ func (d *DB) loadProjects() (map[int64]*models.WorkUnit, error) {
 		}
 	}
 	if err := rows.Err(); err != nil {
-		rows.Close()
 		return nil, fmt.Errorf("scan projects: %w", err)
 	}
-	rows.Close()
 
 	for _, wu := range projectByID {
 		if parent, ok := models.ParentIdentifierOf(wu.Identifier); ok {
@@ -318,6 +316,7 @@ func (d *DB) loadTickets(projectByID map[int64]*models.WorkUnit) (map[int64]*mod
 	if err != nil {
 		return nil, fmt.Errorf("load tickets: %w", err)
 	}
+	defer rows.Close()
 	for rows.Next() {
 		var id int64
 		var identifier, description, phase, status string
@@ -325,7 +324,6 @@ func (d *DB) loadTickets(projectByID map[int64]*models.WorkUnit) (map[int64]*mod
 		var lastUpdated int64
 		var projectID sql.NullInt64
 		if err := rows.Scan(&id, &identifier, &description, &phase, &status, &claimedBy, &lastUpdated, &projectID); err != nil {
-			rows.Close()
 			return nil, fmt.Errorf("scan ticket: %w", err)
 		}
 		wu := &models.WorkUnit{
@@ -348,10 +346,8 @@ func (d *DB) loadTickets(projectByID map[int64]*models.WorkUnit) (map[int64]*mod
 		ticketByID[id] = wu
 	}
 	if err := rows.Err(); err != nil {
-		rows.Close()
 		return nil, fmt.Errorf("scan tickets: %w", err)
 	}
-	rows.Close()
 	return ticketByID, nil
 }
 
@@ -362,10 +358,10 @@ func (d *DB) loadDependencies(projectByID, ticketByID map[int64]*models.WorkUnit
 	if err != nil {
 		return fmt.Errorf("load dependencies: %w", err)
 	}
+	defer rows.Close()
 	for rows.Next() {
 		var wuType, wuID, depType, depID int64
 		if err := rows.Scan(&wuType, &wuID, &depType, &depID); err != nil {
-			rows.Close()
 			return fmt.Errorf("scan dependency: %w", err)
 		}
 		var depIdentifier string
@@ -394,10 +390,8 @@ func (d *DB) loadDependencies(projectByID, ticketByID map[int64]*models.WorkUnit
 		}
 	}
 	if err := rows.Err(); err != nil {
-		rows.Close()
 		return fmt.Errorf("scan dependencies: %w", err)
 	}
-	rows.Close()
 	return nil
 }
 
@@ -409,13 +403,13 @@ func (d *DB) loadChangeRequests(ticketByID map[int64]*models.WorkUnit) error {
 	if err != nil {
 		return fmt.Errorf("load change requests: %w", err)
 	}
+	defer rows.Close()
 	for rows.Next() {
 		var id, ticketID int64
 		var filename, commitHash, cstatus, author, description string
 		var lineNumber int
 		var date int64
 		if err := rows.Scan(&id, &ticketID, &filename, &lineNumber, &commitHash, &cstatus, &date, &author, &description); err != nil {
-			rows.Close()
 			return fmt.Errorf("scan change request: %w", err)
 		}
 		wu, ok := ticketByID[ticketID]
@@ -433,10 +427,8 @@ func (d *DB) loadChangeRequests(ticketByID map[int64]*models.WorkUnit) error {
 		})
 	}
 	if err := rows.Err(); err != nil {
-		rows.Close()
 		return fmt.Errorf("scan change requests: %w", err)
 	}
-	rows.Close()
 	return nil
 }
 
