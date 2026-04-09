@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	acp "github.com/coder/acp-go-sdk"
 
@@ -84,22 +85,37 @@ func (c *acpWorkerClient) appendOutput(text string) {
 }
 
 // SessionUpdate receives streaming output from the agent and writes it to the
-// logfile. Both agent messages and thought chunks are captured.
+// logfile. Both agent messages and thought chunks are captured. It also updates
+// the worker's Activity label and LastActivityAt timestamp for the Workers view.
 func (c *acpWorkerClient) SessionUpdate(_ context.Context, params acp.SessionNotification) error {
 	u := params.Update
+	c.w.SetLastActivityAt(time.Now())
 	switch {
 	case u.AgentMessageChunk != nil:
+		c.w.SetActivity("responding")
 		if u.AgentMessageChunk.Content.Text != nil {
 			c.appendOutput(u.AgentMessageChunk.Content.Text.Text)
 		}
 	case u.AgentThoughtChunk != nil:
+		c.w.SetActivity("thinking")
 		if u.AgentThoughtChunk.Content.Text != nil {
 			c.appendOutput("[thought] " + u.AgentThoughtChunk.Content.Text.Text)
 		}
 	case u.ToolCall != nil:
 		title := u.ToolCall.Title
+		if u.ToolCall.Status == acp.ToolCallStatusCompleted || u.ToolCall.Status == acp.ToolCallStatusFailed {
+			c.w.SetActivity("")
+		} else {
+			c.w.SetActivity("tool: " + title)
+		}
 		c.appendOutput(fmt.Sprintf("[tool] %s (%s)\n", title, u.ToolCall.Status))
 	case u.ToolCallUpdate != nil:
+		if u.ToolCallUpdate.Status != nil {
+			s := *u.ToolCallUpdate.Status
+			if s == acp.ToolCallStatusCompleted || s == acp.ToolCallStatusFailed {
+				c.w.SetActivity("")
+			}
+		}
 		status := ""
 		if u.ToolCallUpdate.Status != nil {
 			status = string(*u.ToolCallUpdate.Status)

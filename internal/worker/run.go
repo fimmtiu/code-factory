@@ -103,10 +103,12 @@ func (w *Worker) processTicket(ctx context.Context, ticket *models.WorkUnit) {
 	w.Status = StatusIdle
 }
 
-// releaseTicket clears the claim on a ticket, clears the display label, and
+// releaseTicket clears the claim on a ticket, clears display state, and
 // sends a log message.
 func (w *Worker) releaseTicket(identifier string) {
 	w.SetCurrentTicket("")
+	w.SetActivity("")
+	w.SetLastActivityAt(time.Time{})
 	if err := w.database.Release(identifier); err != nil {
 		w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("error releasing ticket %s: %v", identifier, err))
 		return
@@ -124,6 +126,8 @@ func (w *Worker) handleAbort(poolCtx context.Context, identifier string, phase m
 		w.releaseTicket(identifier)
 	} else {
 		w.SetCurrentTicket("")
+		w.SetActivity("")
+		w.SetLastActivityAt(time.Time{})
 		w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("aborted stale ticket %s", identifier))
 	}
 	w.Status = StatusIdle

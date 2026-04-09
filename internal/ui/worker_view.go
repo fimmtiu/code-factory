@@ -242,6 +242,23 @@ func (v WorkerView) renderAllLines() []string {
 	return lines
 }
 
+// lastActivityThreshold is the minimum inactivity duration before the "Xs ago"
+// label appears in the Workers view. Very recent timestamps are hidden to
+// avoid visual noise when the agent is actively streaming.
+const lastActivityThreshold = 10 * time.Second
+
+// formatLastActivity formats a duration as a compact relative timestamp.
+func formatLastActivity(since time.Duration) string {
+	switch {
+	case since < time.Minute:
+		return fmt.Sprintf("%ds ago", int(since.Seconds()))
+	case since < time.Hour:
+		return fmt.Sprintf("%dm ago", int(since.Minutes()))
+	default:
+		return fmt.Sprintf("%dh ago", int(since.Hours()))
+	}
+}
+
 // renderStatusLine returns the styled "Worker <N>: <status> (<ticket>)" line for a worker.
 func (v WorkerView) renderStatusLine(w *worker.Worker) string {
 	text := fmt.Sprintf("Worker %d: %s", w.Number, w.Status.String())
@@ -251,18 +268,38 @@ func (v WorkerView) renderStatusLine(w *worker.Worker) string {
 	if ticket := w.GetCurrentTicket(); ticket != "" {
 		text += fmt.Sprintf(" (%s)", ticket)
 	}
+
+	// Build an activity/timing suffix for non-idle, non-paused workers.
+	var suffix string
+	if w.Status != worker.StatusIdle && !w.Paused {
+		if activity := w.GetActivity(); activity != "" {
+			suffix += " · " + activity
+		}
+		if lastActivity := w.GetLastActivityAt(); !lastActivity.IsZero() {
+			if since := time.Since(lastActivity); since >= lastActivityThreshold {
+				suffix += " · " + formatLastActivity(since)
+			}
+		}
+	}
+
+	var styled string
 	switch {
 	case w.Paused:
-		return workerPausedStyle.Render(text)
+		styled = workerPausedStyle.Render(text)
 	case w.Status == worker.StatusIdle:
-		return workerIdleStyle.Render(text)
+		styled = workerIdleStyle.Render(text)
 	case w.Status == worker.StatusAwaitingResponse:
-		return workerAwaitingStyle.Render(text)
+		styled = workerAwaitingStyle.Render(text)
 	case w.Status == worker.StatusBusy:
-		return workerBusyStyle.Render(text)
+		styled = workerBusyStyle.Render(text)
 	default:
-		return workerIdleStyle.Render(text)
+		styled = workerIdleStyle.Render(text)
 	}
+
+	if suffix != "" {
+		styled += workerOutputStyle.Render(suffix)
+	}
+	return styled
 }
 
 // ── KeyBindings ───────────────────────────────────────────────────────────────

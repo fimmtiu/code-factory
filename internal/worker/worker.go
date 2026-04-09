@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/fimmtiu/code-factory/internal/db"
 )
@@ -53,6 +54,15 @@ type Worker struct {
 	// in the worker status view. Protected by mu.
 	LastOutput []string
 
+	// Activity is a human-readable label for what the worker is currently
+	// doing, e.g. "thinking", "tool: Bash", "responding". Empty when idle.
+	// Protected by mu.
+	Activity string
+
+	// LastActivityAt is the time the worker last received any output from the
+	// agent session. Zero when idle. Protected by mu.
+	LastActivityAt time.Time
+
 	// pendingPermission holds the in-flight permission request waiting for a
 	// user response, or nil if none is pending. Protected by mu.
 	pendingPermission *PendingPermissionRequest
@@ -61,9 +71,9 @@ type Worker struct {
 	// nil when the worker is idle. Protected by mu.
 	cancelWork context.CancelFunc
 
-	// mu guards CurrentTicket, LastOutput, pendingPermission, and cancelWork
-	// for concurrent access between the worker goroutine (writer) and the UI
-	// goroutine (reader).
+	// mu guards CurrentTicket, LastOutput, Activity, LastActivityAt,
+	// pendingPermission, and cancelWork for concurrent access between the
+	// worker goroutine (writer) and the UI goroutine (reader).
 	mu sync.RWMutex
 
 	// database, logCh, notifCh, ticketsDir, and workFn are set by Pool.Start
@@ -117,6 +127,36 @@ func (w *Worker) SetLastOutput(lines []string) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.LastOutput = lines
+}
+
+// GetActivity returns the worker's current activity label, or empty if idle.
+// Safe for concurrent access from the UI goroutine.
+func (w *Worker) GetActivity() string {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	return w.Activity
+}
+
+// SetActivity updates the worker's current activity label.
+func (w *Worker) SetActivity(activity string) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.Activity = activity
+}
+
+// GetLastActivityAt returns the time of the worker's most recent agent output,
+// or zero if idle. Safe for concurrent access from the UI goroutine.
+func (w *Worker) GetLastActivityAt() time.Time {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	return w.LastActivityAt
+}
+
+// SetLastActivityAt updates the worker's last activity timestamp.
+func (w *Worker) SetLastActivityAt(t time.Time) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.LastActivityAt = t
 }
 
 // GetPendingPermission returns a copy of the pending permission request, or
