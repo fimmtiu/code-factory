@@ -9,6 +9,7 @@ import (
 
 	"github.com/fimmtiu/code-factory/internal/git"
 	"github.com/fimmtiu/code-factory/internal/storage"
+	"github.com/fimmtiu/code-factory/internal/util"
 )
 
 // maxCommits is the maximum number of commits shown in the selector.
@@ -500,6 +501,8 @@ func (v DiffView) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		v.extendRangeUp(1)
 	case "tab", "enter":
 		return v.switchToDiffViewer()
+	case "t", "T":
+		return v.openTerminal()
 	default:
 		return v, nil
 	}
@@ -521,6 +524,14 @@ func (v DiffView) fetchStatForCurrent() tea.Cmd {
 		return nil // already cached
 	}
 	return fetchShowStatCmd(v.worktreePath, c.Hash)
+}
+
+func (v DiffView) openTerminal() (tea.Model, tea.Cmd) {
+	if v.worktreePath == "" {
+		return v, nil
+	}
+	_ = util.OpenTerminal(v.worktreePath)
+	return v, nil
 }
 
 func (v DiffView) switchToDiffViewer() (tea.Model, tea.Cmd) {
@@ -734,6 +745,7 @@ func (v DiffView) KeyBindings() []KeyBinding {
 		{Key: "↑/↓", Description: "Navigate commits"},
 		{Key: "PgUp/PgDn", Description: "Page navigate"},
 		{Key: "Shift+↑/↓", Description: "Extend selection range"},
+		{Key: "T", Description: "Open terminal in worktree"},
 		{Key: "Tab/Enter", Description: "View diff"},
 	}
 }
@@ -744,7 +756,7 @@ func (v DiffView) HintPairs() []string {
 	if v.viewer != nil {
 		return []string{"↑/↓", "scroll", "PgUp/Dn", "page", "C", "collapse/expand", "Tab/Esc/Enter", "back"}
 	}
-	return []string{"↑/↓", "navigate", "PgUp/Dn", "page", "Shift+↑/↓", "extend range", "Tab", "view diff"}
+	return []string{"↑/↓", "navigate", "PgUp/Dn", "page", "Shift+↑/↓", "extend range", "T", "open terminal", "Tab", "view diff"}
 }
 
 func (v DiffView) Label() string { return "F5:Diffs" }

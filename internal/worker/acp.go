@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -355,6 +356,14 @@ func runACP(
 			_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM)
 		}
 	}()
+
+	// Prevent the system from sleeping while the agent is running.
+	// caffeinate -i (idle sleep) -w (watch PID) exits automatically
+	// when the watched process exits, so no cleanup is needed.
+	caffeinate := exec.Command("caffeinate", "-i", "-w", strconv.Itoa(cmd.Process.Pid))
+	if err := caffeinate.Start(); err != nil {
+		_, _ = fmt.Fprintf(logFile, "[warn] caffeinate: %v\n", err)
+	}
 
 	client := &acpWorkerClient{
 		w:          w,
