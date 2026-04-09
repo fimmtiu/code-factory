@@ -109,6 +109,9 @@ type DiffView struct {
 	statOutput string
 	statHash   string // hash for which statOutput was fetched
 
+	// errorMsg holds a brief error message displayed in the view.
+	errorMsg string
+
 	// ── Viewer screen state ──────────────────────────────────────────────
 	viewerActive     bool   // true when showing the diff viewer
 	viewerText       string // pre-rendered diff content
@@ -462,8 +465,10 @@ func (v DiffView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		v.phase = msg.phase
 		wp, err := storage.WorktreePathForIdentifier(v.identifier)
 		if err != nil {
+			v.errorMsg = fmt.Sprintf("worktree error: %s", err)
 			return v, nil
 		}
+		v.errorMsg = ""
 		v.worktreePath = wp
 		return v, fetchCommitsCmd(v.worktreePath)
 
@@ -593,9 +598,22 @@ func (v DiffView) View() string {
 	return lipgloss.JoinVertical(lipgloss.Left, statusBar, separator, panes)
 }
 
+// diffErrorStyle renders error messages in the diff view status bar.
+var diffErrorStyle = lipgloss.NewStyle().Foreground(colourDanger)
+
 // renderStatusBar renders the status bar with ticket info and selection count.
 func (v DiffView) renderStatusBar() string {
 	left := fmt.Sprintf("Ticket: %s (%s)", v.identifier, v.phase)
+
+	if v.errorMsg != "" {
+		errText := diffErrorStyle.Render(v.errorMsg)
+		spacer := v.width - lipgloss.Width(left) - lipgloss.Width(errText)
+		if spacer < 2 {
+			spacer = 2
+		}
+		return left + strings.Repeat(" ", spacer) + errText
+	}
+
 	right := fmt.Sprintf("%d commit(s) selected", v.selectedCount())
 
 	spacer := v.width - lipgloss.Width(left) - lipgloss.Width(right)

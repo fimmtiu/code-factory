@@ -593,6 +593,57 @@ func TestParseGitLog_LimitsTo100(t *testing.T) {
 	}
 }
 
+// ── Error display tests ──────────────────────────────────────────────────────
+
+// TestRenderStatusBar_WithError verifies the error is shown in the status bar.
+func TestRenderStatusBar_WithError(t *testing.T) {
+	v := DiffView{
+		identifier: "proj/ticket",
+		phase:      "implement",
+		width:      80,
+		height:     24,
+		errorMsg:   "worktree error: path not found",
+	}
+	bar := v.renderStatusBar()
+	if !strings.Contains(bar, "worktree error: path not found") {
+		t.Errorf("status bar should contain error message, got %q", bar)
+	}
+	// Should not show commit count when there's an error.
+	if strings.Contains(bar, "commit(s) selected") {
+		t.Error("status bar should not show commit count when error is displayed")
+	}
+}
+
+// TestRenderStatusBar_ErrorClearedOnSuccess verifies the error is cleared when
+// a new ticket is set successfully.
+func TestRenderStatusBar_ErrorClearedOnSuccess(t *testing.T) {
+	v := DiffView{
+		identifier: "proj/ticket",
+		phase:      "implement",
+		width:      80,
+		height:     24,
+		errorMsg:   "worktree error: path not found",
+		rows: buildCommitRows([]commitEntry{
+			makeCommit("aaaa", "one"),
+		}, -1, false),
+	}
+	// Verify error is shown initially.
+	bar := v.renderStatusBar()
+	if !strings.Contains(bar, "worktree error") {
+		t.Error("expected error in status bar initially")
+	}
+
+	// Clear the error and verify it's gone.
+	v.errorMsg = ""
+	bar = v.renderStatusBar()
+	if strings.Contains(bar, "worktree error") {
+		t.Error("expected error to be cleared from status bar")
+	}
+	if !strings.Contains(bar, "commit(s) selected") {
+		t.Error("expected commit count in status bar after error cleared")
+	}
+}
+
 // ── Status bar test ──────────────────────────────────────────────────────────
 
 // TestRenderStatusBar verifies the status bar content.
