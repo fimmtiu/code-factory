@@ -238,7 +238,8 @@ func (m *DiffViewerModel) renderPane() string {
 		content = strings.Join(visible, "\n")
 	}
 
-	return viewPaneStyle.Width(paneW).Height(m.paneHeight).Render(clipLines(content, m.paneHeight))
+	rendered := viewPaneStyle.Width(paneW).Height(m.paneHeight).Render(clipLines(content, m.paneHeight))
+	return injectScrollbar(rendered, "│", "█", m.offset, m.totalLines(), m.paneHeight)
 }
 
 // KeyBindings returns key bindings shown when the viewer is active.
