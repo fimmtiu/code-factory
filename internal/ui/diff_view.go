@@ -7,14 +7,12 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/fimmtiu/code-factory/internal/git"
 	"github.com/fimmtiu/code-factory/internal/storage"
 )
 
 // maxCommits is the maximum number of commits shown in the selector.
 const maxCommits = 100
-
-// uncommittedHash is the sentinel hash for the "uncommitted changes" pseudo-commit.
-const uncommittedHash = "????"
 
 // statusBarHeight is the number of lines consumed by the status bar and its
 // horizontal separator.
@@ -34,17 +32,11 @@ const (
 	movedAnchor
 )
 
-// commitEntry represents one commit in the list.
-type commitEntry struct {
-	Hash    string
-	Message string
-}
-
 // commitRow represents one row in the commit list. If separator is true, the
 // row is a non-selectable divider above the fork-point commit (same pattern
 // as the CommandView separator between status groups).
 type commitRow struct {
-	commit    commitEntry
+	commit    git.CommitEntry
 	separator bool
 }
 
@@ -52,7 +44,7 @@ type commitRow struct {
 
 // diffCommitListMsg carries the result of the async commit-list fetch.
 type diffCommitListMsg struct {
-	commits      []commitEntry
+	commits      []git.CommitEntry
 	forkPointIdx int    // index into commits of the fork-point commit, or -1
 	hasUncommit  bool   // true if there are uncommitted changes
 	errMsg       string // non-empty when the commit list could not be fetched
@@ -68,8 +60,8 @@ type diffShowStatMsg struct {
 // DiffView.Update handles this by kicking off an async diff fetch; the result
 // arrives as diffContentMsg which activates the viewer screen.
 type switchToDiffViewerMsg struct {
-	startCommit commitEntry
-	endCommit   commitEntry
+	startCommit git.CommitEntry
+	endCommit   git.CommitEntry
 }
 
 // ── DiffView ─────────────────────────────────────────────────────────────────
@@ -148,12 +140,12 @@ func (v *DiffView) resetForTicket(identifier, phase, worktreePath string, err er
 
 // buildCommitRows converts a commit list into rows, inserting a separator
 // above the fork-point commit and prepending an uncommitted-changes pseudo-commit.
-func buildCommitRows(commits []commitEntry, forkPointIdx int, hasUncommit bool) []commitRow {
+func buildCommitRows(commits []git.CommitEntry, forkPointIdx int, hasUncommit bool) []commitRow {
 	var rows []commitRow
 
 	if hasUncommit {
 		rows = append(rows, commitRow{
-			commit: commitEntry{Hash: uncommittedHash, Message: "Uncommitted changes"},
+			commit: git.CommitEntry{Hash: git.UncommittedHash, Message: "Uncommitted changes"},
 		})
 	}
 
@@ -170,9 +162,9 @@ func buildCommitRows(commits []commitEntry, forkPointIdx int, hasUncommit bool) 
 // ── Label rendering ──────────────────────────────────────────────────────────
 
 // renderCommitLabel returns "<4-char hash> <message>" for a commit.
-func renderCommitLabel(c commitEntry) string {
+func renderCommitLabel(c git.CommitEntry) string {
 	h := c.Hash
-	if h != uncommittedHash {
+	if h != git.UncommittedHash {
 		if len(h) > 4 {
 			h = h[:4]
 		}
@@ -245,7 +237,7 @@ func (v DiffView) selectionRange() (int, int) {
 
 // currentCommit returns the commit at whichever end of the selection moved
 // most recently, used for stat display. Falls back to cursor if unset.
-func (v DiffView) currentCommit() *commitEntry {
+func (v DiffView) currentCommit() *git.CommitEntry {
 	idx := v.cursor
 	if v.lastMoved == movedAnchor {
 		idx = v.anchor
@@ -393,15 +385,15 @@ func (v *DiffView) clampSelected() {
 // fetchCommitsCmd fetches the commit list and fork point asynchronously.
 func fetchCommitsCmd(worktreePath string) tea.Cmd {
 	return func() tea.Msg {
-		commits, err := fetchCommitList(worktreePath, maxCommits)
+		commits, err := git.FetchCommitList(worktreePath, maxCommits)
 		if err != nil {
 			return diffCommitListMsg{forkPointIdx: -1, errMsg: err.Error()}
 		}
 
-		defaultBranch := detectDefaultBranch(worktreePath)
+		defaultBranch := git.DetectDefaultBranch(worktreePath)
 		forkPointIdx := matchForkPoint(commits, worktreePath, defaultBranch)
 
-		hasUncommit, _ := hasUncommittedChanges(worktreePath)
+		hasUncommit, _ := git.HasUncommittedChanges(worktreePath)
 
 		return diffCommitListMsg{
 			commits:      commits,
@@ -413,8 +405,8 @@ func fetchCommitsCmd(worktreePath string) tea.Cmd {
 
 // matchForkPoint finds the index in commits that matches the fork point of
 // the given branch, or -1 if not found.
-func matchForkPoint(commits []commitEntry, worktreePath, defaultBranch string) int {
-	forkHash, err := fetchForkPoint(worktreePath, defaultBranch)
+func matchForkPoint(commits []git.CommitEntry, worktreePath, defaultBranch string) int {
+	forkHash, err := git.FetchForkPoint(worktreePath, defaultBranch)
 	if err != nil || forkHash == "" {
 		return -1
 	}
@@ -429,9 +421,9 @@ func matchForkPoint(commits []commitEntry, worktreePath, defaultBranch string) i
 // fetchShowStatCmd fetches `git show --stat` output for a commit.
 func fetchShowStatCmd(worktreePath, hash string) tea.Cmd {
 	return func() tea.Msg {
-		out, err := fetchShowStat(worktreePath, hash)
+		out, err := git.FetchShowStat(worktreePath, hash)
 		if err != nil {
-			if hash == uncommittedHash {
+			if hash == git.UncommittedHash {
 				return diffShowStatMsg{hash: hash, output: "(no changes)"}
 			}
 			return diffShowStatMsg{hash: hash, output: "(error)"}
@@ -553,7 +545,7 @@ func (v DiffView) switchToDiffViewer() (tea.Model, tea.Cmd) {
 		return v, nil
 	}
 	// Find the actual commit entries at the range boundaries.
-	var startC, endC commitEntry
+	var startC, endC git.CommitEntry
 	for i := lo; i <= hi; i++ {
 		if !v.rows[i].separator {
 			endC = v.rows[i].commit

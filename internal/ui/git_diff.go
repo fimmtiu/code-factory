@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/fimmtiu/code-factory/internal/git"
 	"github.com/fimmtiu/code-factory/internal/storage"
 )
 
@@ -16,12 +17,12 @@ func openGitHubCompare(identifier string) {
 	if err != nil {
 		return
 	}
-	defaultBranch := detectDefaultBranch(worktreePath)
-	branchName, err := gitOutput(worktreePath, "branch", "--show-current")
+	defaultBranch := git.DetectDefaultBranch(worktreePath)
+	branchName, err := git.Output(worktreePath, "branch", "--show-current")
 	if err != nil || branchName == "" {
 		return
 	}
-	originURL, _ := gitOutput(worktreePath, "remote", "get-url", "origin")
+	originURL, _ := git.Output(worktreePath, "remote", "get-url", "origin")
 	repo := extractGitHubRepo(originURL)
 	if repo == "" {
 		return
@@ -37,7 +38,7 @@ var isGitHubRepo = sync.OnceValue(func() bool {
 	if err != nil {
 		return false
 	}
-	originURL, err := gitOutput(repoRoot, "remote", "get-url", "origin")
+	originURL, err := git.Output(repoRoot, "remote", "get-url", "origin")
 	if err != nil {
 		return false
 	}
@@ -57,25 +58,6 @@ end tell`
 	c := exec.Command("osascript")
 	c.Stdin = strings.NewReader(script)
 	return c.Start()
-}
-
-// detectDefaultBranch returns "main" or "master" depending on which branch
-// exists in the worktree's repository.
-func detectDefaultBranch(worktreePath string) string {
-	if out, err := gitOutput(worktreePath, "rev-parse", "--verify", "main"); err == nil && out != "" {
-		return "main"
-	}
-	return "master"
-}
-
-// gitOutput runs a git command in the given directory and returns trimmed stdout.
-func gitOutput(dir string, args ...string) (string, error) {
-	fullArgs := append([]string{"-C", dir}, args...)
-	out, err := exec.Command("git", fullArgs...).Output()
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimSpace(string(out)), nil
 }
 
 // extractGitHubRepo extracts "owner/repo" from a GitHub remote URL.

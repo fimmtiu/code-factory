@@ -1,4 +1,4 @@
-package ui
+package git
 
 import (
 	"os"
@@ -59,9 +59,9 @@ func setupTestRepo(t *testing.T) string {
 func TestFetchCommitList(t *testing.T) {
 	wt := setupTestRepo(t)
 
-	commits, err := fetchCommitList(wt, 10)
+	commits, err := FetchCommitList(wt, 10)
 	if err != nil {
-		t.Fatalf("fetchCommitList: %v", err)
+		t.Fatalf("FetchCommitList: %v", err)
 	}
 
 	// Should have 4 commits: 3 feature + 1 initial (no merges).
@@ -88,9 +88,9 @@ func TestFetchCommitList(t *testing.T) {
 func TestFetchCommitList_MaxCommits(t *testing.T) {
 	wt := setupTestRepo(t)
 
-	commits, err := fetchCommitList(wt, 2)
+	commits, err := FetchCommitList(wt, 2)
 	if err != nil {
-		t.Fatalf("fetchCommitList: %v", err)
+		t.Fatalf("FetchCommitList: %v", err)
 	}
 	if len(commits) != 2 {
 		t.Fatalf("expected 2 commits, got %d", len(commits))
@@ -103,16 +103,16 @@ func TestFetchCommitList_MaxCommits(t *testing.T) {
 func TestFetchForkPoint(t *testing.T) {
 	wt := setupTestRepo(t)
 
-	hash, err := fetchForkPoint(wt, "main")
+	hash, err := FetchForkPoint(wt, "main")
 	if err != nil {
-		t.Fatalf("fetchForkPoint: %v", err)
+		t.Fatalf("FetchForkPoint: %v", err)
 	}
 	if len(hash) != 40 {
 		t.Errorf("expected 40-char hash, got %d chars: %q", len(hash), hash)
 	}
 
 	// The fork point should be the "initial commit" hash.
-	commits, _ := fetchCommitList(wt, 10)
+	commits, _ := FetchCommitList(wt, 10)
 	initialHash := commits[len(commits)-1].Hash
 	if hash != initialHash {
 		t.Errorf("fork point %q should equal initial commit %q", hash, initialHash)
@@ -122,10 +122,10 @@ func TestFetchForkPoint(t *testing.T) {
 func TestFetchShowStat(t *testing.T) {
 	wt := setupTestRepo(t)
 
-	commits, _ := fetchCommitList(wt, 10)
-	stat, err := fetchShowStat(wt, commits[0].Hash)
+	commits, _ := FetchCommitList(wt, 10)
+	stat, err := FetchShowStat(wt, commits[0].Hash)
 	if err != nil {
-		t.Fatalf("fetchShowStat: %v", err)
+		t.Fatalf("FetchShowStat: %v", err)
 	}
 	if stat == "" {
 		t.Error("expected non-empty stat output")
@@ -143,9 +143,9 @@ func TestFetchShowStat_Uncommitted(t *testing.T) {
 	// Create an uncommitted change.
 	os.WriteFile(filepath.Join(wt, "file0.txt"), []byte("modified\n"), 0644)
 
-	stat, err := fetchShowStat(wt, uncommittedHash)
+	stat, err := FetchShowStat(wt, UncommittedHash)
 	if err != nil {
-		t.Fatalf("fetchShowStat uncommitted: %v", err)
+		t.Fatalf("FetchShowStat uncommitted: %v", err)
 	}
 	if !strings.Contains(stat, "file0.txt") {
 		t.Errorf("uncommitted stat should mention file0.txt, got:\n%s", stat)
@@ -155,15 +155,15 @@ func TestFetchShowStat_Uncommitted(t *testing.T) {
 func TestFetchDiff(t *testing.T) {
 	wt := setupTestRepo(t)
 
-	commits, _ := fetchCommitList(wt, 10)
+	commits, _ := FetchCommitList(wt, 10)
 	// Use the second feature commit as start and the newest as end.
 	// Avoid using the root commit, since <root>^ has no parent.
 	start := commits[1] // "second feature commit"
 	end := commits[0]   // "third feature commit"
 
-	d, err := fetchDiff(wt, start, end)
+	d, err := FetchDiff(wt, start, end)
 	if err != nil {
-		t.Fatalf("fetchDiff: %v", err)
+		t.Fatalf("FetchDiff: %v", err)
 	}
 	if d == "" {
 		t.Error("expected non-empty diff")
@@ -180,10 +180,10 @@ func TestFetchDiff_Uncommitted(t *testing.T) {
 	// Create an uncommitted change.
 	os.WriteFile(filepath.Join(wt, "file0.txt"), []byte("modified\n"), 0644)
 
-	uncommitted := commitEntry{Hash: uncommittedHash, Message: "Uncommitted changes"}
-	d, err := fetchDiff(wt, uncommitted, uncommitted)
+	uncommitted := CommitEntry{Hash: UncommittedHash, Message: "Uncommitted changes"}
+	d, err := FetchDiff(wt, uncommitted, uncommitted)
 	if err != nil {
-		t.Fatalf("fetchDiff uncommitted: %v", err)
+		t.Fatalf("FetchDiff uncommitted: %v", err)
 	}
 	if !strings.Contains(d, "modified") {
 		t.Errorf("uncommitted diff should contain 'modified', got:\n%s", d)
@@ -196,13 +196,13 @@ func TestFetchDiff_RangeToUncommitted(t *testing.T) {
 	// Create an uncommitted change.
 	os.WriteFile(filepath.Join(wt, "file0.txt"), []byte("modified\n"), 0644)
 
-	commits, _ := fetchCommitList(wt, 10)
+	commits, _ := FetchCommitList(wt, 10)
 	start := commits[0]
-	uncommitted := commitEntry{Hash: uncommittedHash, Message: "Uncommitted changes"}
+	uncommitted := CommitEntry{Hash: UncommittedHash, Message: "Uncommitted changes"}
 
-	d, err := fetchDiff(wt, start, uncommitted)
+	d, err := FetchDiff(wt, start, uncommitted)
 	if err != nil {
-		t.Fatalf("fetchDiff range to uncommitted: %v", err)
+		t.Fatalf("FetchDiff range to uncommitted: %v", err)
 	}
 	if !strings.Contains(d, "modified") {
 		t.Errorf("diff should contain 'modified', got:\n%s", d)
@@ -213,9 +213,9 @@ func TestHasUncommittedChanges(t *testing.T) {
 	wt := setupTestRepo(t)
 
 	// Clean state: no uncommitted changes.
-	has, err := hasUncommittedChanges(wt)
+	has, err := HasUncommittedChanges(wt)
 	if err != nil {
-		t.Fatalf("hasUncommittedChanges: %v", err)
+		t.Fatalf("HasUncommittedChanges: %v", err)
 	}
 	if has {
 		t.Error("expected no uncommitted changes in clean repo")
@@ -224,9 +224,9 @@ func TestHasUncommittedChanges(t *testing.T) {
 	// Modify a file.
 	os.WriteFile(filepath.Join(wt, "file0.txt"), []byte("dirty\n"), 0644)
 
-	has, err = hasUncommittedChanges(wt)
+	has, err = HasUncommittedChanges(wt)
 	if err != nil {
-		t.Fatalf("hasUncommittedChanges: %v", err)
+		t.Fatalf("HasUncommittedChanges: %v", err)
 	}
 	if !has {
 		t.Error("expected uncommitted changes after modifying a file")
@@ -239,9 +239,9 @@ func TestHasUncommittedChanges_UntrackedFile(t *testing.T) {
 	// Add an untracked file.
 	os.WriteFile(filepath.Join(wt, "untracked.txt"), []byte("new\n"), 0644)
 
-	has, err := hasUncommittedChanges(wt)
+	has, err := HasUncommittedChanges(wt)
 	if err != nil {
-		t.Fatalf("hasUncommittedChanges: %v", err)
+		t.Fatalf("HasUncommittedChanges: %v", err)
 	}
 	if !has {
 		t.Error("expected uncommitted changes with untracked file")

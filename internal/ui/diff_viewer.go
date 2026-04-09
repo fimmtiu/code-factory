@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/fimmtiu/code-factory/internal/diff"
+	"github.com/fimmtiu/code-factory/internal/git"
 )
 
 // viewerStatusBarHeight is the number of lines consumed by the viewer's
@@ -252,9 +253,9 @@ func (m *DiffViewerModel) KeyBindings() []KeyBinding {
 // ── Async diff fetch ─────────────────────────────────────────────────────────
 
 // fetchDiffCmd runs git diff between two commits and parses the result.
-func fetchDiffCmd(worktreePath string, startCommit, endCommit commitEntry) tea.Cmd {
+func fetchDiffCmd(worktreePath string, startCommit, endCommit git.CommitEntry) tea.Cmd {
 	return func() tea.Msg {
-		raw, err := fetchDiff(worktreePath, startCommit, endCommit)
+		raw, err := git.FetchDiff(worktreePath, startCommit, endCommit)
 		if err != nil {
 			return diffContentMsg{files: nil}
 		}
