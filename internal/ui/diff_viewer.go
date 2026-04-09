@@ -223,29 +223,55 @@ func isViewerExitKey(msg tea.KeyMsg) bool {
 
 // renderViewerStatusBar renders the two-line status bar for the viewer screen.
 // This is called by DiffView, which owns the identifier and phase fields.
-func renderViewerStatusBar(width int, identifier, phase string, isProject bool, viewer *DiffViewerModel) string {
+func renderViewerStatusBar(width int, identifier, phase string, isProject bool, startHash, endHash string, viewer *DiffViewerModel) string {
 	fileIdx := viewer.currentFileIndex()
 	totalFiles := len(viewer.fileNames)
 
 	// Line 1: "Ticket/Project: <id> (<phase>)" left, "File X of Y" right.
-	left := renderDiffLabel(identifier, phase, isProject)
-	right := ""
+	left1 := renderDiffLabel(identifier, phase, isProject)
+	right1 := ""
 	if totalFiles > 0 {
-		right = fmt.Sprintf("File %d of %d", fileIdx+1, totalFiles)
+		right1 = fmt.Sprintf("File %d of %d", fileIdx+1, totalFiles)
 	}
-	spacer := width - lipgloss.Width(left) - lipgloss.Width(right)
+	spacer := width - lipgloss.Width(left1) - lipgloss.Width(right1)
 	if spacer < 2 {
 		spacer = 2
 	}
-	line1 := left + strings.Repeat(" ", spacer) + right
+	line1 := left1 + strings.Repeat(" ", spacer) + right1
 
-	// Line 2: current filename (left-truncated if needed).
-	var line2 string
+	// Line 2: current filename left, commit range right.
+	var left2 string
 	if totalFiles > 0 && fileIdx < totalFiles {
-		line2 = leftTruncateFilename(viewer.fileNames[fileIdx], width)
+		left2 = viewer.fileNames[fileIdx]
 	}
+	right2 := shortCommitLabel(startHash, endHash)
+	available := width - lipgloss.Width(right2) - 2
+	if available < 0 {
+		available = 0
+	}
+	left2 = leftTruncateFilename(left2, available)
+	spacer = width - lipgloss.Width(left2) - lipgloss.Width(right2)
+	if spacer < 2 {
+		spacer = 2
+	}
+	line2 := left2 + strings.Repeat(" ", spacer) + right2
 
 	return line1 + "\n" + line2
+}
+
+// shortCommitLabel returns "Commit: <hash>" for a single commit or
+// "Commits: <start>..<end>" for a range, using 4-character short hashes.
+func shortCommitLabel(startHash, endHash string) string {
+	short := func(h string) string {
+		if len(h) > 4 {
+			return h[:4]
+		}
+		return h
+	}
+	if startHash == endHash {
+		return "Commit: " + short(endHash)
+	}
+	return "Commits: " + short(startHash) + ".." + short(endHash)
 }
 
 // renderPane renders just the diff content pane (no status bar or separator).

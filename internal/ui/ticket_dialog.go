@@ -517,6 +517,7 @@ func (d *TicketDialog) crContentLines(idx int) []string {
 		codeCtx,
 		"",
 		detailLabelStyle.Render("Description:"),
+		"",
 		cr.Description,
 	}, "\n")
 

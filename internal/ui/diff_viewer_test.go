@@ -132,7 +132,7 @@ func TestViewerStatusBar_Content(t *testing.T) {
 	files := sampleFiles()
 	m := makeViewerModel(files, 80, 24)
 
-	bar := renderViewerStatusBar(80, "proj/ticket", "implement", false, m)
+	bar := renderViewerStatusBar(80, "proj/ticket", "implement", false, "abc1234", "abc1234", m)
 	lines := strings.Split(bar, "\n")
 	if len(lines) < 2 {
 		t.Fatalf("expected at least 2 lines in status bar, got %d", len(lines))
@@ -146,9 +146,12 @@ func TestViewerStatusBar_Content(t *testing.T) {
 		t.Errorf("first line should contain file index, got %q", lines[0])
 	}
 
-	// Second line: current filename.
+	// Second line: current filename and commit.
 	if !strings.Contains(lines[1], "internal/ui/app.go") {
 		t.Errorf("second line should contain filename, got %q", lines[1])
+	}
+	if !strings.Contains(lines[1], "Commit: abc1") {
+		t.Errorf("second line should contain commit hash, got %q", lines[1])
 	}
 }
 
@@ -164,7 +167,7 @@ func TestViewerStatusBar_FileIndexUpdates(t *testing.T) {
 	}
 	m.offset = m.fileStarts[1]
 
-	bar := renderViewerStatusBar(80, "proj/ticket", "implement", false, m)
+	bar := renderViewerStatusBar(80, "proj/ticket", "implement", false, "abc1234", "def5678", m)
 	if !strings.Contains(bar, "File 2 of 2") {
 		t.Errorf("expected 'File 2 of 2' after scroll, got %q", bar)
 	}
@@ -586,7 +589,7 @@ func TestViewerStatusBarWidth(t *testing.T) {
 	files := sampleFiles()
 	m := makeViewerModel(files, 80, 24)
 
-	bar := renderViewerStatusBar(80, "proj/ticket", "implement", false, m)
+	bar := renderViewerStatusBar(80, "proj/ticket", "implement", false, "abc1234", "abc1234", m)
 	lines := strings.Split(bar, "\n")
 
 	// First line should span approximately the full width.

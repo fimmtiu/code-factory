@@ -92,7 +92,9 @@ type DiffView struct {
 	errorMsg string
 
 	// viewer is non-nil when the diff viewer sub-screen is active.
-	viewer *DiffViewerModel
+	viewer          *DiffViewerModel
+	viewerStartHash string // oldest commit hash in the viewed range
+	viewerEndHash   string // newest commit hash in the viewed range
 }
 
 // NewDiffView creates an empty DiffView.
@@ -474,6 +476,8 @@ func (v DiffView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if v.worktreePath == "" {
 			return v, nil
 		}
+		v.viewerStartHash = msg.startCommit.Hash
+		v.viewerEndHash = msg.endCommit.Hash
 		return v, fetchDiffCmd(v.worktreePath, msg.startCommit, msg.endCommit)
 
 	case diffContentMsg:
@@ -590,7 +594,7 @@ func (v DiffView) switchToDiffViewer() (tea.Model, tea.Cmd) {
 func (v DiffView) View() string {
 	if v.viewer != nil {
 		innerW := v.width - viewBorderOverhead
-		statusBar := renderViewerStatusBar(innerW, v.identifier, v.phase, v.isProject, v.viewer)
+		statusBar := renderViewerStatusBar(innerW, v.identifier, v.phase, v.isProject, v.viewerStartHash, v.viewerEndHash, v.viewer)
 		styledBar := diffStatusBarStyle.Width(innerW).Render(statusBar)
 		pane := connectPaneTop(v.viewer.renderPane(), true, true)
 		return lipgloss.JoinVertical(lipgloss.Left, styledBar, pane)
