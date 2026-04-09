@@ -193,12 +193,7 @@ func renderViewerStatusBar(width int, identifier, phase string, isProject bool, 
 	totalFiles := len(viewer.fileNames)
 
 	// Line 1: "Ticket/Project: <id> (<phase>)" left, "File X of Y" right.
-	kind := "Ticket"
-	if isProject {
-		kind = "Project"
-	}
-	boldPart := lipgloss.NewStyle().Bold(true).Render(fmt.Sprintf("%s: %s", kind, identifier))
-	left := fmt.Sprintf("%s (%s)", boldPart, phase)
+	left := renderDiffLabel(identifier, phase, isProject)
 	right := ""
 	if totalFiles > 0 {
 		right = fmt.Sprintf("File %d of %d", fileIdx+1, totalFiles)

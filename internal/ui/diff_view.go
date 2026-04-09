@@ -602,18 +602,27 @@ func connectPaneTop(rendered string, left, right bool) string {
 	return strings.Join(lines, "\n")
 }
 
+// diffLabelBold is the style for the "Ticket: <id>" / "Project: <id>" label.
+var diffLabelBold = lipgloss.NewStyle().Bold(true)
+
+// renderDiffLabel returns the styled left-hand label for Diffs status bars,
+// e.g. "**Ticket: proj/ticket** (implement)".
+func renderDiffLabel(identifier, phase string, isProject bool) string {
+	kind := "Ticket"
+	if isProject {
+		kind = "Project"
+	}
+	boldPart := diffLabelBold.Render(fmt.Sprintf("%s: %s", kind, identifier))
+	return fmt.Sprintf("%s (%s)", boldPart, phase)
+}
+
 // diffErrorStyle renders error messages in the diff view status bar.
 var diffErrorStyle = lipgloss.NewStyle().Foreground(colourDanger)
 
 // renderStatusBar renders the status bar with ticket info and selection count.
 // width is the inner content width (excluding border overhead).
 func (v DiffView) renderStatusBar(width int) string {
-	kind := "Ticket"
-	if v.isProject {
-		kind = "Project"
-	}
-	boldPart := lipgloss.NewStyle().Bold(true).Render(fmt.Sprintf("%s: %s", kind, v.identifier))
-	left := fmt.Sprintf("%s (%s)", boldPart, v.phase)
+	left := renderDiffLabel(v.identifier, v.phase, v.isProject)
 
 	if v.errorMsg != "" {
 		errText := diffErrorStyle.Render(v.errorMsg)
