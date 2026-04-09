@@ -163,10 +163,3 @@ func fileNamesFromDiff(files []diff.File) []string {
 	}
 	return names
 }
-
-// fileStartLines returns the line offset where each file begins in the
-// rendered output. Each file's section starts with its blank separator line.
-// It delegates to renderDiffResult to compute offsets during rendering.
-func fileStartLines(files []diff.File, paneWidth int) []int {
-	return renderDiffResult(files, paneWidth).fileStarts
-}

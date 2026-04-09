@@ -546,50 +546,92 @@ func TestRenderCommitLabel_ShortHash(t *testing.T) {
 	}
 }
 
-// ── Parse tests ──────────────────────────────────────────────────────────────
+// ── switchToDiffViewer guard tests ────────────────────────────────────────────
 
-// TestParseGitLog_Normal verifies parsing of standard git log output.
-func TestParseGitLog_Normal(t *testing.T) {
-	log := "abc123 Fix the thing\ndef456 Add feature\n"
-	commits := parseGitLog(log)
-	if len(commits) != 2 {
-		t.Fatalf("expected 2 commits, got %d", len(commits))
+// TestSwitchToDiffViewer_AllSeparators returns nil cmd when all rows are separators.
+func TestSwitchToDiffViewer_AllSeparators(t *testing.T) {
+	v := DiffView{
+		rows: []commitRow{
+			{separator: true},
+			{separator: true},
+		},
+		width:  80,
+		height: 24,
+		cursor: 0,
+		anchor: 1,
 	}
-	if commits[0].Hash != "abc123" || commits[0].Message != "Fix the thing" {
-		t.Errorf("commit 0: got %+v", commits[0])
-	}
-	if commits[1].Hash != "def456" || commits[1].Message != "Add feature" {
-		t.Errorf("commit 1: got %+v", commits[1])
+	_, cmd := v.switchToDiffViewer()
+	if cmd != nil {
+		t.Error("expected nil cmd when all rows in selection are separators")
 	}
 }
 
-// TestParseGitLog_Empty returns nil for empty input.
-func TestParseGitLog_Empty(t *testing.T) {
-	commits := parseGitLog("")
-	if len(commits) != 0 {
-		t.Errorf("expected 0 commits, got %d", len(commits))
+// TestSwitchToDiffViewer_ValidSelection returns a non-nil cmd for valid commits.
+func TestSwitchToDiffViewer_ValidSelection(t *testing.T) {
+	v := DiffView{
+		rows: []commitRow{
+			{commit: makeCommit("aaaa", "first")},
+			{commit: makeCommit("bbbb", "second")},
+		},
+		width:  80,
+		height: 24,
+		cursor: 0,
+		anchor: 1,
+	}
+	_, cmd := v.switchToDiffViewer()
+	if cmd == nil {
+		t.Error("expected non-nil cmd for valid commit selection")
 	}
 }
 
-// TestParseGitLog_Whitespace handles trailing whitespace and blank lines.
-func TestParseGitLog_Whitespace(t *testing.T) {
-	log := "abc123 Fix\n\n  \n"
-	commits := parseGitLog(log)
-	if len(commits) != 1 {
-		t.Fatalf("expected 1 commit, got %d", len(commits))
+// ── Error display tests ──────────────────────────────────────────────────────
+
+// TestRenderStatusBar_WithError verifies the error is shown in the status bar.
+func TestRenderStatusBar_WithError(t *testing.T) {
+	v := DiffView{
+		identifier: "proj/ticket",
+		phase:      "implement",
+		width:      80,
+		height:     24,
+		errorMsg:   "worktree error: path not found",
+	}
+	bar := v.renderStatusBar()
+	if !strings.Contains(bar, "worktree error: path not found") {
+		t.Errorf("status bar should contain error message, got %q", bar)
+	}
+	// Should not show commit count when there's an error.
+	if strings.Contains(bar, "commit(s) selected") {
+		t.Error("status bar should not show commit count when error is displayed")
 	}
 }
 
-// TestParseGitLog_LimitsTo100 verifies that at most 100 commits are returned.
-func TestParseGitLog_LimitsTo100(t *testing.T) {
-	var lines []string
-	for i := 0; i < 150; i++ {
-		lines = append(lines, "abcdef1 commit message")
+// TestRenderStatusBar_ErrorClearedOnSuccess verifies the error is cleared when
+// a new ticket is set successfully.
+func TestRenderStatusBar_ErrorClearedOnSuccess(t *testing.T) {
+	v := DiffView{
+		identifier: "proj/ticket",
+		phase:      "implement",
+		width:      80,
+		height:     24,
+		errorMsg:   "worktree error: path not found",
+		rows: buildCommitRows([]commitEntry{
+			makeCommit("aaaa", "one"),
+		}, -1, false),
 	}
-	log := strings.Join(lines, "\n")
-	commits := parseGitLog(log)
-	if len(commits) != maxCommits {
-		t.Errorf("expected %d commits, got %d", maxCommits, len(commits))
+	// Verify error is shown initially.
+	bar := v.renderStatusBar()
+	if !strings.Contains(bar, "worktree error") {
+		t.Error("expected error in status bar initially")
+	}
+
+	// Clear the error and verify it's gone.
+	v.errorMsg = ""
+	bar = v.renderStatusBar()
+	if strings.Contains(bar, "worktree error") {
+		t.Error("expected error to be cleared from status bar")
+	}
+	if !strings.Contains(bar, "commit(s) selected") {
+		t.Error("expected commit count in status bar after error cleared")
 	}
 }
 

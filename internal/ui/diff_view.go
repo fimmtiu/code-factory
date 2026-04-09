@@ -25,6 +25,15 @@ const separatorLineHeight = 1
 
 // ── Data types ───────────────────────────────────────────────────────────────
 
+// selectionEnd identifies which end of the commit range selection moved most
+// recently, so the stat preview can display the relevant commit.
+type selectionEnd int
+
+const (
+	movedCursor selectionEnd = iota
+	movedAnchor
+)
+
 // commitEntry represents one commit in the list.
 type commitEntry struct {
 	Hash    string
@@ -55,8 +64,8 @@ type diffShowStatMsg struct {
 }
 
 // switchToDiffViewerMsg is sent when the user presses Tab/Enter to view the diff.
-// TODO: No Update handler consumes this message yet. The parent Model.Update in
-// app.go should handle it to switch to a full diff viewer pane once implemented.
+// DiffView.Update handles this by kicking off an async diff fetch; the result
+// arrives as diffContentMsg which activates the viewer screen.
 type switchToDiffViewerMsg struct {
 	startCommit commitEntry
 	endCommit   commitEntry
@@ -70,8 +79,9 @@ type setDiffTicketMsg struct {
 
 // ── DiffView ─────────────────────────────────────────────────────────────────
 
-// DiffView implements the commit selector screen of the Diffs view (F5).
-// It shows a two-pane layout: commit list on the left, git show --stat on the right.
+// DiffView implements the Diffs view (F5). It has two sub-screens:
+// a commit selector (two-pane layout) and a diff viewer (scrollable diff).
+// The viewerActive flag controls which sub-screen is shown.
 type DiffView struct {
 	width  int
 	height int
@@ -91,14 +101,19 @@ type DiffView struct {
 	anchor int
 	offset int // first visible row in the commit list
 
-	// lastMoved tracks which end of the selection moved most recently:
-	// "cursor" or "anchor". Used by currentCommit() to display the stat
-	// for the end the user just moved.
-	lastMoved string
+	// lastMoved tracks which end of the selection moved most recently.
+	// Used by currentCommit() to display the stat for the end the user just moved.
+	lastMoved selectionEnd
 
 	// Right pane: cached git show --stat output
 	statOutput string
 	statHash   string // hash for which statOutput was fetched
+
+	// errorMsg holds a brief error message displayed in the view.
+	errorMsg string
+
+	// viewer is non-nil when the diff viewer sub-screen is active.
+	viewer *DiffViewerModel
 }
 
 // NewDiffView creates an empty DiffView.
@@ -145,32 +160,6 @@ func renderCommitLabel(c commitEntry) string {
 		}
 	}
 	return h + " " + c.Message
-}
-
-// ── Parse helpers ────────────────────────────────────────────────────────────
-
-// parseGitLog parses "git log --format='%H %s'" output into commitEntry slices.
-// It limits the result to maxCommits entries.
-func parseGitLog(output string) []commitEntry {
-	lines := strings.Split(strings.TrimSpace(output), "\n")
-	var commits []commitEntry
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-		parts := strings.SplitN(line, " ", 2)
-		hash := parts[0]
-		msg := ""
-		if len(parts) > 1 {
-			msg = parts[1]
-		}
-		commits = append(commits, commitEntry{Hash: hash, Message: msg})
-		if len(commits) >= maxCommits {
-			break
-		}
-	}
-	return commits
 }
 
 // ── Dimension helpers ────────────────────────────────────────────────────────
@@ -230,7 +219,7 @@ func (v DiffView) selectionRange() (int, int) {
 // most recently, used for stat display. Falls back to cursor if unset.
 func (v DiffView) currentCommit() *commitEntry {
 	idx := v.cursor
-	if v.lastMoved == "anchor" {
+	if v.lastMoved == movedAnchor {
 		idx = v.anchor
 	}
 	if idx < 0 || idx >= len(v.rows) || v.rows[idx].separator {
@@ -274,7 +263,7 @@ func (v *DiffView) moveDown(n int) {
 	}
 	v.cursor = v.advanceCursor(v.cursor, n, 1)
 	v.anchor = v.cursor
-	v.lastMoved = "cursor"
+	v.lastMoved = movedCursor
 	v.clampScroll()
 }
 
@@ -286,7 +275,7 @@ func (v *DiffView) moveUp(n int) {
 	}
 	v.cursor = v.advanceCursor(v.cursor, n, -1)
 	v.anchor = v.cursor
-	v.lastMoved = "cursor"
+	v.lastMoved = movedCursor
 	v.clampScroll()
 }
 
@@ -296,7 +285,7 @@ func (v *DiffView) extendRangeDown(n int) {
 		return
 	}
 	v.cursor = v.advanceCursor(v.cursor, n, 1)
-	v.lastMoved = "cursor"
+	v.lastMoved = movedCursor
 	v.clampScroll()
 }
 
@@ -306,7 +295,7 @@ func (v *DiffView) extendRangeUp(n int) {
 		return
 	}
 	v.anchor = v.advanceCursor(v.anchor, n, -1)
-	v.lastMoved = "anchor"
+	v.lastMoved = movedAnchor
 	v.clampScroll()
 }
 
@@ -376,29 +365,15 @@ func (v *DiffView) clampSelected() {
 // fetchCommitsCmd fetches the commit list and fork point asynchronously.
 func fetchCommitsCmd(worktreePath string) tea.Cmd {
 	return func() tea.Msg {
-		// Fetch non-merge commits.
-		logOutput, err := gitOutput(worktreePath, "log", "--no-merges", "--format=%H %s", fmt.Sprintf("-%d", maxCommits))
+		commits, err := fetchCommitList(worktreePath, maxCommits)
 		if err != nil {
 			return diffCommitListMsg{forkPointIdx: -1}
 		}
-		commits := parseGitLog(logOutput)
 
-		// Detect fork point.
 		defaultBranch := detectDefaultBranch(worktreePath)
-		forkHash, err := gitOutput(worktreePath, "merge-base", "--fork-point", defaultBranch)
-		forkPointIdx := -1
-		if err == nil && forkHash != "" {
-			for i, c := range commits {
-				if c.Hash == forkHash {
-					forkPointIdx = i
-					break
-				}
-			}
-		}
+		forkPointIdx := matchForkPoint(commits, worktreePath, defaultBranch)
 
-		// Check for uncommitted changes.
-		statusOut, err := gitOutput(worktreePath, "status", "--porcelain")
-		hasUncommit := err == nil && strings.TrimSpace(statusOut) != ""
+		hasUncommit, _ := hasUncommittedChanges(worktreePath)
 
 		return diffCommitListMsg{
 			commits:      commits,
@@ -408,19 +383,29 @@ func fetchCommitsCmd(worktreePath string) tea.Cmd {
 	}
 }
 
+// matchForkPoint finds the index in commits that matches the fork point of
+// the given branch, or -1 if not found.
+func matchForkPoint(commits []commitEntry, worktreePath, defaultBranch string) int {
+	forkHash, err := fetchForkPoint(worktreePath, defaultBranch)
+	if err != nil || forkHash == "" {
+		return -1
+	}
+	for i, c := range commits {
+		if c.Hash == forkHash {
+			return i
+		}
+	}
+	return -1
+}
+
 // fetchShowStatCmd fetches `git show --stat` output for a commit.
 func fetchShowStatCmd(worktreePath, hash string) tea.Cmd {
 	return func() tea.Msg {
-		if hash == uncommittedHash {
-			out, err := gitOutput(worktreePath, "diff", "--stat")
-			if err != nil {
+		out, err := fetchShowStat(worktreePath, hash)
+		if err != nil {
+			if hash == uncommittedHash {
 				return diffShowStatMsg{hash: hash, output: "(no changes)"}
 			}
-			return diffShowStatMsg{hash: hash, output: out}
-		}
-
-		out, err := gitOutput(worktreePath, "show", "--stat", "--format=", hash)
-		if err != nil {
 			return diffShowStatMsg{hash: hash, output: "(error)"}
 		}
 		return diffShowStatMsg{hash: hash, output: out}
@@ -436,6 +421,9 @@ func (v DiffView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		v.width = msg.Width
 		v.height = msg.Height
 		v.clampScroll()
+		if v.viewer != nil {
+			v.viewer.Update(msg)
+		}
 		return v, nil
 
 	case setDiffTicketMsg:
@@ -443,8 +431,10 @@ func (v DiffView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		v.phase = msg.phase
 		wp, err := storage.WorktreePathForIdentifier(v.identifier)
 		if err != nil {
+			v.errorMsg = fmt.Sprintf("worktree error: %s", err)
 			return v, nil
 		}
+		v.errorMsg = ""
 		v.worktreePath = wp
 		return v, fetchCommitsCmd(v.worktreePath)
 
@@ -460,7 +450,26 @@ func (v DiffView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		v.statOutput = msg.output
 		return v, nil
 
+	case switchToDiffViewerMsg:
+		// Kick off an async diff fetch for the selected range.
+		if v.worktreePath == "" {
+			return v, nil
+		}
+		return v, fetchDiffCmd(v.worktreePath, msg.startCommit, msg.endCommit)
+
+	case diffContentMsg:
+		v.viewer = newDiffViewerModel(msg.files, v.width, v.height, v.identifier, v.phase)
+		return v, nil
+
 	case tea.KeyMsg:
+		if v.viewer != nil {
+			if isViewerExitKey(msg) {
+				v.viewer = nil
+				return v, nil
+			}
+			v.viewer.Update(msg)
+			return v, nil
+		}
 		return v.handleKey(msg)
 	}
 
@@ -528,6 +537,10 @@ func (v DiffView) switchToDiffViewer() (tea.Model, tea.Cmd) {
 			break
 		}
 	}
+	// Guard: if no non-separator commits were found, do nothing.
+	if startC.Hash == "" || endC.Hash == "" {
+		return v, nil
+	}
 	return v, func() tea.Msg {
 		return switchToDiffViewerMsg{startCommit: startC, endCommit: endC}
 	}
@@ -536,6 +549,10 @@ func (v DiffView) switchToDiffViewer() (tea.Model, tea.Cmd) {
 // ── View ─────────────────────────────────────────────────────────────────────
 
 func (v DiffView) View() string {
+	if v.viewer != nil {
+		return v.viewer.View()
+	}
+
 	if v.identifier == "" {
 		paneW := v.width - viewBorderOverhead
 		h := v.height - chromeHeight - viewBorderOverhead
@@ -556,9 +573,22 @@ func (v DiffView) View() string {
 	return lipgloss.JoinVertical(lipgloss.Left, statusBar, separator, panes)
 }
 
+// diffErrorStyle renders error messages in the diff view status bar.
+var diffErrorStyle = lipgloss.NewStyle().Foreground(colourDanger)
+
 // renderStatusBar renders the status bar with ticket info and selection count.
 func (v DiffView) renderStatusBar() string {
 	left := fmt.Sprintf("Ticket: %s (%s)", v.identifier, v.phase)
+
+	if v.errorMsg != "" {
+		errText := diffErrorStyle.Render(v.errorMsg)
+		spacer := v.width - lipgloss.Width(left) - lipgloss.Width(errText)
+		if spacer < 2 {
+			spacer = 2
+		}
+		return left + strings.Repeat(" ", spacer) + errText
+	}
+
 	right := fmt.Sprintf("%d commit(s) selected", v.selectedCount())
 
 	spacer := v.width - lipgloss.Width(left) - lipgloss.Width(right)
@@ -641,6 +671,9 @@ func (v DiffView) renderRightPane() string {
 // ── KeyBindings ──────────────────────────────────────────────────────────────
 
 func (v DiffView) KeyBindings() []KeyBinding {
+	if v.viewer != nil {
+		return v.viewer.KeyBindings()
+	}
 	return []KeyBinding{
 		{Key: "↑/↓", Description: "Navigate commits"},
 		{Key: "PgUp/PgDn", Description: "Page navigate"},
