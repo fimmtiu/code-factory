@@ -58,9 +58,10 @@ func FetchCommitList(worktreePath string, maxCommits int) ([]CommitEntry, error)
 }
 
 // FetchForkPoint returns the commit hash where the current branch diverged from
-// the given default branch.
+// the given default branch. Uses merge-base (commit graph) rather than
+// --fork-point (reflog), since reflogs are unreliable in worktrees.
 func FetchForkPoint(worktreePath, defaultBranch string) (string, error) {
-	return Output(worktreePath, "merge-base", "--fork-point", defaultBranch)
+	return Output(worktreePath, "merge-base", defaultBranch, "HEAD")
 }
 
 // FetchShowStat returns the commit message followed by the --stat file list
