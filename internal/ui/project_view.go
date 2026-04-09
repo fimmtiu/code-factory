@@ -643,8 +643,11 @@ func (v ProjectView) View() string {
 		Height(topH - 2).
 		Render(statusContent)
 
+	// ── Pre-compute filtered tree nodes (used by tree, scrollbar, and detail) ──
+	nodes := v.filteredTreeNodes()
+
 	// ── Tree pane ──
-	treeContent := v.renderTreeContent()
+	treeContent := v.renderTreeContentFor(nodes)
 	treeInnerW := v.treeWidth()
 	treeBorderStyle := unfocusedBorderStyle
 	if v.focus == focusTree {
@@ -658,12 +661,12 @@ func (v ProjectView) View() string {
 	if v.focus == focusTree {
 		treeRightChar = "║"
 	}
-	treePane = injectScrollbar(treePane, treeRightChar, "█", v.treeOffset, len(v.filteredTreeNodes()), topH-2)
+	treePane = injectScrollbar(treePane, treeRightChar, "█", v.treeOffset, len(nodes), topH-2)
 
 	topRow := lipgloss.JoinHorizontal(lipgloss.Top, statusPane, treePane)
 
 	// ── Detail pane ──
-	detailContent := v.renderDetailContent()
+	detailContent := v.renderDetailContentFor(nodes)
 	detailInnerW := v.width - 2
 	if detailInnerW < 1 {
 		detailInnerW = 1
@@ -720,7 +723,12 @@ func (v ProjectView) renderStatusContent() string {
 
 // renderTreeContent returns the text content for the tree pane.
 func (v ProjectView) renderTreeContent() string {
-	nodes := v.filteredTreeNodes()
+	return v.renderTreeContentFor(v.filteredTreeNodes())
+}
+
+// renderTreeContentFor returns the text content for the tree pane using
+// pre-computed filtered nodes (avoids redundant filteredTreeNodes calls).
+func (v ProjectView) renderTreeContentFor(nodes []treeNode) string {
 	if len(nodes) == 0 {
 		if v.filterText != "" {
 			return "(no matches)"
@@ -826,7 +834,12 @@ func (v ProjectView) treeNodeStyle(node treeNode, idx int) lipgloss.Style {
 
 // detailLines returns the full content of the detail pane as individual lines.
 func (v ProjectView) detailLines() []string {
-	nodes := v.filteredTreeNodes()
+	return v.detailLinesFor(v.filteredTreeNodes())
+}
+
+// detailLinesFor returns the full content of the detail pane using
+// pre-computed filtered nodes (avoids redundant filteredTreeNodes calls).
+func (v ProjectView) detailLinesFor(nodes []treeNode) []string {
 	if len(nodes) == 0 {
 		return []string{"(no selection)"}
 	}
@@ -876,7 +889,13 @@ func buildDetailLines(wu *models.WorkUnit, width int) []string {
 
 // renderDetailContent returns the visible slice of detail lines, joined.
 func (v ProjectView) renderDetailContent() string {
-	lines := v.detailLines()
+	return v.renderDetailContentFor(v.filteredTreeNodes())
+}
+
+// renderDetailContentFor returns the visible slice of detail lines using
+// pre-computed filtered nodes (avoids redundant filteredTreeNodes calls).
+func (v ProjectView) renderDetailContentFor(nodes []treeNode) string {
+	lines := v.detailLinesFor(nodes)
 	h := v.detailHeight()
 
 	start := v.detailOffset
