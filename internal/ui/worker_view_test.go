@@ -60,6 +60,34 @@ func TestFormatLastActivity_Hours(t *testing.T) {
 
 // --- renderStatusLine tests ---
 
+func TestRenderStatusLine_BusyShowsTicketNotStatus(t *testing.T) {
+	w := worker.NewWorker(3)
+	w.Status = worker.StatusBusy
+	w.SetCurrentTicket("implement diff-viewer/keybinding-integration")
+
+	v := NewWorkerView(nil)
+	line := v.renderStatusLine(w)
+
+	if !strings.Contains(line, "Worker 3: implement diff-viewer/keybinding-integration") {
+		t.Errorf("busy status line should show phase and ticket:\n%s", line)
+	}
+	if strings.Contains(line, "busy") {
+		t.Errorf("busy status line should not contain the word 'busy':\n%s", line)
+	}
+}
+
+func TestRenderStatusLine_IdleShowsIdle(t *testing.T) {
+	w := worker.NewWorker(2)
+	w.Status = worker.StatusIdle
+
+	v := NewWorkerView(nil)
+	line := v.renderStatusLine(w)
+
+	if !strings.Contains(line, "Worker 2: idle") {
+		t.Errorf("idle status line should say 'idle':\n%s", line)
+	}
+}
+
 func TestRenderStatusLine_ShowsActivityWhenBusy(t *testing.T) {
 	w := worker.NewWorker(1)
 	w.Status = worker.StatusBusy

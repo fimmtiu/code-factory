@@ -259,14 +259,16 @@ func formatLastActivity(since time.Duration) string {
 	}
 }
 
-// renderStatusLine returns the styled "Worker <N>: <status> (<ticket>)" line for a worker.
+// renderStatusLine returns the styled status line for a worker.
 func (v WorkerView) renderStatusLine(w *worker.Worker) string {
-	text := fmt.Sprintf("Worker %d: %s", w.Number, w.Status.String())
-	if w.Paused {
+	var text string
+	switch {
+	case w.Paused:
 		text = fmt.Sprintf("Worker %d: paused", w.Number)
-	}
-	if ticket := w.GetCurrentTicket(); ticket != "" {
-		text += fmt.Sprintf(" (%s)", ticket)
+	case w.GetCurrentTicket() != "":
+		text = fmt.Sprintf("Worker %d: %s", w.Number, w.GetCurrentTicket())
+	default:
+		text = fmt.Sprintf("Worker %d: %s", w.Number, w.Status.String())
 	}
 
 	// Build an activity/timing suffix for non-idle, non-paused workers.
