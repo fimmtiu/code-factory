@@ -328,11 +328,11 @@ func (v LogView) openDiffView() (tea.Model, tea.Cmd) {
 	}
 	identifier := identifierFromLogfile(entry.Logfile)
 	if identifier == "" {
-		return v, nil
+		return v, ShowNotification("Cannot open diff: unrecognised logfile path")
 	}
 	phase := phaseFromLogfile(entry.Logfile)
 	if phase == "" {
-		return v, nil
+		return v, ShowNotification("Cannot open diff: unable to determine phase from logfile")
 	}
 	return v, func() tea.Msg {
 		return openDiffViewMsg{identifier: identifier, phase: phase}

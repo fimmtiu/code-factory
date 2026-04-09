@@ -94,7 +94,7 @@ func TestLogView_GKey_EmptyLogfile_ReturnsNilCmd(t *testing.T) {
 	}
 }
 
-func TestLogView_GKey_InvalidLogfilePath_ReturnsNilCmd(t *testing.T) {
+func TestLogView_GKey_InvalidLogfilePath_ReturnsNotification(t *testing.T) {
 	v := LogView{
 		width:  120,
 		height: 40,
@@ -105,8 +105,12 @@ func TestLogView_GKey_InvalidLogfilePath_ReturnsNilCmd(t *testing.T) {
 	}
 
 	_, cmd := v.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("g")})
-	if cmd != nil {
-		t.Error("expected nil cmd when logfile path has no valid identifier")
+	if cmd == nil {
+		t.Fatal("expected non-nil cmd (notification) when logfile path has no valid identifier")
+	}
+	msg := cmd()
+	if _, ok := msg.(notifMsg); !ok {
+		t.Errorf("expected notifMsg, got %T", msg)
 	}
 }
 
