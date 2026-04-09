@@ -63,14 +63,14 @@ func FetchForkPoint(worktreePath, defaultBranch string) (string, error) {
 	return Output(worktreePath, "merge-base", "--fork-point", defaultBranch)
 }
 
-// FetchShowStat returns the git show --stat output for the given commit,
-// suppressing the commit header. For the uncommitted pseudo-commit, it
-// returns git diff --stat instead.
+// FetchShowStat returns the commit message followed by the --stat file list
+// for the given commit. For the uncommitted pseudo-commit, it returns
+// git diff --stat instead.
 func FetchShowStat(worktreePath, commitHash string) (string, error) {
 	if commitHash == UncommittedHash {
 		return Output(worktreePath, "diff", "--stat")
 	}
-	return Output(worktreePath, "show", "--stat", "--format=", commitHash)
+	return Output(worktreePath, "show", "--stat", "--format=%B", commitHash)
 }
 
 // FetchDiff returns the raw diff between two commits.
