@@ -290,7 +290,7 @@ func TestExtendRangeDown(t *testing.T) {
 	}
 }
 
-// TestExtendRangeUp verifies shift+up extends the range upward.
+// TestExtendRangeUp verifies shift+up moves the cursor upward while anchor stays fixed.
 func TestExtendRangeUp(t *testing.T) {
 	rows := buildCommitRows([]git.CommitEntry{
 		makeCommit("aaaa", "newest"),
@@ -302,14 +302,14 @@ func TestExtendRangeUp(t *testing.T) {
 	v.cursor = 2
 	v.anchor = 2
 
-	v.extendRangeUp(1) // move end up to 1
-	if v.cursor != 2 || v.anchor != 1 {
-		t.Errorf("after extendRangeUp(1): start=%d end=%d, want 2,1", v.cursor, v.anchor)
+	v.extendRangeUp(1) // cursor moves up to 1, anchor stays at 2
+	if v.cursor != 1 || v.anchor != 2 {
+		t.Errorf("after extendRangeUp(1): cursor=%d anchor=%d, want 1,2", v.cursor, v.anchor)
 	}
 
-	v.extendRangeUp(1) // move end up to 0
-	if v.cursor != 2 || v.anchor != 0 {
-		t.Errorf("after extendRangeUp(2): start=%d end=%d, want 2,0", v.cursor, v.anchor)
+	v.extendRangeUp(1) // cursor moves up to 0, anchor stays at 2
+	if v.cursor != 0 || v.anchor != 2 {
+		t.Errorf("after extendRangeUp(2): cursor=%d anchor=%d, want 0,2", v.cursor, v.anchor)
 	}
 }
 
@@ -343,14 +343,14 @@ func TestExtendRangeUp_SkipsSeparator(t *testing.T) {
 	v.cursor = 3
 	v.anchor = 3
 
-	v.extendRangeUp(1) // bbbb (row 2)
-	if v.cursor != 3 || v.anchor != 2 {
-		t.Errorf("step 1: start=%d end=%d, want 3,2", v.cursor, v.anchor)
+	v.extendRangeUp(1) // cursor moves to bbbb (row 2), anchor stays at 3
+	if v.cursor != 2 || v.anchor != 3 {
+		t.Errorf("step 1: cursor=%d anchor=%d, want 2,3", v.cursor, v.anchor)
 	}
 
-	v.extendRangeUp(1) // should skip separator, land on aaaa (row 0)
-	if v.cursor != 3 || v.anchor != 0 {
-		t.Errorf("step 2: start=%d end=%d, want 3,0", v.cursor, v.anchor)
+	v.extendRangeUp(1) // cursor skips separator, lands on aaaa (row 0), anchor stays at 3
+	if v.cursor != 0 || v.anchor != 3 {
+		t.Errorf("step 2: cursor=%d anchor=%d, want 0,3", v.cursor, v.anchor)
 	}
 }
 
@@ -381,15 +381,74 @@ func TestExtendRangeUp_ClampsAtStart(t *testing.T) {
 	v.anchor = 1
 
 	v.extendRangeUp(10)
+	if v.cursor != 0 || v.anchor != 1 {
+		t.Errorf("after extendRangeUp clamp: cursor=%d anchor=%d, want 0,1", v.cursor, v.anchor)
+	}
+}
+
+// TestExtendRange_DownThenUp_ContractsRange verifies that shift+down then
+// shift+up moves the cursor in both cases, contracting the selection. The
+// anchor stays fixed at the original position throughout.
+func TestExtendRange_DownThenUp_ContractsRange(t *testing.T) {
+	rows := buildCommitRows([]git.CommitEntry{
+		makeCommit("aaaa", "newest"),
+		makeCommit("bbbb", "middle"),
+		makeCommit("cccc", "oldest"),
+	}, -1, false)
+	v := makeDiffViewWithRows(rows)
+	v.cursor = 0
+	v.anchor = 0
+
+	// Shift+Down twice: cursor goes to 2, anchor stays at 0.
+	v.extendRangeDown(1)
+	v.extendRangeDown(1)
+	if v.cursor != 2 || v.anchor != 0 {
+		t.Fatalf("after 2x extendRangeDown: cursor=%d anchor=%d, want 2,0", v.cursor, v.anchor)
+	}
+
+	// Shift+Up once: cursor goes back to 1, anchor stays at 0.
+	v.extendRangeUp(1)
 	if v.cursor != 1 || v.anchor != 0 {
-		t.Errorf("after extendRangeUp clamp: start=%d end=%d, want 1,0", v.cursor, v.anchor)
+		t.Errorf("after extendRangeUp: cursor=%d anchor=%d, want 1,0", v.cursor, v.anchor)
+	}
+
+	// Shift+Up again: cursor goes to 0, anchor stays at 0 (collapsed).
+	v.extendRangeUp(1)
+	if v.cursor != 0 || v.anchor != 0 {
+		t.Errorf("after 2nd extendRangeUp: cursor=%d anchor=%d, want 0,0", v.cursor, v.anchor)
+	}
+}
+
+// TestExtendRange_UpThenDown_ContractsRange verifies the reverse: shift+up
+// from the bottom, then shift+down contracts back.
+func TestExtendRange_UpThenDown_ContractsRange(t *testing.T) {
+	rows := buildCommitRows([]git.CommitEntry{
+		makeCommit("aaaa", "newest"),
+		makeCommit("bbbb", "middle"),
+		makeCommit("cccc", "oldest"),
+	}, -1, false)
+	v := makeDiffViewWithRows(rows)
+	v.cursor = 2
+	v.anchor = 2
+
+	// Shift+Up twice: cursor goes to 0, anchor stays at 2.
+	v.extendRangeUp(1)
+	v.extendRangeUp(1)
+	if v.cursor != 0 || v.anchor != 2 {
+		t.Fatalf("after 2x extendRangeUp: cursor=%d anchor=%d, want 0,2", v.cursor, v.anchor)
+	}
+
+	// Shift+Down once: cursor goes to 1, anchor stays at 2.
+	v.extendRangeDown(1)
+	if v.cursor != 1 || v.anchor != 2 {
+		t.Errorf("after extendRangeDown: cursor=%d anchor=%d, want 1,2", v.cursor, v.anchor)
 	}
 }
 
 // ── Stat refresh tests ───────────────────────────────────────────────────────
 
-// TestHandleKey_ShiftUpTriggersStatRefresh verifies that shift+up triggers a
-// stat refresh even though it only moves the anchor, not the cursor.
+// TestHandleKey_ShiftUpTriggersStatRefresh verifies that shift+up moves the
+// cursor and triggers a stat refresh.
 func TestHandleKey_ShiftUpTriggersStatRefresh(t *testing.T) {
 	rows := buildCommitRows([]git.CommitEntry{
 		makeCommit("aaaa", "newest"),
@@ -409,12 +468,12 @@ func TestHandleKey_ShiftUpTriggersStatRefresh(t *testing.T) {
 
 	updated, cmd := v.handleKey(fakeKeyMsg("shift+up"))
 	dv := updated.(DiffView)
-	// anchor should have moved, cursor should not.
-	if dv.cursor != 2 {
-		t.Errorf("shift+up moved cursor: got %d, want 2", dv.cursor)
+	// cursor should have moved up, anchor should stay fixed.
+	if dv.cursor != 1 {
+		t.Errorf("shift+up: cursor got %d, want 1", dv.cursor)
 	}
-	if dv.anchor != 1 {
-		t.Errorf("shift+up did not move anchor: got %d, want 1", dv.anchor)
+	if dv.anchor != 2 {
+		t.Errorf("shift+up: anchor got %d, want 2", dv.anchor)
 	}
 	// A stat refresh should have been triggered.
 	if cmd == nil {

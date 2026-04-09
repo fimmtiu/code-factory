@@ -23,14 +23,6 @@ const separatorLineHeight = 1
 
 // ── Data types ───────────────────────────────────────────────────────────────
 
-// selectionEnd identifies which end of the commit range selection moved most
-// recently, so the stat preview can display the relevant commit.
-type selectionEnd int
-
-const (
-	movedCursor selectionEnd = iota
-	movedAnchor
-)
 
 // commitRow represents one row in the commit list. If separator is true, the
 // row is a non-selectable divider above the fork-point commit (same pattern
@@ -88,10 +80,6 @@ type DiffView struct {
 	cursor int
 	anchor int
 	offset int // first visible row in the commit list
-
-	// lastMoved tracks which end of the selection moved most recently.
-	// Used by currentCommit() to display the stat for the end the user just moved.
-	lastMoved selectionEnd
 
 	// Right pane: cached git show --stat output
 	statOutput string
@@ -235,17 +223,12 @@ func (v DiffView) selectionRange() (int, int) {
 	return lo, hi
 }
 
-// currentCommit returns the commit at whichever end of the selection moved
-// most recently, used for stat display. Falls back to cursor if unset.
+// currentCommit returns the commit at the cursor position, used for stat display.
 func (v DiffView) currentCommit() *git.CommitEntry {
-	idx := v.cursor
-	if v.lastMoved == movedAnchor {
-		idx = v.anchor
-	}
-	if idx < 0 || idx >= len(v.rows) || v.rows[idx].separator {
+	if v.cursor < 0 || v.cursor >= len(v.rows) || v.rows[v.cursor].separator {
 		return nil
 	}
-	return &v.rows[idx].commit
+	return &v.rows[v.cursor].commit
 }
 
 // ── Navigation ───────────────────────────────────────────────────────────────
@@ -283,7 +266,6 @@ func (v *DiffView) moveDown(n int) {
 	}
 	v.cursor = v.advanceCursor(v.cursor, n, 1)
 	v.anchor = v.cursor
-	v.lastMoved = movedCursor
 	v.clampScroll()
 }
 
@@ -295,7 +277,6 @@ func (v *DiffView) moveUp(n int) {
 	}
 	v.cursor = v.advanceCursor(v.cursor, n, -1)
 	v.anchor = v.cursor
-	v.lastMoved = movedCursor
 	v.clampScroll()
 }
 
@@ -305,17 +286,15 @@ func (v *DiffView) extendRangeDown(n int) {
 		return
 	}
 	v.cursor = v.advanceCursor(v.cursor, n, 1)
-	v.lastMoved = movedCursor
 	v.clampScroll()
 }
 
-// extendRangeUp moves anchor upward (newer) while leaving cursor fixed.
+// extendRangeUp moves cursor upward (newer) while leaving anchor fixed.
 func (v *DiffView) extendRangeUp(n int) {
 	if len(v.rows) == 0 {
 		return
 	}
-	v.anchor = v.advanceCursor(v.anchor, n, -1)
-	v.lastMoved = movedAnchor
+	v.cursor = v.advanceCursor(v.cursor, n, -1)
 	v.clampScroll()
 }
 
