@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/mattn/go-isatty"
 
 	"github.com/fimmtiu/code-factory/internal/db"
 	"github.com/fimmtiu/code-factory/internal/models"
@@ -40,6 +41,9 @@ func runCommand(subcommand string, args []string) error {
 	case "create-project":
 		return runCreateProject(d, args, os.Stdin)
 	case "create-ticket":
+		if len(args) == 0 && isatty.IsTerminal(os.Stdin.Fd()) {
+			return runWizard(d, "ticket")
+		}
 		return runCreateTicket(d, args, os.Stdin)
 	case "set-status":
 		return runSetStatus(d, args)
