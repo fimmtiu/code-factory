@@ -13,6 +13,15 @@ import (
 	"github.com/fimmtiu/code-factory/internal/worker"
 )
 
+// ── Messages ─────────────────────────────────────────────────────────────────
+
+// openDiffViewMsg is emitted by CommandView and LogView when the user presses
+// 'g' to open the diff viewer for a ticket.
+type openDiffViewMsg struct {
+	identifier string
+	phase      string
+}
+
 // ── Styles ───────────────────────────────────────────────────────────────────
 
 var (
@@ -197,6 +206,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case openDiffViewMsg:
+		m.activeView = ViewDiff
+		updated, cmd := m.views[ViewDiff].Update(msg)
+		m.views[ViewDiff] = updated.(viewModel)
+		return m, cmd
+
 	case tea.KeyMsg:
 		if m.editorWaiting {
 			return m, nil
@@ -306,10 +321,8 @@ func (m Model) View() string {
 				rightPairs = append(rightPairs, "C", "copy path", "/", "filter")
 			}
 		case ViewDiff:
-			if dv, ok := m.views[ViewDiff].(DiffView); ok && dv.viewer != nil {
-				rightPairs = []string{"↑/↓", "scroll", "PgUp/Dn", "page", "Tab/Esc/Enter", "back"}
-			} else {
-				rightPairs = []string{"↑/↓", "navigate", "PgUp/Dn", "page", "Shift+↑/↓", "extend range", "Tab", "view diff"}
+			if dv, ok := m.views[ViewDiff].(DiffView); ok {
+				rightPairs = dv.HintPairs()
 			}
 		}
 		if len(rightPairs) > 0 {

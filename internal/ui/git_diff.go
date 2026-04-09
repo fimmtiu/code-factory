@@ -6,20 +6,9 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/fimmtiu/code-factory/internal/git"
 	"github.com/fimmtiu/code-factory/internal/storage"
 )
-
-// openTerminalGitDiff opens a terminal in the ticket's worktree and runs
-// git diff against the fork point of the default branch.
-func openTerminalGitDiff(identifier string) {
-	worktreePath, err := storage.WorktreePathForIdentifier(identifier)
-	if err != nil {
-		return
-	}
-	defaultBranch := detectDefaultBranch(worktreePath)
-	diffCmd := "git diff $(git merge-base --fork-point '" + defaultBranch + "')"
-	_ = openTerminalWithCommand(worktreePath, diffCmd)
-}
 
 // openGitHubCompare opens a GitHub compare page for the ticket's branch
 // against the default branch.
@@ -28,12 +17,12 @@ func openGitHubCompare(identifier string) {
 	if err != nil {
 		return
 	}
-	defaultBranch := detectDefaultBranch(worktreePath)
-	branchName, err := gitOutput(worktreePath, "branch", "--show-current")
+	defaultBranch := git.DetectDefaultBranch(worktreePath)
+	branchName, err := git.Output(worktreePath, "branch", "--show-current")
 	if err != nil || branchName == "" {
 		return
 	}
-	originURL, _ := gitOutput(worktreePath, "remote", "get-url", "origin")
+	originURL, _ := git.Output(worktreePath, "remote", "get-url", "origin")
 	repo := extractGitHubRepo(originURL)
 	if repo == "" {
 		return
@@ -49,7 +38,7 @@ var isGitHubRepo = sync.OnceValue(func() bool {
 	if err != nil {
 		return false
 	}
-	originURL, err := gitOutput(repoRoot, "remote", "get-url", "origin")
+	originURL, err := git.Output(repoRoot, "remote", "get-url", "origin")
 	if err != nil {
 		return false
 	}
@@ -69,25 +58,6 @@ end tell`
 	c := exec.Command("osascript")
 	c.Stdin = strings.NewReader(script)
 	return c.Start()
-}
-
-// detectDefaultBranch returns "main" or "master" depending on which branch
-// exists in the worktree's repository.
-func detectDefaultBranch(worktreePath string) string {
-	if out, err := gitOutput(worktreePath, "rev-parse", "--verify", "main"); err == nil && out != "" {
-		return "main"
-	}
-	return "master"
-}
-
-// gitOutput runs a git command in the given directory and returns trimmed stdout.
-func gitOutput(dir string, args ...string) (string, error) {
-	fullArgs := append([]string{"-C", dir}, args...)
-	out, err := exec.Command("git", fullArgs...).Output()
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimSpace(string(out)), nil
 }
 
 // extractGitHubRepo extracts "owner/repo" from a GitHub remote URL.
@@ -122,6 +92,23 @@ func identifierFromLogfile(logfile string) string {
 	for i, p := range parts {
 		if p == ".tickets" && i+3 < len(parts) {
 			return parts[i+1] + "/" + parts[i+2]
+		}
+	}
+	return ""
+}
+
+// phaseFromLogfile extracts the phase name from a logfile path.
+// Logfiles live at .tickets/<project>/<ticket>/<phase>.log (optionally
+// numbered as <phase>.log.N), so the phase is the filename base before ".log".
+func phaseFromLogfile(logfile string) string {
+	parts := strings.Split(filepath.ToSlash(logfile), "/")
+	for i, p := range parts {
+		if p == ".tickets" && i+3 < len(parts) {
+			filename := parts[i+3]
+			// Strip ".log" or ".log.N" suffix to get the phase.
+			if idx := strings.Index(filename, ".log"); idx > 0 {
+				return filename[:idx]
+			}
 		}
 	}
 	return ""

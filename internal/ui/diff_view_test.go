@@ -5,16 +5,18 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/fimmtiu/code-factory/internal/git"
 )
 
-// makeCommit creates a test commitEntry with the given hash and message.
-func makeCommit(hash, message string) commitEntry {
-	return commitEntry{Hash: hash, Message: message}
+// makeCommit creates a test git.CommitEntry with the given hash and message.
+func makeCommit(hash, message string) git.CommitEntry {
+	return git.CommitEntry{Hash: hash, Message: message}
 }
 
 // TestBuildCommitRows_Basic verifies that commits are converted to rows in order.
 func TestBuildCommitRows_Basic(t *testing.T) {
-	commits := []commitEntry{
+	commits := []git.CommitEntry{
 		makeCommit("aaaa1111", "newest commit"),
 		makeCommit("bbbb2222", "older commit"),
 		makeCommit("cccc3333", "oldest commit"),
@@ -36,7 +38,7 @@ func TestBuildCommitRows_Basic(t *testing.T) {
 // TestBuildCommitRows_WithForkPoint verifies that a separator is inserted
 // above the fork-point commit.
 func TestBuildCommitRows_WithForkPoint(t *testing.T) {
-	commits := []commitEntry{
+	commits := []git.CommitEntry{
 		makeCommit("aaaa1111", "on branch"),
 		makeCommit("bbbb2222", "also on branch"),
 		makeCommit("cccc3333", "fork-point commit"),
@@ -59,14 +61,14 @@ func TestBuildCommitRows_WithForkPoint(t *testing.T) {
 // TestBuildCommitRows_WithUncommittedChanges verifies that uncommitted changes
 // appear at the top as a pseudo-commit.
 func TestBuildCommitRows_WithUncommittedChanges(t *testing.T) {
-	commits := []commitEntry{
+	commits := []git.CommitEntry{
 		makeCommit("aaaa1111", "latest commit"),
 	}
 	rows := buildCommitRows(commits, -1, true)
 	if len(rows) != 2 {
 		t.Fatalf("expected 2 rows, got %d", len(rows))
 	}
-	if rows[0].commit.Hash != uncommittedHash {
+	if rows[0].commit.Hash != git.UncommittedHash {
 		t.Errorf("expected first row to be uncommitted, got hash %q", rows[0].commit.Hash)
 	}
 	if rows[0].commit.Message != "Uncommitted changes" {
@@ -80,7 +82,7 @@ func TestBuildCommitRows_WithUncommittedChanges(t *testing.T) {
 // TestBuildCommitRows_ForkPointAtZero verifies that the separator appears
 // before the very first commit when fork point is 0.
 func TestBuildCommitRows_ForkPointAtZero(t *testing.T) {
-	commits := []commitEntry{
+	commits := []git.CommitEntry{
 		makeCommit("aaaa1111", "fork-point commit"),
 		makeCommit("bbbb2222", "older"),
 	}
@@ -99,7 +101,7 @@ func TestBuildCommitRows_ForkPointAtZero(t *testing.T) {
 // TestBuildCommitRows_UncommittedAndForkPoint verifies both uncommitted
 // changes and fork-point separator coexist correctly.
 func TestBuildCommitRows_UncommittedAndForkPoint(t *testing.T) {
-	commits := []commitEntry{
+	commits := []git.CommitEntry{
 		makeCommit("aaaa1111", "on branch"),
 		makeCommit("bbbb2222", "fork-point"),
 	}
@@ -108,7 +110,7 @@ func TestBuildCommitRows_UncommittedAndForkPoint(t *testing.T) {
 	if len(rows) != 4 {
 		t.Fatalf("expected 4 rows, got %d", len(rows))
 	}
-	if rows[0].commit.Hash != uncommittedHash {
+	if rows[0].commit.Hash != git.UncommittedHash {
 		t.Errorf("expected row 0 to be uncommitted, got %q", rows[0].commit.Hash)
 	}
 	if rows[1].commit.Hash != "aaaa1111" {
@@ -124,7 +126,7 @@ func TestBuildCommitRows_UncommittedAndForkPoint(t *testing.T) {
 
 // TestBuildCommitRows_NoForkPoint verifies no separator when forkPointIdx is -1.
 func TestBuildCommitRows_NoForkPoint(t *testing.T) {
-	commits := []commitEntry{
+	commits := []git.CommitEntry{
 		makeCommit("aaaa1111", "one"),
 		makeCommit("bbbb2222", "two"),
 	}
@@ -153,7 +155,7 @@ func TestBuildCommitRows_OnlyUncommitted(t *testing.T) {
 	if len(rows) != 1 {
 		t.Fatalf("expected 1 row, got %d", len(rows))
 	}
-	if rows[0].commit.Hash != uncommittedHash {
+	if rows[0].commit.Hash != git.UncommittedHash {
 		t.Errorf("expected uncommitted hash, got %q", rows[0].commit.Hash)
 	}
 }
@@ -172,7 +174,7 @@ func makeDiffViewWithRows(rows []commitRow) DiffView {
 
 // TestMoveDown_Basic verifies simple downward navigation.
 func TestMoveDown_Basic(t *testing.T) {
-	rows := buildCommitRows([]commitEntry{
+	rows := buildCommitRows([]git.CommitEntry{
 		makeCommit("aaaa", "first"),
 		makeCommit("bbbb", "second"),
 		makeCommit("cccc", "third"),
@@ -187,7 +189,7 @@ func TestMoveDown_Basic(t *testing.T) {
 
 // TestMoveUp_Basic verifies simple upward navigation.
 func TestMoveUp_Basic(t *testing.T) {
-	rows := buildCommitRows([]commitEntry{
+	rows := buildCommitRows([]git.CommitEntry{
 		makeCommit("aaaa", "first"),
 		makeCommit("bbbb", "second"),
 		makeCommit("cccc", "third"),
@@ -204,7 +206,7 @@ func TestMoveUp_Basic(t *testing.T) {
 
 // TestMoveDown_SkipsSeparator verifies that downward navigation skips separators.
 func TestMoveDown_SkipsSeparator(t *testing.T) {
-	rows := buildCommitRows([]commitEntry{
+	rows := buildCommitRows([]git.CommitEntry{
 		makeCommit("aaaa", "on branch"),
 		makeCommit("bbbb", "fork-point"),
 		makeCommit("cccc", "below fork"),
@@ -220,7 +222,7 @@ func TestMoveDown_SkipsSeparator(t *testing.T) {
 
 // TestMoveUp_SkipsSeparator verifies that upward navigation skips separators.
 func TestMoveUp_SkipsSeparator(t *testing.T) {
-	rows := buildCommitRows([]commitEntry{
+	rows := buildCommitRows([]git.CommitEntry{
 		makeCommit("aaaa", "on branch"),
 		makeCommit("bbbb", "fork-point"),
 		makeCommit("cccc", "below fork"),
@@ -238,7 +240,7 @@ func TestMoveUp_SkipsSeparator(t *testing.T) {
 
 // TestMoveDown_ClampsAtEnd verifies that moving down past the last row clamps.
 func TestMoveDown_ClampsAtEnd(t *testing.T) {
-	rows := buildCommitRows([]commitEntry{
+	rows := buildCommitRows([]git.CommitEntry{
 		makeCommit("aaaa", "only"),
 	}, -1, false)
 	v := makeDiffViewWithRows(rows)
@@ -251,7 +253,7 @@ func TestMoveDown_ClampsAtEnd(t *testing.T) {
 
 // TestMoveUp_ClampsAtStart verifies that moving up past the first row clamps.
 func TestMoveUp_ClampsAtStart(t *testing.T) {
-	rows := buildCommitRows([]commitEntry{
+	rows := buildCommitRows([]git.CommitEntry{
 		makeCommit("aaaa", "first"),
 		makeCommit("bbbb", "second"),
 	}, -1, false)
@@ -267,7 +269,7 @@ func TestMoveUp_ClampsAtStart(t *testing.T) {
 
 // TestExtendRangeDown verifies shift+down extends the range downward.
 func TestExtendRangeDown(t *testing.T) {
-	rows := buildCommitRows([]commitEntry{
+	rows := buildCommitRows([]git.CommitEntry{
 		makeCommit("aaaa", "newest"),
 		makeCommit("bbbb", "middle"),
 		makeCommit("cccc", "oldest"),
@@ -290,7 +292,7 @@ func TestExtendRangeDown(t *testing.T) {
 
 // TestExtendRangeUp verifies shift+up extends the range upward.
 func TestExtendRangeUp(t *testing.T) {
-	rows := buildCommitRows([]commitEntry{
+	rows := buildCommitRows([]git.CommitEntry{
 		makeCommit("aaaa", "newest"),
 		makeCommit("bbbb", "middle"),
 		makeCommit("cccc", "oldest"),
@@ -313,7 +315,7 @@ func TestExtendRangeUp(t *testing.T) {
 
 // TestExtendRangeDown_SkipsSeparator verifies range extension skips separators.
 func TestExtendRangeDown_SkipsSeparator(t *testing.T) {
-	rows := buildCommitRows([]commitEntry{
+	rows := buildCommitRows([]git.CommitEntry{
 		makeCommit("aaaa", "on branch"),
 		makeCommit("bbbb", "fork-point"),
 		makeCommit("cccc", "below fork"),
@@ -331,7 +333,7 @@ func TestExtendRangeDown_SkipsSeparator(t *testing.T) {
 
 // TestExtendRangeUp_SkipsSeparator verifies range extension skips separators going up.
 func TestExtendRangeUp_SkipsSeparator(t *testing.T) {
-	rows := buildCommitRows([]commitEntry{
+	rows := buildCommitRows([]git.CommitEntry{
 		makeCommit("aaaa", "on branch"),
 		makeCommit("bbbb", "fork-point"),
 		makeCommit("cccc", "below fork"),
@@ -354,7 +356,7 @@ func TestExtendRangeUp_SkipsSeparator(t *testing.T) {
 
 // TestExtendRangeDown_ClampsAtEnd verifies that extending past the end clamps.
 func TestExtendRangeDown_ClampsAtEnd(t *testing.T) {
-	rows := buildCommitRows([]commitEntry{
+	rows := buildCommitRows([]git.CommitEntry{
 		makeCommit("aaaa", "first"),
 		makeCommit("bbbb", "second"),
 	}, -1, false)
@@ -370,7 +372,7 @@ func TestExtendRangeDown_ClampsAtEnd(t *testing.T) {
 
 // TestExtendRangeUp_ClampsAtStart verifies that extending past the start clamps.
 func TestExtendRangeUp_ClampsAtStart(t *testing.T) {
-	rows := buildCommitRows([]commitEntry{
+	rows := buildCommitRows([]git.CommitEntry{
 		makeCommit("aaaa", "first"),
 		makeCommit("bbbb", "second"),
 	}, -1, false)
@@ -389,7 +391,7 @@ func TestExtendRangeUp_ClampsAtStart(t *testing.T) {
 // TestHandleKey_ShiftUpTriggersStatRefresh verifies that shift+up triggers a
 // stat refresh even though it only moves the anchor, not the cursor.
 func TestHandleKey_ShiftUpTriggersStatRefresh(t *testing.T) {
-	rows := buildCommitRows([]commitEntry{
+	rows := buildCommitRows([]git.CommitEntry{
 		makeCommit("aaaa", "newest"),
 		makeCommit("bbbb", "middle"),
 		makeCommit("cccc", "oldest"),
@@ -423,7 +425,7 @@ func TestHandleKey_ShiftUpTriggersStatRefresh(t *testing.T) {
 // TestHandleKey_ShiftDownTriggersStatRefresh verifies shift+down also triggers
 // a stat refresh (cursor moves).
 func TestHandleKey_ShiftDownTriggersStatRefresh(t *testing.T) {
-	rows := buildCommitRows([]commitEntry{
+	rows := buildCommitRows([]git.CommitEntry{
 		makeCommit("aaaa", "newest"),
 		makeCommit("bbbb", "middle"),
 		makeCommit("cccc", "oldest"),
@@ -480,7 +482,7 @@ func fakeKeyMsg(key string) tea.KeyMsg {
 
 // TestSelectedCount_Single verifies count is 1 for single selection.
 func TestSelectedCount_Single(t *testing.T) {
-	rows := buildCommitRows([]commitEntry{
+	rows := buildCommitRows([]git.CommitEntry{
 		makeCommit("aaaa", "first"),
 		makeCommit("bbbb", "second"),
 		makeCommit("cccc", "third"),
@@ -497,7 +499,7 @@ func TestSelectedCount_Single(t *testing.T) {
 
 // TestSelectedCount_Range verifies count for a range that spans a separator.
 func TestSelectedCount_Range(t *testing.T) {
-	rows := buildCommitRows([]commitEntry{
+	rows := buildCommitRows([]git.CommitEntry{
 		makeCommit("aaaa", "on branch"),
 		makeCommit("bbbb", "fork-point"),
 		makeCommit("cccc", "below fork"),
@@ -518,7 +520,7 @@ func TestSelectedCount_Range(t *testing.T) {
 
 // TestRenderCommitLabel verifies the "<4-char hash> <message>" format.
 func TestRenderCommitLabel(t *testing.T) {
-	c := commitEntry{Hash: "abcdef1234567890", Message: "fix the bug"}
+	c := git.CommitEntry{Hash: "abcdef1234567890", Message: "fix the bug"}
 	got := renderCommitLabel(c)
 	if !strings.HasPrefix(got, "abcd ") {
 		t.Errorf("expected label to start with first 4 chars of hash, got %q", got)
@@ -530,7 +532,7 @@ func TestRenderCommitLabel(t *testing.T) {
 
 // TestRenderCommitLabel_Uncommitted verifies the "????" prefix for uncommitted changes.
 func TestRenderCommitLabel_Uncommitted(t *testing.T) {
-	c := commitEntry{Hash: uncommittedHash, Message: "Uncommitted changes"}
+	c := git.CommitEntry{Hash: git.UncommittedHash, Message: "Uncommitted changes"}
 	got := renderCommitLabel(c)
 	if !strings.HasPrefix(got, "???? ") {
 		t.Errorf("expected uncommitted label to start with '???? ', got %q", got)
@@ -539,7 +541,7 @@ func TestRenderCommitLabel_Uncommitted(t *testing.T) {
 
 // TestRenderCommitLabel_ShortHash handles a hash shorter than 4 chars.
 func TestRenderCommitLabel_ShortHash(t *testing.T) {
-	c := commitEntry{Hash: "ab", Message: "short"}
+	c := git.CommitEntry{Hash: "ab", Message: "short"}
 	got := renderCommitLabel(c)
 	if !strings.HasPrefix(got, "ab") {
 		t.Errorf("expected label to start with short hash, got %q", got)
@@ -614,7 +616,7 @@ func TestRenderStatusBar_ErrorClearedOnSuccess(t *testing.T) {
 		width:      80,
 		height:     24,
 		errorMsg:   "worktree error: path not found",
-		rows: buildCommitRows([]commitEntry{
+		rows: buildCommitRows([]git.CommitEntry{
 			makeCommit("aaaa", "one"),
 		}, -1, false),
 	}
@@ -646,7 +648,7 @@ func TestRenderStatusBar(t *testing.T) {
 		anchor:     0,
 		width:      80,
 		height:     24,
-		rows: buildCommitRows([]commitEntry{
+		rows: buildCommitRows([]git.CommitEntry{
 			makeCommit("aaaa", "one"),
 		}, -1, false),
 	}
@@ -671,7 +673,7 @@ func TestRenderStatusBar_Range(t *testing.T) {
 		anchor:     0,
 		width:      80,
 		height:     24,
-		rows: buildCommitRows([]commitEntry{
+		rows: buildCommitRows([]git.CommitEntry{
 			makeCommit("aaaa", "one"),
 			makeCommit("bbbb", "two"),
 			makeCommit("cccc", "three"),
@@ -704,5 +706,161 @@ func TestLeftPaneWidth(t *testing.T) {
 	w := v.leftPaneWidth()
 	if w != 30 {
 		t.Errorf("leftPaneWidth for width=90: got %d, want 30", w)
+	}
+}
+
+// ── Error propagation tests ──────────────────────────────────────────────────
+
+// TestDiffCommitListMsg_WithError verifies that an error in the commit list
+// fetch is displayed to the user via errorMsg.
+func TestDiffCommitListMsg_WithError(t *testing.T) {
+	v := DiffView{
+		width:      80,
+		height:     24,
+		identifier: "proj/ticket",
+		phase:      "implement",
+	}
+
+	updated, cmd := v.Update(diffCommitListMsg{
+		forkPointIdx: -1,
+		errMsg:       "exit status 128",
+	})
+	dv := updated.(DiffView)
+	if dv.errorMsg == "" {
+		t.Error("expected errorMsg to be set when commit list fetch fails")
+	}
+	if !strings.Contains(dv.errorMsg, "exit status 128") {
+		t.Errorf("errorMsg should contain the original error, got %q", dv.errorMsg)
+	}
+	if len(dv.rows) != 0 {
+		t.Errorf("expected no rows on error, got %d", len(dv.rows))
+	}
+	if cmd != nil {
+		t.Error("expected nil cmd on error")
+	}
+}
+
+// TestDiffCommitListMsg_SuccessClearsError verifies that a successful fetch
+// does not set errorMsg.
+func TestDiffCommitListMsg_SuccessClearsError(t *testing.T) {
+	v := DiffView{
+		width:      80,
+		height:     24,
+		identifier: "proj/ticket",
+		phase:      "implement",
+		errorMsg:   "previous error",
+	}
+
+	updated, _ := v.Update(diffCommitListMsg{
+		commits:      []git.CommitEntry{makeCommit("aaaa", "one")},
+		forkPointIdx: -1,
+	})
+	dv := updated.(DiffView)
+	if dv.errorMsg != "" {
+		t.Errorf("errorMsg should be empty on success, got %q", dv.errorMsg)
+	}
+	if len(dv.rows) != 1 {
+		t.Errorf("expected 1 row, got %d", len(dv.rows))
+	}
+}
+
+// ── resetForTicket tests ─────────────────────────────────────────────────────
+
+// TestResetForTicket_ClearsStaleState verifies that resetForTicket clears
+// all fields from the previous ticket, preventing stale-state flash.
+func TestResetForTicket_ClearsStaleState(t *testing.T) {
+	v := DiffView{
+		width:      80,
+		height:     24,
+		identifier: "old/ticket",
+		phase:      "implement",
+		rows: buildCommitRows([]git.CommitEntry{
+			makeCommit("aaaa", "old commit"),
+		}, -1, false),
+		cursor:     1,
+		anchor:     1,
+		offset:     5,
+		statOutput: "old stat output",
+		statHash:   "aaaa",
+		viewer:     &DiffViewerModel{},
+	}
+
+	v.resetForTicket("new/ticket", "review", "/tmp/worktree", nil)
+
+	if v.identifier != "new/ticket" {
+		t.Errorf("identifier = %q, want %q", v.identifier, "new/ticket")
+	}
+	if v.phase != "review" {
+		t.Errorf("phase = %q, want %q", v.phase, "review")
+	}
+	if len(v.rows) != 0 {
+		t.Errorf("rows should be cleared, got %d rows", len(v.rows))
+	}
+	if v.cursor != 0 {
+		t.Errorf("cursor = %d, want 0", v.cursor)
+	}
+	if v.anchor != 0 {
+		t.Errorf("anchor = %d, want 0", v.anchor)
+	}
+	if v.offset != 0 {
+		t.Errorf("offset = %d, want 0", v.offset)
+	}
+	if v.statOutput != "" {
+		t.Errorf("statOutput = %q, want empty", v.statOutput)
+	}
+	if v.statHash != "" {
+		t.Errorf("statHash = %q, want empty", v.statHash)
+	}
+	if v.viewer != nil {
+		t.Error("viewer should be nil")
+	}
+	if v.errorMsg != "" {
+		t.Errorf("errorMsg = %q, want empty", v.errorMsg)
+	}
+}
+
+// ── HintPairs tests ──────────────────────────────────────────────────────────
+
+// TestHintPairs_CommitSelector verifies hint pairs for the commit selector screen.
+func TestHintPairs_CommitSelector(t *testing.T) {
+	v := DiffView{width: 80, height: 24}
+	pairs := v.HintPairs()
+	if len(pairs) == 0 {
+		t.Fatal("expected non-empty hint pairs for commit selector")
+	}
+	// Should contain "navigate" for the commit selector screen.
+	found := false
+	for _, p := range pairs {
+		if p == "navigate" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected 'navigate' in commit selector hint pairs")
+	}
+}
+
+// TestHintPairs_ViewerMode verifies hint pairs for the viewer screen.
+func TestHintPairs_ViewerMode(t *testing.T) {
+	v := DiffView{
+		width:  80,
+		height: 24,
+		viewer: &DiffViewerModel{},
+	}
+	pairs := v.HintPairs()
+	if len(pairs) == 0 {
+		t.Fatal("expected non-empty hint pairs for viewer")
+	}
+	// Should contain "scroll" for the viewer screen.
+	found := false
+	for _, p := range pairs {
+		if p == "scroll" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected 'scroll' in viewer hint pairs")
 	}
 }

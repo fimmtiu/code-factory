@@ -245,7 +245,7 @@ func (v CommandView) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "a", "A":
 		return v.approveTicket()
 	case "g":
-		return v.terminalGitDiff()
+		return v.openDiffView()
 	case "G":
 		return v.githubCompare()
 	case "d", "D":
@@ -626,13 +626,16 @@ func (v CommandView) renderRow(wu *models.WorkUnit, selected bool) string {
 	return line
 }
 
-func (v CommandView) terminalGitDiff() (tea.Model, tea.Cmd) {
+func (v CommandView) openDiffView() (tea.Model, tea.Cmd) {
 	wu := v.selectedTicket()
 	if wu == nil {
 		return v, nil
 	}
-	openTerminalGitDiff(wu.Identifier)
-	return v, nil
+	identifier := wu.Identifier
+	phase := string(wu.Phase)
+	return v, func() tea.Msg {
+		return openDiffViewMsg{identifier: identifier, phase: phase}
+	}
 }
 
 func (v CommandView) githubCompare() (tea.Model, tea.Cmd) {
@@ -751,7 +754,7 @@ func (v CommandView) KeyBindings() []KeyBinding {
 		{Key: "T", Description: "Open terminal in worktree"},
 		{Key: "E", Description: "Open worktree in Cursor"},
 		{Key: "A", Description: "Approve ticket (user-review tickets)"},
-		{Key: "g", Description: "Open git diff in terminal"},
+		{Key: "g", Description: "View diff"},
 		{Key: "G", Description: "Open GitHub compare page", Hidden: !isGitHubRepo()},
 	}
 }

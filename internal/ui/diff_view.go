@@ -7,14 +7,12 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/fimmtiu/code-factory/internal/git"
 	"github.com/fimmtiu/code-factory/internal/storage"
 )
 
 // maxCommits is the maximum number of commits shown in the selector.
 const maxCommits = 100
-
-// uncommittedHash is the sentinel hash for the "uncommitted changes" pseudo-commit.
-const uncommittedHash = "????"
 
 // statusBarHeight is the number of lines consumed by the status bar and its
 // horizontal separator.
@@ -34,17 +32,11 @@ const (
 	movedAnchor
 )
 
-// commitEntry represents one commit in the list.
-type commitEntry struct {
-	Hash    string
-	Message string
-}
-
 // commitRow represents one row in the commit list. If separator is true, the
 // row is a non-selectable divider above the fork-point commit (same pattern
 // as the CommandView separator between status groups).
 type commitRow struct {
-	commit    commitEntry
+	commit    git.CommitEntry
 	separator bool
 }
 
@@ -52,9 +44,10 @@ type commitRow struct {
 
 // diffCommitListMsg carries the result of the async commit-list fetch.
 type diffCommitListMsg struct {
-	commits      []commitEntry
-	forkPointIdx int  // index into commits of the fork-point commit, or -1
-	hasUncommit  bool // true if there are uncommitted changes
+	commits      []git.CommitEntry
+	forkPointIdx int    // index into commits of the fork-point commit, or -1
+	hasUncommit  bool   // true if there are uncommitted changes
+	errMsg       string // non-empty when the commit list could not be fetched
 }
 
 // diffShowStatMsg carries the git show --stat output for a commit.
@@ -67,21 +60,16 @@ type diffShowStatMsg struct {
 // DiffView.Update handles this by kicking off an async diff fetch; the result
 // arrives as diffContentMsg which activates the viewer screen.
 type switchToDiffViewerMsg struct {
-	startCommit commitEntry
-	endCommit   commitEntry
-}
-
-// setDiffTicketMsg is sent to configure the DiffView with a ticket's context.
-type setDiffTicketMsg struct {
-	identifier string
-	phase      string
+	startCommit git.CommitEntry
+	endCommit   git.CommitEntry
 }
 
 // ── DiffView ─────────────────────────────────────────────────────────────────
 
 // DiffView implements the Diffs view (F5). It has two sub-screens:
 // a commit selector (two-pane layout) and a diff viewer (scrollable diff).
-// The viewerActive flag controls which sub-screen is shown.
+// When viewer is non-nil, the viewer sub-screen is shown; otherwise, the
+// commit selector is shown.
 type DiffView struct {
 	width  int
 	height int
@@ -126,16 +114,38 @@ func (v DiffView) Init() tea.Cmd {
 	return nil
 }
 
+// resetForTicket prepares the DiffView to display a new ticket's commits.
+// It resets selection state and resolves the worktree path. The caller should
+// check errorMsg after calling; if empty, worktreePath is valid.
+func (v *DiffView) resetForTicket(identifier, phase, worktreePath string, err error) {
+	v.identifier = identifier
+	v.phase = phase
+	v.cursor = 0
+	v.anchor = 0
+	v.offset = 0
+	v.rows = nil
+	v.statOutput = ""
+	v.statHash = ""
+	v.viewer = nil
+	if err != nil {
+		v.errorMsg = fmt.Sprintf("worktree error: %s", err)
+		v.worktreePath = ""
+	} else {
+		v.errorMsg = ""
+		v.worktreePath = worktreePath
+	}
+}
+
 // ── Row building ─────────────────────────────────────────────────────────────
 
 // buildCommitRows converts a commit list into rows, inserting a separator
 // above the fork-point commit and prepending an uncommitted-changes pseudo-commit.
-func buildCommitRows(commits []commitEntry, forkPointIdx int, hasUncommit bool) []commitRow {
+func buildCommitRows(commits []git.CommitEntry, forkPointIdx int, hasUncommit bool) []commitRow {
 	var rows []commitRow
 
 	if hasUncommit {
 		rows = append(rows, commitRow{
-			commit: commitEntry{Hash: uncommittedHash, Message: "Uncommitted changes"},
+			commit: git.CommitEntry{Hash: git.UncommittedHash, Message: "Uncommitted changes"},
 		})
 	}
 
@@ -152,9 +162,9 @@ func buildCommitRows(commits []commitEntry, forkPointIdx int, hasUncommit bool) 
 // ── Label rendering ──────────────────────────────────────────────────────────
 
 // renderCommitLabel returns "<4-char hash> <message>" for a commit.
-func renderCommitLabel(c commitEntry) string {
+func renderCommitLabel(c git.CommitEntry) string {
 	h := c.Hash
-	if h != uncommittedHash {
+	if h != git.UncommittedHash {
 		if len(h) > 4 {
 			h = h[:4]
 		}
@@ -191,6 +201,16 @@ func (v DiffView) commitListHeight() int {
 	return h
 }
 
+// viewerPaneHeight returns the content-pane height available to the viewer,
+// after accounting for the app chrome, viewer status bar, and separator.
+func (v DiffView) viewerPaneHeight() int {
+	h := v.height - chromeHeight - viewerStatusBarHeight - separatorLineHeight - viewBorderOverhead
+	if h < 1 {
+		h = 1
+	}
+	return h
+}
+
 // ── Selection helpers ────────────────────────────────────────────────────────
 
 // selectedCount returns the number of non-separator commits in the selection range.
@@ -217,7 +237,7 @@ func (v DiffView) selectionRange() (int, int) {
 
 // currentCommit returns the commit at whichever end of the selection moved
 // most recently, used for stat display. Falls back to cursor if unset.
-func (v DiffView) currentCommit() *commitEntry {
+func (v DiffView) currentCommit() *git.CommitEntry {
 	idx := v.cursor
 	if v.lastMoved == movedAnchor {
 		idx = v.anchor
@@ -365,15 +385,15 @@ func (v *DiffView) clampSelected() {
 // fetchCommitsCmd fetches the commit list and fork point asynchronously.
 func fetchCommitsCmd(worktreePath string) tea.Cmd {
 	return func() tea.Msg {
-		commits, err := fetchCommitList(worktreePath, maxCommits)
+		commits, err := git.FetchCommitList(worktreePath, maxCommits)
 		if err != nil {
-			return diffCommitListMsg{forkPointIdx: -1}
+			return diffCommitListMsg{forkPointIdx: -1, errMsg: err.Error()}
 		}
 
-		defaultBranch := detectDefaultBranch(worktreePath)
+		defaultBranch := git.DetectDefaultBranch(worktreePath)
 		forkPointIdx := matchForkPoint(commits, worktreePath, defaultBranch)
 
-		hasUncommit, _ := hasUncommittedChanges(worktreePath)
+		hasUncommit, _ := git.HasUncommittedChanges(worktreePath)
 
 		return diffCommitListMsg{
 			commits:      commits,
@@ -385,8 +405,8 @@ func fetchCommitsCmd(worktreePath string) tea.Cmd {
 
 // matchForkPoint finds the index in commits that matches the fork point of
 // the given branch, or -1 if not found.
-func matchForkPoint(commits []commitEntry, worktreePath, defaultBranch string) int {
-	forkHash, err := fetchForkPoint(worktreePath, defaultBranch)
+func matchForkPoint(commits []git.CommitEntry, worktreePath, defaultBranch string) int {
+	forkHash, err := git.FetchForkPoint(worktreePath, defaultBranch)
 	if err != nil || forkHash == "" {
 		return -1
 	}
@@ -401,9 +421,9 @@ func matchForkPoint(commits []commitEntry, worktreePath, defaultBranch string) i
 // fetchShowStatCmd fetches `git show --stat` output for a commit.
 func fetchShowStatCmd(worktreePath, hash string) tea.Cmd {
 	return func() tea.Msg {
-		out, err := fetchShowStat(worktreePath, hash)
+		out, err := git.FetchShowStat(worktreePath, hash)
 		if err != nil {
-			if hash == uncommittedHash {
+			if hash == git.UncommittedHash {
 				return diffShowStatMsg{hash: hash, output: "(no changes)"}
 			}
 			return diffShowStatMsg{hash: hash, output: "(error)"}
@@ -422,23 +442,24 @@ func (v DiffView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		v.height = msg.Height
 		v.clampScroll()
 		if v.viewer != nil {
-			v.viewer.Update(msg)
+			v.viewer.setSize(v.width, v.viewerPaneHeight())
 		}
 		return v, nil
 
-	case setDiffTicketMsg:
-		v.identifier = msg.identifier
-		v.phase = msg.phase
-		wp, err := storage.WorktreePathForIdentifier(v.identifier)
+	case openDiffViewMsg:
+		wp, err := storage.WorktreePathForIdentifier(msg.identifier)
+		v.resetForTicket(msg.identifier, msg.phase, wp, err)
 		if err != nil {
-			v.errorMsg = fmt.Sprintf("worktree error: %s", err)
+			return v, nil
+		}
+		return v, fetchCommitsCmd(wp)
+
+	case diffCommitListMsg:
+		if msg.errMsg != "" {
+			v.errorMsg = fmt.Sprintf("git error: %s", msg.errMsg)
 			return v, nil
 		}
 		v.errorMsg = ""
-		v.worktreePath = wp
-		return v, fetchCommitsCmd(v.worktreePath)
-
-	case diffCommitListMsg:
 		v.rows = buildCommitRows(msg.commits, msg.forkPointIdx, msg.hasUncommit)
 		v.clampSelected()
 		v.clampScroll()
@@ -458,7 +479,7 @@ func (v DiffView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return v, fetchDiffCmd(v.worktreePath, msg.startCommit, msg.endCommit)
 
 	case diffContentMsg:
-		v.viewer = newDiffViewerModel(msg.files, v.width, v.height, v.identifier, v.phase)
+		v.viewer = newDiffViewerModel(msg.files, v.width, v.viewerPaneHeight())
 		return v, nil
 
 	case tea.KeyMsg:
@@ -524,7 +545,7 @@ func (v DiffView) switchToDiffViewer() (tea.Model, tea.Cmd) {
 		return v, nil
 	}
 	// Find the actual commit entries at the range boundaries.
-	var startC, endC commitEntry
+	var startC, endC git.CommitEntry
 	for i := lo; i <= hi; i++ {
 		if !v.rows[i].separator {
 			endC = v.rows[i].commit
@@ -550,7 +571,10 @@ func (v DiffView) switchToDiffViewer() (tea.Model, tea.Cmd) {
 
 func (v DiffView) View() string {
 	if v.viewer != nil {
-		return v.viewer.View()
+		statusBar := renderViewerStatusBar(v.width, v.identifier, v.phase, v.viewer)
+		separator := strings.Repeat("─", v.width)
+		pane := v.viewer.renderPane()
+		return lipgloss.JoinVertical(lipgloss.Left, statusBar, separator, pane)
 	}
 
 	if v.identifier == "" {
@@ -680,6 +704,15 @@ func (v DiffView) KeyBindings() []KeyBinding {
 		{Key: "Shift+↑/↓", Description: "Extend selection range"},
 		{Key: "Tab/Enter", Description: "View diff"},
 	}
+}
+
+// HintPairs returns alternating key/description pairs for the footer hint bar.
+// The root model calls this instead of inspecting DiffView internals.
+func (v DiffView) HintPairs() []string {
+	if v.viewer != nil {
+		return []string{"↑/↓", "scroll", "PgUp/Dn", "page", "Tab/Esc/Enter", "back"}
+	}
+	return []string{"↑/↓", "navigate", "PgUp/Dn", "page", "Shift+↑/↓", "extend range", "Tab", "view diff"}
 }
 
 func (v DiffView) Label() string { return "F5:Diffs" }
