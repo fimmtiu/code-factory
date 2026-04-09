@@ -21,8 +21,13 @@ func makeDiffViewInViewerMode(files []diff.File, width, height int) DiffView {
 		identifier: "proj/ticket",
 		phase:      "implement",
 	}
-	v.enterViewerMode(files, width)
+	v.viewer = newDiffViewerModel(files, width, height, "proj/ticket", "implement")
 	return v
+}
+
+// makeViewerModel creates a standalone DiffViewerModel for direct testing.
+func makeViewerModel(files []diff.File, width, height int) *DiffViewerModel {
+	return newDiffViewerModel(files, width, height, "proj/ticket", "implement")
 }
 
 // sampleFiles returns a small set of diff files for testing.
@@ -90,39 +95,33 @@ func largeSampleFiles() []diff.File {
 
 // ── Viewer mode entry tests ──────────────────────────────────────────────────
 
-// TestEnterViewerMode verifies that enterViewerMode sets viewer state correctly.
+// TestEnterViewerMode verifies that newDiffViewerModel sets viewer state correctly.
 func TestEnterViewerMode(t *testing.T) {
 	files := sampleFiles()
-	v := makeDiffViewInViewerMode(files, 80, 24)
+	m := makeViewerModel(files, 80, 24)
 
-	if !v.viewerActive {
-		t.Error("expected viewerActive to be true")
+	if m.text == "" {
+		t.Error("expected text to be non-empty")
 	}
-	if v.viewerText == "" {
-		t.Error("expected viewerText to be non-empty")
+	if len(m.fileStarts) != 2 {
+		t.Errorf("expected 2 file starts, got %d", len(m.fileStarts))
 	}
-	if len(v.viewerFileStarts) != 2 {
-		t.Errorf("expected 2 file starts, got %d", len(v.viewerFileStarts))
+	if len(m.fileNames) != 2 {
+		t.Errorf("expected 2 file names, got %d", len(m.fileNames))
 	}
-	if len(v.viewerFileNames) != 2 {
-		t.Errorf("expected 2 file names, got %d", len(v.viewerFileNames))
-	}
-	if v.viewerOffset != 0 {
-		t.Errorf("expected viewerOffset to be 0, got %d", v.viewerOffset)
+	if m.offset != 0 {
+		t.Errorf("expected offset to be 0, got %d", m.offset)
 	}
 }
 
 // TestEnterViewerMode_EmptyFiles handles empty diff.
 func TestEnterViewerMode_EmptyFiles(t *testing.T) {
-	v := makeDiffViewInViewerMode(nil, 80, 24)
-	if !v.viewerActive {
-		t.Error("expected viewerActive to be true")
+	m := makeViewerModel(nil, 80, 24)
+	if m.text != "" {
+		t.Errorf("expected empty text, got %q", m.text)
 	}
-	if v.viewerText != "" {
-		t.Errorf("expected empty viewerText, got %q", v.viewerText)
-	}
-	if len(v.viewerFileStarts) != 0 {
-		t.Errorf("expected 0 file starts, got %d", len(v.viewerFileStarts))
+	if len(m.fileStarts) != 0 {
+		t.Errorf("expected 0 file starts, got %d", len(m.fileStarts))
 	}
 }
 
@@ -131,9 +130,9 @@ func TestEnterViewerMode_EmptyFiles(t *testing.T) {
 // TestViewerStatusBar_Content verifies the two-line status bar content.
 func TestViewerStatusBar_Content(t *testing.T) {
 	files := sampleFiles()
-	v := makeDiffViewInViewerMode(files, 80, 24)
+	m := makeViewerModel(files, 80, 24)
 
-	bar := v.renderViewerStatusBar()
+	bar := m.renderStatusBar()
 	lines := strings.Split(bar, "\n")
 	if len(lines) < 2 {
 		t.Fatalf("expected at least 2 lines in status bar, got %d", len(lines))
@@ -157,15 +156,15 @@ func TestViewerStatusBar_Content(t *testing.T) {
 // boundary updates the file index.
 func TestViewerStatusBar_FileIndexUpdates(t *testing.T) {
 	files := sampleFiles()
-	v := makeDiffViewInViewerMode(files, 80, 40)
+	m := makeViewerModel(files, 80, 40)
 
 	// Scroll past the first file.
-	if len(v.viewerFileStarts) < 2 {
+	if len(m.fileStarts) < 2 {
 		t.Fatal("need at least 2 files for this test")
 	}
-	v.viewerOffset = v.viewerFileStarts[1]
+	m.offset = m.fileStarts[1]
 
-	bar := v.renderViewerStatusBar()
+	bar := m.renderStatusBar()
 	if !strings.Contains(bar, "File 2 of 2") {
 		t.Errorf("expected 'File 2 of 2' after scroll, got %q", bar)
 	}
@@ -179,10 +178,10 @@ func TestViewerStatusBar_FileIndexUpdates(t *testing.T) {
 // TestCurrentFileIndex_AtStart verifies file index is 0 at the beginning.
 func TestCurrentFileIndex_AtStart(t *testing.T) {
 	files := sampleFiles()
-	v := makeDiffViewInViewerMode(files, 80, 24)
-	v.viewerOffset = 0
+	m := makeViewerModel(files, 80, 24)
+	m.offset = 0
 
-	idx := v.currentFileIndex()
+	idx := m.currentFileIndex()
 	if idx != 0 {
 		t.Errorf("expected file index 0, got %d", idx)
 	}
@@ -191,22 +190,22 @@ func TestCurrentFileIndex_AtStart(t *testing.T) {
 // TestCurrentFileIndex_BetweenFiles verifies file index between file boundaries.
 func TestCurrentFileIndex_BetweenFiles(t *testing.T) {
 	files := sampleFiles()
-	v := makeDiffViewInViewerMode(files, 80, 24)
+	m := makeViewerModel(files, 80, 24)
 
-	if len(v.viewerFileStarts) < 2 {
+	if len(m.fileStarts) < 2 {
 		t.Fatal("need at least 2 files")
 	}
 
 	// Just before the second file starts.
-	v.viewerOffset = v.viewerFileStarts[1] - 1
-	idx := v.currentFileIndex()
+	m.offset = m.fileStarts[1] - 1
+	idx := m.currentFileIndex()
 	if idx != 0 {
 		t.Errorf("expected file index 0 (before second file), got %d", idx)
 	}
 
 	// At the second file start.
-	v.viewerOffset = v.viewerFileStarts[1]
-	idx = v.currentFileIndex()
+	m.offset = m.fileStarts[1]
+	idx = m.currentFileIndex()
 	if idx != 1 {
 		t.Errorf("expected file index 1 (at second file), got %d", idx)
 	}
@@ -214,8 +213,8 @@ func TestCurrentFileIndex_BetweenFiles(t *testing.T) {
 
 // TestCurrentFileIndex_EmptyFiles returns 0 for empty diff.
 func TestCurrentFileIndex_EmptyFiles(t *testing.T) {
-	v := makeDiffViewInViewerMode(nil, 80, 24)
-	idx := v.currentFileIndex()
+	m := makeViewerModel(nil, 80, 24)
+	idx := m.currentFileIndex()
 	if idx != 0 {
 		t.Errorf("expected file index 0 for empty, got %d", idx)
 	}
@@ -298,68 +297,68 @@ func TestLeftTruncateFilename_NegativeWidth(t *testing.T) {
 // TestViewerScrollDown verifies scrolling down by 1.
 func TestViewerScrollDown(t *testing.T) {
 	files := largeSampleFiles()
-	v := makeDiffViewInViewerMode(files, 80, 24)
-	v.viewerOffset = 0
+	m := makeViewerModel(files, 80, 24)
+	m.offset = 0
 
-	v.viewerScrollDown(1)
-	if v.viewerOffset != 1 {
-		t.Errorf("expected offset 1 after scrollDown(1), got %d", v.viewerOffset)
+	m.scrollDown(1)
+	if m.offset != 1 {
+		t.Errorf("expected offset 1 after scrollDown(1), got %d", m.offset)
 	}
 }
 
 // TestViewerScrollUp verifies scrolling up from a non-zero offset.
 func TestViewerScrollUp(t *testing.T) {
 	files := largeSampleFiles()
-	v := makeDiffViewInViewerMode(files, 80, 24)
-	v.viewerOffset = 5
+	m := makeViewerModel(files, 80, 24)
+	m.offset = 5
 
-	v.viewerScrollUp(2)
-	if v.viewerOffset != 3 {
-		t.Errorf("expected offset 3 after scrollUp(2), got %d", v.viewerOffset)
+	m.scrollUp(2)
+	if m.offset != 3 {
+		t.Errorf("expected offset 3 after scrollUp(2), got %d", m.offset)
 	}
 }
 
 // TestViewerScrollUp_ClampsAtZero verifies scroll doesn't go negative.
 func TestViewerScrollUp_ClampsAtZero(t *testing.T) {
 	files := largeSampleFiles()
-	v := makeDiffViewInViewerMode(files, 80, 24)
-	v.viewerOffset = 2
+	m := makeViewerModel(files, 80, 24)
+	m.offset = 2
 
-	v.viewerScrollUp(10)
-	if v.viewerOffset != 0 {
-		t.Errorf("expected offset 0 after clamping, got %d", v.viewerOffset)
+	m.scrollUp(10)
+	if m.offset != 0 {
+		t.Errorf("expected offset 0 after clamping, got %d", m.offset)
 	}
 }
 
 // TestViewerScrollDown_ClampsAtMax verifies scroll doesn't go past the end.
 func TestViewerScrollDown_ClampsAtMax(t *testing.T) {
 	files := largeSampleFiles()
-	v := makeDiffViewInViewerMode(files, 80, 24)
+	m := makeViewerModel(files, 80, 24)
 
-	totalLines := len(strings.Split(v.viewerText, "\n"))
-	v.viewerScrollDown(totalLines + 100)
+	totalLines := len(strings.Split(m.text, "\n"))
+	m.scrollDown(totalLines + 100)
 
-	maxOffset := totalLines - v.viewerPaneHeight()
+	maxOffset := totalLines - m.paneHeight()
 	if maxOffset < 0 {
 		maxOffset = 0
 	}
-	if v.viewerOffset != maxOffset {
-		t.Errorf("expected offset %d after clamping, got %d", maxOffset, v.viewerOffset)
+	if m.offset != maxOffset {
+		t.Errorf("expected offset %d after clamping, got %d", maxOffset, m.offset)
 	}
 }
 
-// ── Key handling tests ───────────────────────────────────────────────────────
+// ── Key handling tests (through DiffView.Update) ─────────────────────────────
 
 // TestViewerKeyUp scrolls up.
 func TestViewerKeyUp(t *testing.T) {
 	files := largeSampleFiles()
 	v := makeDiffViewInViewerMode(files, 80, 24)
-	v.viewerOffset = 3
+	v.viewer.offset = 3
 
 	updated, _ := v.Update(tea.KeyMsg{Type: tea.KeyUp})
 	dv := updated.(DiffView)
-	if dv.viewerOffset != 2 {
-		t.Errorf("expected offset 2 after up key, got %d", dv.viewerOffset)
+	if dv.viewer.offset != 2 {
+		t.Errorf("expected offset 2 after up key, got %d", dv.viewer.offset)
 	}
 }
 
@@ -367,12 +366,12 @@ func TestViewerKeyUp(t *testing.T) {
 func TestViewerKeyDown(t *testing.T) {
 	files := largeSampleFiles()
 	v := makeDiffViewInViewerMode(files, 80, 24)
-	v.viewerOffset = 0
+	v.viewer.offset = 0
 
 	updated, _ := v.Update(tea.KeyMsg{Type: tea.KeyDown})
 	dv := updated.(DiffView)
-	if dv.viewerOffset != 1 {
-		t.Errorf("expected offset 1 after down key, got %d", dv.viewerOffset)
+	if dv.viewer.offset != 1 {
+		t.Errorf("expected offset 1 after down key, got %d", dv.viewer.offset)
 	}
 }
 
@@ -380,12 +379,12 @@ func TestViewerKeyDown(t *testing.T) {
 func TestViewerKeyPgDown(t *testing.T) {
 	files := largeSampleFiles()
 	v := makeDiffViewInViewerMode(files, 80, 24)
-	v.viewerOffset = 0
+	v.viewer.offset = 0
 
 	updated, _ := v.Update(tea.KeyMsg{Type: tea.KeyPgDown})
 	dv := updated.(DiffView)
-	if dv.viewerOffset != dv.viewerPaneHeight() {
-		t.Errorf("expected offset %d after pgdown, got %d", dv.viewerPaneHeight(), dv.viewerOffset)
+	if dv.viewer.offset != dv.viewer.paneHeight() {
+		t.Errorf("expected offset %d after pgdown, got %d", dv.viewer.paneHeight(), dv.viewer.offset)
 	}
 }
 
@@ -393,13 +392,13 @@ func TestViewerKeyPgDown(t *testing.T) {
 func TestViewerKeyPgUp(t *testing.T) {
 	files := largeSampleFiles()
 	v := makeDiffViewInViewerMode(files, 80, 24)
-	paneH := v.viewerPaneHeight()
-	v.viewerOffset = paneH + 5
+	paneH := v.viewer.paneHeight()
+	v.viewer.offset = paneH + 5
 
 	updated, _ := v.Update(tea.KeyMsg{Type: tea.KeyPgUp})
 	dv := updated.(DiffView)
-	if dv.viewerOffset != 5 {
-		t.Errorf("expected offset 5 after pgup, got %d", dv.viewerOffset)
+	if dv.viewer.offset != 5 {
+		t.Errorf("expected offset 5 after pgup, got %d", dv.viewer.offset)
 	}
 }
 
@@ -410,8 +409,8 @@ func TestViewerKeyEscape(t *testing.T) {
 
 	updated, _ := v.Update(tea.KeyMsg{Type: tea.KeyEscape})
 	dv := updated.(DiffView)
-	if dv.viewerActive {
-		t.Error("expected viewerActive to be false after Escape")
+	if dv.viewer != nil {
+		t.Error("expected viewer to be nil after Escape")
 	}
 }
 
@@ -422,8 +421,8 @@ func TestViewerKeyTab(t *testing.T) {
 
 	updated, _ := v.Update(tea.KeyMsg{Type: tea.KeyTab})
 	dv := updated.(DiffView)
-	if dv.viewerActive {
-		t.Error("expected viewerActive to be false after Tab")
+	if dv.viewer != nil {
+		t.Error("expected viewer to be nil after Tab")
 	}
 }
 
@@ -434,8 +433,8 @@ func TestViewerKeyEnter(t *testing.T) {
 
 	updated, _ := v.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	dv := updated.(DiffView)
-	if dv.viewerActive {
-		t.Error("expected viewerActive to be false after Enter")
+	if dv.viewer != nil {
+		t.Error("expected viewer to be nil after Enter")
 	}
 }
 
@@ -443,14 +442,14 @@ func TestViewerKeyEnter(t *testing.T) {
 func TestViewerIgnoresUnhandledKeys(t *testing.T) {
 	files := largeSampleFiles()
 	v := makeDiffViewInViewerMode(files, 80, 24)
-	v.viewerOffset = 2
+	v.viewer.offset = 2
 
 	updated, _ := v.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x")})
 	dv := updated.(DiffView)
-	if dv.viewerOffset != 2 {
-		t.Errorf("unhandled key should not change offset, got %d", dv.viewerOffset)
+	if dv.viewer.offset != 2 {
+		t.Errorf("unhandled key should not change offset, got %d", dv.viewer.offset)
 	}
-	if !dv.viewerActive {
+	if dv.viewer == nil {
 		t.Error("unhandled key should not exit viewer mode")
 	}
 }
@@ -459,21 +458,21 @@ func TestViewerIgnoresUnhandledKeys(t *testing.T) {
 
 // TestViewerPaneHeight verifies the height calculation.
 func TestViewerPaneHeight(t *testing.T) {
-	v := DiffView{width: 80, height: 24}
+	m := makeViewerModel(nil, 80, 24)
 	// height - chromeHeight - viewerStatusBarHeight(2) - separatorLineHeight(1) - viewBorderOverhead(2)
 	expected := 24 - chromeHeight - viewerStatusBarHeight - separatorLineHeight - viewBorderOverhead
-	got := v.viewerPaneHeight()
+	got := m.paneHeight()
 	if got != expected {
-		t.Errorf("viewerPaneHeight: got %d, want %d", got, expected)
+		t.Errorf("paneHeight: got %d, want %d", got, expected)
 	}
 }
 
 // TestViewerPaneHeight_Small verifies minimum height is 1.
 func TestViewerPaneHeight_Small(t *testing.T) {
-	v := DiffView{width: 80, height: 5}
-	h := v.viewerPaneHeight()
+	m := makeViewerModel(nil, 80, 5)
+	h := m.paneHeight()
 	if h < 1 {
-		t.Errorf("viewerPaneHeight should be at least 1, got %d", h)
+		t.Errorf("paneHeight should be at least 1, got %d", h)
 	}
 }
 
@@ -550,11 +549,11 @@ func TestDiffViewReceivesDiffContent(t *testing.T) {
 	files := sampleFiles()
 	updated, _ := v.Update(diffContentMsg{files: files})
 	dv := updated.(DiffView)
-	if !dv.viewerActive {
-		t.Error("expected viewerActive after diffContentMsg")
+	if dv.viewer == nil {
+		t.Error("expected viewer to be non-nil after diffContentMsg")
 	}
-	if dv.viewerText == "" {
-		t.Error("expected non-empty viewerText after diffContentMsg")
+	if dv.viewer.text == "" {
+		t.Error("expected non-empty viewer text after diffContentMsg")
 	}
 }
 
@@ -564,12 +563,15 @@ func TestDiffViewReceivesDiffContent(t *testing.T) {
 func TestViewerWindowResize(t *testing.T) {
 	files := sampleFiles()
 	v := makeDiffViewInViewerMode(files, 80, 24)
-	v.viewerOffset = 5
+	v.viewer.offset = 5
 
 	updated, _ := v.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	dv := updated.(DiffView)
 	if dv.width != 120 || dv.height != 40 {
 		t.Errorf("expected 120x40, got %dx%d", dv.width, dv.height)
+	}
+	if dv.viewer.width != 120 || dv.viewer.height != 40 {
+		t.Errorf("expected viewer 120x40, got %dx%d", dv.viewer.width, dv.viewer.height)
 	}
 }
 
@@ -578,9 +580,9 @@ func TestViewerWindowResize(t *testing.T) {
 // TestViewerStatusBarWidth checks that the status bar lines use the full width.
 func TestViewerStatusBarWidth(t *testing.T) {
 	files := sampleFiles()
-	v := makeDiffViewInViewerMode(files, 80, 24)
+	m := makeViewerModel(files, 80, 24)
 
-	bar := v.renderViewerStatusBar()
+	bar := m.renderStatusBar()
 	lines := strings.Split(bar, "\n")
 
 	// First line should span approximately the full width.

@@ -112,12 +112,8 @@ type DiffView struct {
 	// errorMsg holds a brief error message displayed in the view.
 	errorMsg string
 
-	// ── Viewer screen state ──────────────────────────────────────────────
-	viewerActive     bool   // true when showing the diff viewer
-	viewerText       string // pre-rendered diff content
-	viewerFileStarts []int  // line offset where each file begins
-	viewerFileNames  []string
-	viewerOffset     int // first visible line in the viewer pane
+	// viewer is non-nil when the diff viewer sub-screen is active.
+	viewer *DiffViewerModel
 }
 
 // NewDiffView creates an empty DiffView.
@@ -425,8 +421,8 @@ func (v DiffView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		v.width = msg.Width
 		v.height = msg.Height
 		v.clampScroll()
-		if v.viewerActive {
-			v.viewerClampScroll()
+		if v.viewer != nil {
+			v.viewer.Update(msg)
 		}
 		return v, nil
 
@@ -462,12 +458,17 @@ func (v DiffView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return v, fetchDiffCmd(v.worktreePath, msg.startCommit, msg.endCommit)
 
 	case diffContentMsg:
-		v.enterViewerMode(msg.files, v.width)
+		v.viewer = newDiffViewerModel(msg.files, v.width, v.height, v.identifier, v.phase)
 		return v, nil
 
 	case tea.KeyMsg:
-		if v.viewerActive {
-			return v.handleViewerKey(msg)
+		if v.viewer != nil {
+			if isViewerExitKey(msg) {
+				v.viewer = nil
+				return v, nil
+			}
+			v.viewer.Update(msg)
+			return v, nil
 		}
 		return v.handleKey(msg)
 	}
@@ -548,8 +549,8 @@ func (v DiffView) switchToDiffViewer() (tea.Model, tea.Cmd) {
 // ── View ─────────────────────────────────────────────────────────────────────
 
 func (v DiffView) View() string {
-	if v.viewerActive {
-		return v.viewerView()
+	if v.viewer != nil {
+		return v.viewer.View()
 	}
 
 	if v.identifier == "" {
@@ -670,8 +671,8 @@ func (v DiffView) renderRightPane() string {
 // ── KeyBindings ──────────────────────────────────────────────────────────────
 
 func (v DiffView) KeyBindings() []KeyBinding {
-	if v.viewerActive {
-		return viewerKeyBindings()
+	if v.viewer != nil {
+		return v.viewer.KeyBindings()
 	}
 	return []KeyBinding{
 		{Key: "↑/↓", Description: "Navigate commits"},
