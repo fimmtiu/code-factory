@@ -312,3 +312,5 @@ func (v WorkerView) KeyBindings() []KeyBinding {
 		{Key: "PgUp/PgDn", Description: "Scroll up/down one page"},
 	}
 }
+
+func (v WorkerView) Label() string { return "F3:Workers" }

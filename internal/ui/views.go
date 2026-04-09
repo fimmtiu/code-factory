@@ -41,7 +41,7 @@ var emptyStateStyle = lipgloss.NewStyle().
 // viewBorderOverhead is the number of rows (and columns) consumed by viewPaneStyle.
 const viewBorderOverhead = 2
 
-// ViewID is an enum for the four main views.
+// ViewID is an enum for the five main views.
 type ViewID int
 
 const (
@@ -49,20 +49,17 @@ const (
 	ViewCommand
 	ViewWorker
 	ViewLog
+	ViewDiff
 )
 
-// viewNames maps ViewID to a display name.
-var viewNames = map[ViewID]string{
-	ViewProject: "Projects",
-	ViewCommand: "Commands",
-	ViewWorker:  "Workers",
-	ViewLog:     "Log",
-}
+// viewCount is the total number of views; used for tab cycling.
+const viewCount = ViewDiff + 1
 
 // viewModel is the interface that each view sub-model must satisfy.
 type viewModel interface {
 	tea.Model
 	KeyBindings() []KeyBinding
+	Label() string // e.g. "F1:Projects"; used by renderHeader
 }
 
 // clipLines truncates content to at most maxLines lines, preventing overflow
@@ -93,12 +90,12 @@ func truncateLine(s string, maxWidth int) string {
 	return string(runes[:maxWidth])
 }
 
-// nextView returns the next view in the cycle (project → command → worker → log → project).
+// nextView returns the next view in the cycle (project → command → worker → log → diffs → project).
 func nextView(current ViewID) ViewID {
-	return (current + 1) % 4
+	return (current + 1) % viewCount
 }
 
 // prevView returns the previous view in the cycle.
 func prevView(current ViewID) ViewID {
-	return (current + 3) % 4
+	return (current + viewCount - 1) % viewCount
 }

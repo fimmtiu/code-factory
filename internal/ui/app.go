@@ -13,6 +13,15 @@ import (
 	"github.com/fimmtiu/code-factory/internal/worker"
 )
 
+// ── Messages ─────────────────────────────────────────────────────────────────
+
+// openDiffViewMsg is emitted by CommandView and LogView when the user presses
+// 'g' to open the diff viewer for a ticket.
+type openDiffViewMsg struct {
+	identifier string
+	phase      string
+}
+
 // ── Styles ───────────────────────────────────────────────────────────────────
 
 var (
@@ -48,7 +57,7 @@ type Model struct {
 	height int
 
 	activeView ViewID
-	views      [4]viewModel
+	views      [viewCount]viewModel
 
 	dialog        dialog // nil when no dialog is open
 	editorWaiting bool   // true while a blocking editor is open
@@ -71,11 +80,12 @@ func NewModel(pool *worker.Pool, database *db.DB, waitSecs int) Model {
 		pool:       pool,
 		db:         database,
 		activeView: ViewProject,
-		views: [4]viewModel{
+		views: [viewCount]viewModel{
 			ViewProject: NewProjectView(database, waitSecs),
 			ViewCommand: NewCommandView(database, pool, waitSecs),
 			ViewWorker:  NewWorkerView(pool),
 			ViewLog:     NewLogView(database),
+			ViewDiff:    NewDiffView(),
 		},
 	}
 }
@@ -200,6 +210,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case openDiffViewMsg:
+		m.activeView = ViewDiff
+		updated, cmd := m.views[ViewDiff].Update(msg)
+		m.views[ViewDiff] = updated.(viewModel)
+		return m, cmd
+
 	case tea.KeyMsg:
 		if m.editorWaiting {
 			return m, nil
@@ -231,6 +247,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "f4":
 			m.activeView = ViewLog
 			return m, func() tea.Msg { return logActivatedMsg{} }
+		case "f5":
+			m.activeView = ViewDiff
+			return m, nil
 
 		case "shift+tab":
 			m.activeView = nextView(m.activeView)
@@ -304,6 +323,10 @@ func (m Model) View() string {
 					rightPairs = append(rightPairs, "G", "github")
 				}
 				rightPairs = append(rightPairs, "C", "copy path", "/", "filter")
+			}
+		case ViewDiff:
+			if dv, ok := m.views[ViewDiff].(DiffView); ok {
+				rightPairs = dv.HintPairs()
 			}
 		}
 		if len(rightPairs) > 0 {
@@ -398,28 +421,12 @@ func (m Model) View() string {
 
 // renderHeader returns the tab bar showing the active view.
 func (m Model) renderHeader() string {
-	tabs := make([]string, 4)
-	for i, name := range []string{
-		viewNames[ViewProject],
-		viewNames[ViewCommand],
-		viewNames[ViewWorker],
-		viewNames[ViewLog],
-	} {
-		label := name
-		switch ViewID(i) {
-		case ViewProject:
-			label = "F1:" + name
-		case ViewCommand:
-			label = "F2:" + name
-		case ViewWorker:
-			label = "F3:" + name
-		case ViewLog:
-			label = "F4:" + name
-		}
+	tabs := make([]string, len(m.views))
+	for i, v := range m.views {
 		if ViewID(i) == m.activeView {
-			tabs[i] = activeTabStyle.Render(label)
+			tabs[i] = activeTabStyle.Render(v.Label())
 		} else {
-			tabs[i] = inactiveTabStyle.Render(label)
+			tabs[i] = inactiveTabStyle.Render(v.Label())
 		}
 	}
 	return headerStyle.Render(strings.Join(tabs, "  "))

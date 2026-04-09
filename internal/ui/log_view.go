@@ -251,7 +251,7 @@ func (v LogView) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "c", "C":
 		return v.copyLogfilePath()
 	case "g":
-		return v.terminalGitDiff()
+		return v.openDiffView()
 	case "G":
 		return v.githubCompare()
 	case "/":
@@ -322,17 +322,22 @@ func (v LogView) openLogfile() (tea.Model, tea.Cmd) {
 	})
 }
 
-func (v LogView) terminalGitDiff() (tea.Model, tea.Cmd) {
+func (v LogView) openDiffView() (tea.Model, tea.Cmd) {
 	entry := v.selectedEntry()
 	if entry == nil || entry.Logfile == "" {
 		return v, nil
 	}
 	identifier := identifierFromLogfile(entry.Logfile)
 	if identifier == "" {
-		return v, nil
+		return v, ShowNotification("Cannot open diff: unrecognised logfile path")
 	}
-	openTerminalGitDiff(identifier)
-	return v, nil
+	phase := phaseFromLogfile(entry.Logfile)
+	if phase == "" {
+		return v, ShowNotification("Cannot open diff: unable to determine phase from logfile")
+	}
+	return v, func() tea.Msg {
+		return openDiffViewMsg{identifier: identifier, phase: phase}
+	}
 }
 
 func (v LogView) githubCompare() (tea.Model, tea.Cmd) {
@@ -506,8 +511,10 @@ func (v LogView) KeyBindings() []KeyBinding {
 		{Key: "PgUp/PgDn", Description: "Page navigate"},
 		{Key: "E", Description: "Open logfile in $EDITOR"},
 		{Key: "C", Description: "Copy logfile path to clipboard"},
-		{Key: "g", Description: "Open git diff in terminal"},
+		{Key: "g", Description: "View diff"},
 		{Key: "G", Description: "Open GitHub compare page", Hidden: !isGitHubRepo()},
 		{Key: "/", Description: "Filter entries by substring"},
 	}
 }
+
+func (v LogView) Label() string { return "F4:Log" }

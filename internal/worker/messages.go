@@ -21,4 +21,3 @@ type MainToWorkerMessage struct {
 	Kind    MainToWorkerKind
 	Payload string
 }
-

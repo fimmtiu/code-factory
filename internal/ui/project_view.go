@@ -915,3 +915,5 @@ func (v ProjectView) KeyBindings() []KeyBinding {
 		{Key: "/", Description: "Filter tree by substring"},
 	}
 }
+
+func (v ProjectView) Label() string { return "F1:Projects" }
