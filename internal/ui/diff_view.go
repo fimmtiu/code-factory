@@ -701,4 +701,13 @@ func (v DiffView) KeyBindings() []KeyBinding {
 	}
 }
 
+// HintPairs returns alternating key/description pairs for the footer hint bar.
+// The root model calls this instead of inspecting DiffView internals.
+func (v DiffView) HintPairs() []string {
+	if v.viewer != nil {
+		return []string{"↑/↓", "scroll", "PgUp/Dn", "page", "Tab/Esc/Enter", "back"}
+	}
+	return []string{"↑/↓", "navigate", "PgUp/Dn", "page", "Shift+↑/↓", "extend range", "Tab", "view diff"}
+}
+
 func (v DiffView) Label() string { return "F5:Diffs" }

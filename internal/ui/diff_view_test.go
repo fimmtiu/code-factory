@@ -816,3 +816,49 @@ func TestResetForTicket_ClearsStaleState(t *testing.T) {
 		t.Errorf("errorMsg = %q, want empty", v.errorMsg)
 	}
 }
+
+// ── HintPairs tests ──────────────────────────────────────────────────────────
+
+// TestHintPairs_CommitSelector verifies hint pairs for the commit selector screen.
+func TestHintPairs_CommitSelector(t *testing.T) {
+	v := DiffView{width: 80, height: 24}
+	pairs := v.HintPairs()
+	if len(pairs) == 0 {
+		t.Fatal("expected non-empty hint pairs for commit selector")
+	}
+	// Should contain "navigate" for the commit selector screen.
+	found := false
+	for _, p := range pairs {
+		if p == "navigate" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected 'navigate' in commit selector hint pairs")
+	}
+}
+
+// TestHintPairs_ViewerMode verifies hint pairs for the viewer screen.
+func TestHintPairs_ViewerMode(t *testing.T) {
+	v := DiffView{
+		width:  80,
+		height: 24,
+		viewer: &DiffViewerModel{},
+	}
+	pairs := v.HintPairs()
+	if len(pairs) == 0 {
+		t.Fatal("expected non-empty hint pairs for viewer")
+	}
+	// Should contain "scroll" for the viewer screen.
+	found := false
+	for _, p := range pairs {
+		if p == "scroll" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected 'scroll' in viewer hint pairs")
+	}
+}

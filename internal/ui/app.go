@@ -321,10 +321,8 @@ func (m Model) View() string {
 				rightPairs = append(rightPairs, "C", "copy path", "/", "filter")
 			}
 		case ViewDiff:
-			if dv, ok := m.views[ViewDiff].(DiffView); ok && dv.viewer != nil {
-				rightPairs = []string{"↑/↓", "scroll", "PgUp/Dn", "page", "Tab/Esc/Enter", "back"}
-			} else {
-				rightPairs = []string{"↑/↓", "navigate", "PgUp/Dn", "page", "Shift+↑/↓", "extend range", "Tab", "view diff"}
+			if dv, ok := m.views[ViewDiff].(DiffView); ok {
+				rightPairs = dv.HintPairs()
 			}
 		}
 		if len(rightPairs) > 0 {
