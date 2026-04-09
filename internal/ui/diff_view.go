@@ -68,6 +68,7 @@ type DiffView struct {
 	// Ticket context
 	identifier   string
 	phase        string
+	isProject    bool
 	worktreePath string // resolved once from identifier; empty until set
 
 	// Commit data
@@ -104,9 +105,10 @@ func (v DiffView) Init() tea.Cmd {
 // resetForTicket prepares the DiffView to display a new ticket's commits.
 // It resets selection state and resolves the worktree path. The caller should
 // check errorMsg after calling; if empty, worktreePath is valid.
-func (v *DiffView) resetForTicket(identifier, phase, worktreePath string, err error) {
+func (v *DiffView) resetForTicket(identifier, phase string, isProject bool, worktreePath string, err error) {
 	v.identifier = identifier
 	v.phase = phase
+	v.isProject = isProject
 	v.cursor = 0
 	v.anchor = 0
 	v.offset = 0
@@ -148,7 +150,11 @@ func buildCommitRows(commits []git.CommitEntry, forkPointIdx int, hasUncommit bo
 
 // ── Label rendering ──────────────────────────────────────────────────────────
 
-// renderCommitLabel returns "<4-char hash> <message>" for a commit.
+// commitHashStyle renders the short hash prefix in bold medium grey.
+var commitHashStyle = lipgloss.NewStyle().Bold(true).Foreground(colourMuted)
+
+// renderCommitLabel returns "<4-char hash> <message>" as plain text.
+// Hash styling is applied later by renderCommitRow for unselected rows.
 func renderCommitLabel(c git.CommitEntry) string {
 	h := c.Hash
 	if h != git.UncommittedHash {
@@ -426,7 +432,7 @@ func (v DiffView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case openDiffViewMsg:
 		wp, err := storage.WorktreePathForIdentifier(msg.identifier)
-		v.resetForTicket(msg.identifier, msg.phase, wp, err)
+		v.resetForTicket(msg.identifier, msg.phase, msg.isProject, wp, err)
 		if err != nil {
 			return v, nil
 		}
@@ -550,7 +556,7 @@ func (v DiffView) switchToDiffViewer() (tea.Model, tea.Cmd) {
 func (v DiffView) View() string {
 	if v.viewer != nil {
 		innerW := v.width - viewBorderOverhead
-		statusBar := renderViewerStatusBar(innerW, v.identifier, v.phase, v.viewer)
+		statusBar := renderViewerStatusBar(innerW, v.identifier, v.phase, v.isProject, v.viewer)
 		styledBar := diffStatusBarStyle.Width(innerW).Render(statusBar)
 		pane := connectPaneTop(v.viewer.renderPane(), true, true)
 		return lipgloss.JoinVertical(lipgloss.Left, styledBar, pane)
@@ -602,7 +608,12 @@ var diffErrorStyle = lipgloss.NewStyle().Foreground(colourDanger)
 // renderStatusBar renders the status bar with ticket info and selection count.
 // width is the inner content width (excluding border overhead).
 func (v DiffView) renderStatusBar(width int) string {
-	left := fmt.Sprintf("Ticket: %s (%s)", v.identifier, v.phase)
+	kind := "Ticket"
+	if v.isProject {
+		kind = "Project"
+	}
+	boldPart := lipgloss.NewStyle().Bold(true).Render(fmt.Sprintf("%s: %s", kind, v.identifier))
+	left := fmt.Sprintf("%s (%s)", boldPart, v.phase)
 
 	if v.errorMsg != "" {
 		errText := diffErrorStyle.Render(v.errorMsg)
@@ -613,7 +624,12 @@ func (v DiffView) renderStatusBar(width int) string {
 		return left + strings.Repeat(" ", spacer) + errText
 	}
 
-	right := fmt.Sprintf("%d commit(s) selected", v.selectedCount())
+	n := v.selectedCount()
+	noun := "commits"
+	if n == 1 {
+		noun = "commit"
+	}
+	right := fmt.Sprintf("%d %s selected", n, noun)
 
 	spacer := width - lipgloss.Width(left) - lipgloss.Width(right)
 	if spacer < 2 {
@@ -666,7 +682,12 @@ func (v DiffView) renderCommitRow(i, w, lo, hi int) string {
 	if i >= lo && i <= hi {
 		return diffRangeStyle.Width(w).Render(label)
 	}
-	return label
+	// Style the hash prefix for unselected rows.
+	h := row.commit.Hash
+	if h != git.UncommittedHash && len(h) > 4 {
+		h = h[:4]
+	}
+	return commitHashStyle.Render(h) + label[len(h):]
 }
 
 // renderRightPane renders the git show --stat preview pane.

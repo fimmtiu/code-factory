@@ -188,12 +188,17 @@ func isViewerExitKey(msg tea.KeyMsg) bool {
 
 // renderViewerStatusBar renders the two-line status bar for the viewer screen.
 // This is called by DiffView, which owns the identifier and phase fields.
-func renderViewerStatusBar(width int, identifier, phase string, viewer *DiffViewerModel) string {
+func renderViewerStatusBar(width int, identifier, phase string, isProject bool, viewer *DiffViewerModel) string {
 	fileIdx := viewer.currentFileIndex()
 	totalFiles := len(viewer.fileNames)
 
-	// Line 1: "Ticket: <id> (<phase>)" left, "File X of Y" right.
-	left := fmt.Sprintf("Ticket: %s (%s)", identifier, phase)
+	// Line 1: "Ticket/Project: <id> (<phase>)" left, "File X of Y" right.
+	kind := "Ticket"
+	if isProject {
+		kind = "Project"
+	}
+	boldPart := lipgloss.NewStyle().Bold(true).Render(fmt.Sprintf("%s: %s", kind, identifier))
+	left := fmt.Sprintf("%s (%s)", boldPart, phase)
 	right := ""
 	if totalFiles > 0 {
 		right = fmt.Sprintf("File %d of %d", fileIdx+1, totalFiles)

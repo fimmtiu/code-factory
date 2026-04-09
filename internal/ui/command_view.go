@@ -620,8 +620,9 @@ func (v CommandView) openDiffView() (tea.Model, tea.Cmd) {
 	}
 	identifier := wu.Identifier
 	phase := string(wu.Phase)
+	isProject := wu.IsProject
 	return v, func() tea.Msg {
-		return openDiffViewMsg{identifier: identifier, phase: phase}
+		return openDiffViewMsg{identifier: identifier, phase: phase, isProject: isProject}
 	}
 }
 

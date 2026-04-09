@@ -661,7 +661,7 @@ func TestRenderStatusBar_WithError(t *testing.T) {
 		t.Errorf("status bar should contain error message, got %q", bar)
 	}
 	// Should not show commit count when there's an error.
-	if strings.Contains(bar, "commit(s) selected") {
+	if strings.Contains(bar, "selected") {
 		t.Error("status bar should not show commit count when error is displayed")
 	}
 }
@@ -691,7 +691,7 @@ func TestRenderStatusBar_ErrorClearedOnSuccess(t *testing.T) {
 	if strings.Contains(bar, "worktree error") {
 		t.Error("expected error to be cleared from status bar")
 	}
-	if !strings.Contains(bar, "commit(s) selected") {
+	if !strings.Contains(bar, "selected") {
 		t.Error("expected commit count in status bar after error cleared")
 	}
 }
@@ -718,7 +718,7 @@ func TestRenderStatusBar(t *testing.T) {
 	if !strings.Contains(bar, "implement") {
 		t.Errorf("status bar should contain phase, got %q", bar)
 	}
-	if !strings.Contains(bar, "1 commit(s) selected") {
+	if !strings.Contains(bar, "1 commit selected") {
 		t.Errorf("status bar should contain selection count, got %q", bar)
 	}
 }
@@ -739,7 +739,7 @@ func TestRenderStatusBar_Range(t *testing.T) {
 		}, -1, false),
 	}
 	bar := v.renderStatusBar(v.width)
-	if !strings.Contains(bar, "3 commit(s) selected") {
+	if !strings.Contains(bar, "3 commits selected") {
 		t.Errorf("status bar should show 3 selected, got %q", bar)
 	}
 }
@@ -844,7 +844,7 @@ func TestResetForTicket_ClearsStaleState(t *testing.T) {
 		viewer:     &DiffViewerModel{},
 	}
 
-	v.resetForTicket("new/ticket", "review", "/tmp/worktree", nil)
+	v.resetForTicket("new/ticket", "review", false, "/tmp/worktree", nil)
 
 	if v.identifier != "new/ticket" {
 		t.Errorf("identifier = %q, want %q", v.identifier, "new/ticket")

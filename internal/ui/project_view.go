@@ -510,8 +510,9 @@ func (v ProjectView) openDiffView() (tea.Model, tea.Cmd) {
 	wu := nodes[v.treeSelected].wu
 	identifier := wu.Identifier
 	phase := string(wu.Phase)
+	isProject := wu.IsProject
 	return v, func() tea.Msg {
-		return openDiffViewMsg{identifier: identifier, phase: phase}
+		return openDiffViewMsg{identifier: identifier, phase: phase, isProject: isProject}
 	}
 }
 

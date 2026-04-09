@@ -20,6 +20,7 @@ import (
 type openDiffViewMsg struct {
 	identifier string
 	phase      string
+	isProject  bool
 }
 
 // ── Styles ───────────────────────────────────────────────────────────────────
