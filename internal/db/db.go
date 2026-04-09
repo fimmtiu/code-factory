@@ -728,6 +728,11 @@ func claimTicketRow(tx *sql.Tx, pid int) (int64, *models.WorkUnit, error) {
 		return 0, nil, err
 	}
 
+	parent, err := projectIdentifierByID(tx, projectID)
+	if err != nil {
+		return 0, nil, err
+	}
+
 	wu := &models.WorkUnit{
 		Identifier:   identifier,
 		Description:  description,
@@ -737,19 +742,22 @@ func claimTicketRow(tx *sql.Tx, pid int) (int64, *models.WorkUnit, error) {
 		LastUpdated:  time.Unix(now, 0),
 		IsProject:    false,
 		Dependencies: []string{},
-		Parent:       projectIdentifierByID(tx, projectID),
+		Parent:       parent,
 	}
 	return id, wu, nil
 }
 
 // projectIdentifierByID resolves an optional project row ID to its identifier string.
-func projectIdentifierByID(tx *sql.Tx, projectID sql.NullInt64) string {
+func projectIdentifierByID(tx *sql.Tx, projectID sql.NullInt64) (string, error) {
 	if !projectID.Valid {
-		return ""
+		return "", nil
 	}
 	var identifier string
-	_ = tx.QueryRow(`SELECT identifier FROM projects WHERE id = ?`, projectID.Int64).Scan(&identifier)
-	return identifier
+	err := tx.QueryRow(`SELECT identifier FROM projects WHERE id = ?`, projectID.Int64).Scan(&identifier)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	return identifier, err
 }
 
 // loadTicketDeps appends dependency identifiers to wu.Dependencies.
@@ -769,11 +777,15 @@ func loadTicketDeps(tx *sql.Tx, ticketID int64, wu *models.WorkUnit) error {
 			return err
 		}
 		var depIdentifier string
+		var scanErr error
 		switch depType {
 		case workUnitTypeTicket:
-			_ = tx.QueryRow(`SELECT identifier FROM tickets WHERE id = ?`, depID).Scan(&depIdentifier)
+			scanErr = tx.QueryRow(`SELECT identifier FROM tickets WHERE id = ?`, depID).Scan(&depIdentifier)
 		case workUnitTypeProject:
-			_ = tx.QueryRow(`SELECT identifier FROM projects WHERE id = ?`, depID).Scan(&depIdentifier)
+			scanErr = tx.QueryRow(`SELECT identifier FROM projects WHERE id = ?`, depID).Scan(&depIdentifier)
+		}
+		if scanErr != nil && scanErr != sql.ErrNoRows {
+			return scanErr
 		}
 		if depIdentifier != "" {
 			wu.Dependencies = append(wu.Dependencies, depIdentifier)
