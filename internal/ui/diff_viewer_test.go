@@ -21,13 +21,13 @@ func makeDiffViewInViewerMode(files []diff.File, width, height int) DiffView {
 		identifier: "proj/ticket",
 		phase:      "implement",
 	}
-	v.viewer = newDiffViewerModel(files, width, height, "proj/ticket", "implement")
+	v.viewer = newDiffViewerModel(files, v.width, v.viewerPaneHeight())
 	return v
 }
 
 // makeViewerModel creates a standalone DiffViewerModel for direct testing.
-func makeViewerModel(files []diff.File, width, height int) *DiffViewerModel {
-	return newDiffViewerModel(files, width, height, "proj/ticket", "implement")
+func makeViewerModel(files []diff.File, paneWidth, paneHeight int) *DiffViewerModel {
+	return newDiffViewerModel(files, paneWidth, paneHeight)
 }
 
 // sampleFiles returns a small set of diff files for testing.
@@ -132,7 +132,7 @@ func TestViewerStatusBar_Content(t *testing.T) {
 	files := sampleFiles()
 	m := makeViewerModel(files, 80, 24)
 
-	bar := m.renderStatusBar()
+	bar := renderViewerStatusBar(80, "proj/ticket", "implement", m)
 	lines := strings.Split(bar, "\n")
 	if len(lines) < 2 {
 		t.Fatalf("expected at least 2 lines in status bar, got %d", len(lines))
@@ -164,7 +164,7 @@ func TestViewerStatusBar_FileIndexUpdates(t *testing.T) {
 	}
 	m.offset = m.fileStarts[1]
 
-	bar := m.renderStatusBar()
+	bar := renderViewerStatusBar(80, "proj/ticket", "implement", m)
 	if !strings.Contains(bar, "File 2 of 2") {
 		t.Errorf("expected 'File 2 of 2' after scroll, got %q", bar)
 	}
@@ -338,7 +338,7 @@ func TestViewerScrollDown_ClampsAtMax(t *testing.T) {
 	totalLines := len(strings.Split(m.text, "\n"))
 	m.scrollDown(totalLines + 100)
 
-	maxOffset := totalLines - m.paneHeight()
+	maxOffset := totalLines - m.paneHeight
 	if maxOffset < 0 {
 		maxOffset = 0
 	}
@@ -383,8 +383,8 @@ func TestViewerKeyPgDown(t *testing.T) {
 
 	updated, _ := v.Update(tea.KeyMsg{Type: tea.KeyPgDown})
 	dv := updated.(DiffView)
-	if dv.viewer.offset != dv.viewer.paneHeight() {
-		t.Errorf("expected offset %d after pgdown, got %d", dv.viewer.paneHeight(), dv.viewer.offset)
+	if dv.viewer.offset != dv.viewer.paneHeight {
+		t.Errorf("expected offset %d after pgdown, got %d", dv.viewer.paneHeight, dv.viewer.offset)
 	}
 }
 
@@ -392,7 +392,7 @@ func TestViewerKeyPgDown(t *testing.T) {
 func TestViewerKeyPgUp(t *testing.T) {
 	files := largeSampleFiles()
 	v := makeDiffViewInViewerMode(files, 80, 24)
-	paneH := v.viewer.paneHeight()
+	paneH := v.viewer.paneHeight
 	v.viewer.offset = paneH + 5
 
 	updated, _ := v.Update(tea.KeyMsg{Type: tea.KeyPgUp})
@@ -456,21 +456,21 @@ func TestViewerIgnoresUnhandledKeys(t *testing.T) {
 
 // ── Viewer pane height tests ─────────────────────────────────────────────────
 
-// TestViewerPaneHeight verifies the height calculation.
+// TestViewerPaneHeight verifies that DiffView computes the correct pane height
+// and passes it through to the viewer.
 func TestViewerPaneHeight(t *testing.T) {
-	m := makeViewerModel(nil, 80, 24)
-	// height - chromeHeight - viewerStatusBarHeight(2) - separatorLineHeight(1) - viewBorderOverhead(2)
-	expected := 24 - chromeHeight - viewerStatusBarHeight - separatorLineHeight - viewBorderOverhead
-	got := m.paneHeight()
+	v := makeDiffViewInViewerMode(nil, 80, 24)
+	expected := v.viewerPaneHeight()
+	got := v.viewer.paneHeight
 	if got != expected {
-		t.Errorf("paneHeight: got %d, want %d", got, expected)
+		t.Errorf("viewer.paneHeight: got %d, want %d", got, expected)
 	}
 }
 
 // TestViewerPaneHeight_Small verifies minimum height is 1.
 func TestViewerPaneHeight_Small(t *testing.T) {
-	m := makeViewerModel(nil, 80, 5)
-	h := m.paneHeight()
+	v := makeDiffViewInViewerMode(nil, 80, 5)
+	h := v.viewer.paneHeight
 	if h < 1 {
 		t.Errorf("paneHeight should be at least 1, got %d", h)
 	}
@@ -570,8 +570,12 @@ func TestViewerWindowResize(t *testing.T) {
 	if dv.width != 120 || dv.height != 40 {
 		t.Errorf("expected 120x40, got %dx%d", dv.width, dv.height)
 	}
-	if dv.viewer.width != 120 || dv.viewer.height != 40 {
-		t.Errorf("expected viewer 120x40, got %dx%d", dv.viewer.width, dv.viewer.height)
+	if dv.viewer.paneWidth != 120 {
+		t.Errorf("expected viewer paneWidth 120, got %d", dv.viewer.paneWidth)
+	}
+	expectedPaneH := dv.viewerPaneHeight()
+	if dv.viewer.paneHeight != expectedPaneH {
+		t.Errorf("expected viewer paneHeight %d, got %d", expectedPaneH, dv.viewer.paneHeight)
 	}
 }
 
@@ -582,7 +586,7 @@ func TestViewerStatusBarWidth(t *testing.T) {
 	files := sampleFiles()
 	m := makeViewerModel(files, 80, 24)
 
-	bar := m.renderStatusBar()
+	bar := renderViewerStatusBar(80, "proj/ticket", "implement", m)
 	lines := strings.Split(bar, "\n")
 
 	// First line should span approximately the full width.

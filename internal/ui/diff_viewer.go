@@ -25,33 +25,35 @@ type diffContentMsg struct {
 
 // DiffViewerModel is the sub-screen for displaying a scrollable diff.
 // DiffView holds a *DiffViewerModel that is non-nil when the viewer is active.
+// DiffView owns the status bar rendering and passes only the content-pane
+// dimensions into the viewer, so the viewer has no duplicate copies of
+// identifier, phase, or full terminal size.
 type DiffViewerModel struct {
 	text       string // pre-rendered diff content
 	fileStarts []int  // line offset where each file begins
 	fileNames  []string
 	offset     int // first visible line in the viewer pane
 
-	// Dimensions and context inherited from DiffView on creation.
-	width      int
-	height     int
-	identifier string
-	phase      string
+	// Content-pane dimensions (excluding status bar, separator, and chrome).
+	// Set by DiffView on creation and resize via setSize.
+	paneWidth  int
+	paneHeight int
 }
 
 // newDiffViewerModel creates a DiffViewerModel from parsed diff files.
-func newDiffViewerModel(files []diff.File, width, height int, identifier, phase string) *DiffViewerModel {
+// paneWidth and paneHeight are the dimensions of the content area only
+// (DiffView accounts for the status bar, separator, and chrome).
+func newDiffViewerModel(files []diff.File, paneWidth, paneHeight int) *DiffViewerModel {
 	m := &DiffViewerModel{
-		width:      width,
-		height:     height,
-		identifier: identifier,
-		phase:      phase,
+		paneWidth:  paneWidth,
+		paneHeight: paneHeight,
 	}
 
 	if len(files) == 0 {
 		return m
 	}
 
-	w := width - viewBorderOverhead
+	w := paneWidth - viewBorderOverhead
 	if w < 1 {
 		w = 1
 	}
@@ -62,15 +64,11 @@ func newDiffViewerModel(files []diff.File, width, height int, identifier, phase 
 	return m
 }
 
-// ── Dimension helpers ────────────────────────────────────────────────────────
-
-// paneHeight returns the number of visible lines in the viewer pane.
-func (m *DiffViewerModel) paneHeight() int {
-	h := m.height - chromeHeight - viewerStatusBarHeight - separatorLineHeight - viewBorderOverhead
-	if h < 1 {
-		h = 1
-	}
-	return h
+// setSize updates the content-pane dimensions and re-clamps the scroll offset.
+func (m *DiffViewerModel) setSize(paneWidth, paneHeight int) {
+	m.paneWidth = paneWidth
+	m.paneHeight = paneHeight
+	m.clampScroll()
 }
 
 // totalLines returns the total number of lines in the rendered diff.
@@ -98,9 +96,7 @@ func (m *DiffViewerModel) scrollUp(n int) {
 // clampScroll ensures the viewer offset stays in bounds.
 func (m *DiffViewerModel) clampScroll() {
 	total := m.totalLines()
-	paneH := m.paneHeight()
-
-	maxOffset := total - paneH
+	maxOffset := total - m.paneHeight
 	if maxOffset < 0 {
 		maxOffset = 0
 	}
@@ -152,13 +148,10 @@ func leftTruncateFilename(name string, maxWidth int) string {
 
 // ── Update ───────────────────────────────────────────────────────────────────
 
-// Update handles key events for the viewer screen.
+// Update handles key events for the viewer screen. Window resize is handled
+// by DiffView, which calls setSize directly.
 func (m *DiffViewerModel) Update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
-	case tea.WindowSizeMsg:
-		m.width = msg.Width
-		m.height = msg.Height
-		m.clampScroll()
 	case tea.KeyMsg:
 		return m.handleKey(msg)
 	}
@@ -166,7 +159,7 @@ func (m *DiffViewerModel) Update(msg tea.Msg) tea.Cmd {
 }
 
 // handleKey processes key events. Returns nil for all keys; the caller
-// checks shouldClose() to detect exit keys.
+// checks isViewerExitKey() to detect exit keys.
 func (m *DiffViewerModel) handleKey(msg tea.KeyMsg) tea.Cmd {
 	switch msg.String() {
 	case "up":
@@ -174,14 +167,14 @@ func (m *DiffViewerModel) handleKey(msg tea.KeyMsg) tea.Cmd {
 	case "down":
 		m.scrollDown(1)
 	case "pgup":
-		m.scrollUp(m.paneHeight())
+		m.scrollUp(m.paneHeight)
 	case "pgdown":
-		m.scrollDown(m.paneHeight())
+		m.scrollDown(m.paneHeight)
 	}
 	return nil
 }
 
-// isExitKey returns true if the key should close the viewer.
+// isViewerExitKey returns true if the key should close the viewer.
 func isViewerExitKey(msg tea.KeyMsg) bool {
 	switch msg.String() {
 	case "tab", "esc", "enter":
@@ -192,18 +185,19 @@ func isViewerExitKey(msg tea.KeyMsg) bool {
 
 // ── Rendering ────────────────────────────────────────────────────────────────
 
-// renderStatusBar renders the two-line status bar for the viewer screen.
-func (m *DiffViewerModel) renderStatusBar() string {
-	fileIdx := m.currentFileIndex()
-	totalFiles := len(m.fileNames)
+// renderViewerStatusBar renders the two-line status bar for the viewer screen.
+// This is called by DiffView, which owns the identifier and phase fields.
+func renderViewerStatusBar(width int, identifier, phase string, viewer *DiffViewerModel) string {
+	fileIdx := viewer.currentFileIndex()
+	totalFiles := len(viewer.fileNames)
 
 	// Line 1: "Ticket: <id> (<phase>)" left, "File X of Y" right.
-	left := fmt.Sprintf("Ticket: %s (%s)", m.identifier, m.phase)
+	left := fmt.Sprintf("Ticket: %s (%s)", identifier, phase)
 	right := ""
 	if totalFiles > 0 {
 		right = fmt.Sprintf("File %d of %d", fileIdx+1, totalFiles)
 	}
-	spacer := m.width - lipgloss.Width(left) - lipgloss.Width(right)
+	spacer := width - lipgloss.Width(left) - lipgloss.Width(right)
 	if spacer < 2 {
 		spacer = 2
 	}
@@ -212,30 +206,26 @@ func (m *DiffViewerModel) renderStatusBar() string {
 	// Line 2: current filename (left-truncated if needed).
 	var line2 string
 	if totalFiles > 0 && fileIdx < totalFiles {
-		line2 = leftTruncateFilename(m.fileNames[fileIdx], m.width)
+		line2 = leftTruncateFilename(viewer.fileNames[fileIdx], width)
 	}
 
 	return line1 + "\n" + line2
 }
 
-// View renders the complete viewer screen.
-func (m *DiffViewerModel) View() string {
-	statusBar := m.renderStatusBar()
-	separator := strings.Repeat("─", m.width)
-
-	paneH := m.paneHeight()
-	paneW := m.width - viewBorderOverhead
+// renderPane renders just the diff content pane (no status bar or separator).
+func (m *DiffViewerModel) renderPane() string {
+	paneW := m.paneWidth - viewBorderOverhead
 	if paneW < 1 {
 		paneW = 1
 	}
 
 	var content string
 	if m.text == "" {
-		content = lipgloss.Place(paneW, paneH, lipgloss.Center, lipgloss.Center,
+		content = lipgloss.Place(paneW, m.paneHeight, lipgloss.Center, lipgloss.Center,
 			emptyStateStyle.Render("No diff content"))
 	} else {
 		lines := strings.Split(m.text, "\n")
-		end := m.offset + paneH
+		end := m.offset + m.paneHeight
 		if end > len(lines) {
 			end = len(lines)
 		}
@@ -247,9 +237,7 @@ func (m *DiffViewerModel) View() string {
 		content = strings.Join(visible, "\n")
 	}
 
-	pane := viewPaneStyle.Width(paneW).Height(paneH).Render(clipLines(content, paneH))
-
-	return lipgloss.JoinVertical(lipgloss.Left, statusBar, separator, pane)
+	return viewPaneStyle.Width(paneW).Height(m.paneHeight).Render(clipLines(content, m.paneHeight))
 }
 
 // KeyBindings returns key bindings shown when the viewer is active.

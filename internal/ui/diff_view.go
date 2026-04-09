@@ -209,6 +209,16 @@ func (v DiffView) commitListHeight() int {
 	return h
 }
 
+// viewerPaneHeight returns the content-pane height available to the viewer,
+// after accounting for the app chrome, viewer status bar, and separator.
+func (v DiffView) viewerPaneHeight() int {
+	h := v.height - chromeHeight - viewerStatusBarHeight - separatorLineHeight - viewBorderOverhead
+	if h < 1 {
+		h = 1
+	}
+	return h
+}
+
 // ── Selection helpers ────────────────────────────────────────────────────────
 
 // selectedCount returns the number of non-separator commits in the selection range.
@@ -440,7 +450,7 @@ func (v DiffView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		v.height = msg.Height
 		v.clampScroll()
 		if v.viewer != nil {
-			v.viewer.Update(msg)
+			v.viewer.setSize(v.width, v.viewerPaneHeight())
 		}
 		return v, nil
 
@@ -477,7 +487,7 @@ func (v DiffView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return v, fetchDiffCmd(v.worktreePath, msg.startCommit, msg.endCommit)
 
 	case diffContentMsg:
-		v.viewer = newDiffViewerModel(msg.files, v.width, v.height, v.identifier, v.phase)
+		v.viewer = newDiffViewerModel(msg.files, v.width, v.viewerPaneHeight())
 		return v, nil
 
 	case tea.KeyMsg:
@@ -569,7 +579,10 @@ func (v DiffView) switchToDiffViewer() (tea.Model, tea.Cmd) {
 
 func (v DiffView) View() string {
 	if v.viewer != nil {
-		return v.viewer.View()
+		statusBar := renderViewerStatusBar(v.width, v.identifier, v.phase, v.viewer)
+		separator := strings.Repeat("─", v.width)
+		pane := v.viewer.renderPane()
+		return lipgloss.JoinVertical(lipgloss.Left, statusBar, separator, pane)
 	}
 
 	if v.identifier == "" {
