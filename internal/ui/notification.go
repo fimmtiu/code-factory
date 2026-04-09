@@ -89,7 +89,7 @@ func fireOSNotification(text string) tea.Cmd {
 		_ = exec.Command("terminal-notifier",
 			"-title", "Code Factory",
 			"-message", text,
-			"-appIcon", notifIconPath,
+			"-contentImage", notifIconPath,
 		).Run()
 		return nil
 	}
