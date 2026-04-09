@@ -6,6 +6,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+
+	"github.com/fimmtiu/code-factory/internal/storage"
 )
 
 // maxCommits is the maximum number of commits shown in the selector.
@@ -441,6 +443,14 @@ func (v DiffView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			v.viewer.Update(msg)
 		}
 		return v, nil
+
+	case openDiffViewMsg:
+		wp, err := storage.WorktreePathForIdentifier(msg.identifier)
+		v.resetForTicket(msg.identifier, msg.phase, wp, err)
+		if err != nil {
+			return v, nil
+		}
+		return v, fetchCommitsCmd(wp)
 
 	case diffCommitListMsg:
 		if msg.errMsg != "" {

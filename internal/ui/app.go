@@ -10,7 +10,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/fimmtiu/code-factory/internal/db"
-	"github.com/fimmtiu/code-factory/internal/storage"
 	"github.com/fimmtiu/code-factory/internal/worker"
 )
 
@@ -208,15 +207,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case openDiffViewMsg:
-		dv := m.views[ViewDiff].(DiffView)
-		wp, err := storage.WorktreePathForIdentifier(msg.identifier)
-		dv.resetForTicket(msg.identifier, msg.phase, wp, err)
-		m.views[ViewDiff] = dv
 		m.activeView = ViewDiff
-		if err != nil {
-			return m, nil
-		}
-		return m, fetchCommitsCmd(wp)
+		updated, cmd := m.views[ViewDiff].Update(msg)
+		m.views[ViewDiff] = updated.(viewModel)
+		return m, cmd
 
 	case tea.KeyMsg:
 		if m.editorWaiting {
