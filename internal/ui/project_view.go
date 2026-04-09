@@ -265,29 +265,29 @@ func (v ProjectView) filteredTreeNodes() []treeNode {
 		}
 	}
 
-	// For each matched node, mark its direct ancestors. After finding each
-	// ancestor, the search continues only from before that ancestor's position
-	// so that siblings of ancestors are never included.
+	// Build a parent index in O(n). In pre-order layout, the parent of a
+	// node at depth d is the most recently seen node at depth d-1.
+	parentIdx := make([]int, len(v.treeNodes))
+	// Stack tracks the index of the most recent ancestor at each depth.
+	stack := make([]int, 0, 8)
+	for i, node := range v.treeNodes {
+		d := node.depth
+		// Trim to current depth; stack[d-1] is the parent.
+		stack = append(stack[:d], i)
+		if d == 0 {
+			parentIdx[i] = -1 // root has no parent
+		} else {
+			parentIdx[i] = stack[d-1]
+		}
+	}
+
+	// For each matched node, walk up via parentIdx to mark ancestors.
 	for i := range v.treeNodes {
 		if !matched[i] {
 			continue
 		}
-		pos := i
-		depth := v.treeNodes[i].depth
-		for depth > 0 {
-			found := false
-			for j := pos - 1; j >= 0; j-- {
-				if v.treeNodes[j].depth == depth-1 {
-					matched[j] = true
-					pos = j
-					depth--
-					found = true
-					break
-				}
-			}
-			if !found {
-				break
-			}
+		for j := parentIdx[i]; j >= 0 && !matched[j]; j = parentIdx[j] {
+			matched[j] = true
 		}
 	}
 
