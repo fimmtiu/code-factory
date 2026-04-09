@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"os/exec"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -503,6 +504,8 @@ func (v DiffView) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return v.switchToDiffViewer()
 	case "t", "T":
 		return v.openTerminal()
+	case "e", "E":
+		return v.openEditorNonblocking()
 	default:
 		return v, nil
 	}
@@ -531,6 +534,14 @@ func (v DiffView) openTerminal() (tea.Model, tea.Cmd) {
 		return v, nil
 	}
 	_ = util.OpenTerminal(v.worktreePath)
+	return v, nil
+}
+
+func (v DiffView) openEditorNonblocking() (tea.Model, tea.Cmd) {
+	if v.worktreePath == "" {
+		return v, nil
+	}
+	_ = exec.Command(util.NonblockingEditorCommand(), v.worktreePath).Start()
 	return v, nil
 }
 
@@ -746,6 +757,7 @@ func (v DiffView) KeyBindings() []KeyBinding {
 		{Key: "PgUp/PgDn", Description: "Page navigate"},
 		{Key: "Shift+↑/↓", Description: "Extend selection range"},
 		{Key: "T", Description: "Open terminal in worktree"},
+		{Key: "E", Description: "Open worktree in Cursor"},
 		{Key: "Tab/Enter", Description: "View diff"},
 	}
 }
@@ -756,7 +768,7 @@ func (v DiffView) HintPairs() []string {
 	if v.viewer != nil {
 		return []string{"↑/↓", "scroll", "PgUp/Dn", "page", "C", "collapse/expand", "Tab/Esc/Enter", "back"}
 	}
-	return []string{"↑/↓", "navigate", "PgUp/Dn", "page", "Shift+↑/↓", "extend range", "T", "open terminal", "Tab", "view diff"}
+	return []string{"↑/↓", "navigate", "PgUp/Dn", "page", "Shift+↑/↓", "extend range", "T", "open terminal", "E", "open editor", "Tab", "view diff"}
 }
 
 func (v DiffView) Label() string { return "F5:Diffs" }
