@@ -51,8 +51,9 @@ type commitRow struct {
 // diffCommitListMsg carries the result of the async commit-list fetch.
 type diffCommitListMsg struct {
 	commits      []commitEntry
-	forkPointIdx int  // index into commits of the fork-point commit, or -1
-	hasUncommit  bool // true if there are uncommitted changes
+	forkPointIdx int    // index into commits of the fork-point commit, or -1
+	hasUncommit  bool   // true if there are uncommitted changes
+	errMsg       string // non-empty when the commit list could not be fetched
 }
 
 // diffShowStatMsg carries the git show --stat output for a commit.
@@ -382,7 +383,7 @@ func fetchCommitsCmd(worktreePath string) tea.Cmd {
 	return func() tea.Msg {
 		commits, err := fetchCommitList(worktreePath, maxCommits)
 		if err != nil {
-			return diffCommitListMsg{forkPointIdx: -1}
+			return diffCommitListMsg{forkPointIdx: -1, errMsg: err.Error()}
 		}
 
 		defaultBranch := detectDefaultBranch(worktreePath)
@@ -442,6 +443,11 @@ func (v DiffView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return v, nil
 
 	case diffCommitListMsg:
+		if msg.errMsg != "" {
+			v.errorMsg = fmt.Sprintf("git error: %s", msg.errMsg)
+			return v, nil
+		}
+		v.errorMsg = ""
 		v.rows = buildCommitRows(msg.commits, msg.forkPointIdx, msg.hasUncommit)
 		v.clampSelected()
 		v.clampScroll()

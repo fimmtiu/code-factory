@@ -707,6 +707,61 @@ func TestLeftPaneWidth(t *testing.T) {
 	}
 }
 
+// ── Error propagation tests ──────────────────────────────────────────────────
+
+// TestDiffCommitListMsg_WithError verifies that an error in the commit list
+// fetch is displayed to the user via errorMsg.
+func TestDiffCommitListMsg_WithError(t *testing.T) {
+	v := DiffView{
+		width:      80,
+		height:     24,
+		identifier: "proj/ticket",
+		phase:      "implement",
+	}
+
+	updated, cmd := v.Update(diffCommitListMsg{
+		forkPointIdx: -1,
+		errMsg:       "exit status 128",
+	})
+	dv := updated.(DiffView)
+	if dv.errorMsg == "" {
+		t.Error("expected errorMsg to be set when commit list fetch fails")
+	}
+	if !strings.Contains(dv.errorMsg, "exit status 128") {
+		t.Errorf("errorMsg should contain the original error, got %q", dv.errorMsg)
+	}
+	if len(dv.rows) != 0 {
+		t.Errorf("expected no rows on error, got %d", len(dv.rows))
+	}
+	if cmd != nil {
+		t.Error("expected nil cmd on error")
+	}
+}
+
+// TestDiffCommitListMsg_SuccessClearsError verifies that a successful fetch
+// does not set errorMsg.
+func TestDiffCommitListMsg_SuccessClearsError(t *testing.T) {
+	v := DiffView{
+		width:      80,
+		height:     24,
+		identifier: "proj/ticket",
+		phase:      "implement",
+		errorMsg:   "previous error",
+	}
+
+	updated, _ := v.Update(diffCommitListMsg{
+		commits:      []commitEntry{makeCommit("aaaa", "one")},
+		forkPointIdx: -1,
+	})
+	dv := updated.(DiffView)
+	if dv.errorMsg != "" {
+		t.Errorf("errorMsg should be empty on success, got %q", dv.errorMsg)
+	}
+	if len(dv.rows) != 1 {
+		t.Errorf("expected 1 row, got %d", len(dv.rows))
+	}
+}
+
 // ── resetForTicket tests ─────────────────────────────────────────────────────
 
 // TestResetForTicket_ClearsStaleState verifies that resetForTicket clears
