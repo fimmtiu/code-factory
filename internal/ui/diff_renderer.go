@@ -108,22 +108,23 @@ func renderHunk(sb *strings.Builder, h diff.Hunk, paneWidth int) int {
 
 	lineNum := h.NewStart
 	for _, line := range h.Lines {
+		text := expandTabs(line.Content)
 		switch line.Type {
 		case diff.LineRemoved:
 			// Blank line-number space, then content with pink background.
 			prefix := strings.Repeat(" ", numWidth) + " "
-			content := prefix + line.Content
+			content := prefix + text
 			sb.WriteString(padToWidth(diffRemovedStyle, content, paneWidth))
 		case diff.LineAdded:
 			// Line number on the left, then content with green background.
 			prefix := fmt.Sprintf("%*d ", numWidth, lineNum)
-			content := prefix + line.Content
+			content := prefix + text
 			sb.WriteString(padToWidth(diffAddedStyle, content, paneWidth))
 			lineNum++
 		case diff.LineContext:
 			// Line number on the left, plain text (no background).
 			prefix := fmt.Sprintf("%*d ", numWidth, lineNum)
-			sb.WriteString(prefix + line.Content)
+			sb.WriteString(prefix + text)
 			lineNum++
 		}
 		sb.WriteString("\n")
@@ -153,6 +154,14 @@ func digitCount(n int) int {
 		n /= 10
 	}
 	return count
+}
+
+// expandTabs replaces tab characters with spaces. Terminals render tabs at
+// variable widths, but lipgloss.Width counts each tab as 1 column, so styled
+// lines padded to the pane width overshoot and wrap. Using fixed 4-space tabs
+// keeps the width calculation and the terminal rendering in agreement.
+func expandTabs(s string) string {
+	return strings.ReplaceAll(s, "\t", "    ")
 }
 
 // fileNamesFromDiff returns ordered file names from the parsed diff.
