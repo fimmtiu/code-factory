@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/fimmtiu/code-factory/internal/git"
+	"github.com/fimmtiu/code-factory/internal/models"
 	"github.com/fimmtiu/code-factory/internal/storage"
 	"github.com/fimmtiu/code-factory/internal/util"
 )
@@ -368,16 +369,27 @@ func (v *DiffView) clampSelected() {
 
 // ── Commands ─────────────────────────────────────────────────────────────────
 
+// parentBranch returns the branch name to compare against for fork-point
+// detection. For nested tickets (e.g. "proj/ticket"), this is the parent
+// project's branch (e.g. "proj"). For top-level tickets, it falls back to
+// the repository's default branch (main/master).
+func parentBranch(identifier, worktreePath string) string {
+	if parent, ok := models.ParentIdentifierOf(identifier); ok {
+		return strings.ReplaceAll(parent, "/", "_")
+	}
+	return git.DetectDefaultBranch(worktreePath)
+}
+
 // fetchCommitsCmd fetches the commit list and fork point asynchronously.
-func fetchCommitsCmd(worktreePath string) tea.Cmd {
+func fetchCommitsCmd(worktreePath, identifier string) tea.Cmd {
 	return func() tea.Msg {
 		commits, err := git.FetchCommitList(worktreePath, maxCommits)
 		if err != nil {
 			return diffCommitListMsg{forkPointIdx: -1, errMsg: err.Error()}
 		}
 
-		defaultBranch := git.DetectDefaultBranch(worktreePath)
-		forkPointIdx := matchForkPoint(commits, worktreePath, defaultBranch)
+		baseBranch := parentBranch(identifier, worktreePath)
+		forkPointIdx := matchForkPoint(commits, worktreePath, baseBranch)
 
 		hasUncommit, _ := git.HasUncommittedChanges(worktreePath)
 
@@ -438,7 +450,7 @@ func (v DiffView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if err != nil {
 			return v, nil
 		}
-		return v, fetchCommitsCmd(wp)
+		return v, fetchCommitsCmd(wp, msg.identifier)
 
 	case diffCommitListMsg:
 		if msg.errMsg != "" {
