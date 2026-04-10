@@ -55,8 +55,6 @@ func runCommand(subcommand string, args []string) error {
 		return runAddChangeRequest(d, args, os.Stdin)
 	case "close-cr":
 		return runCloseChangeRequest(d, args)
-	case "append-change-request":
-		return runAppendChangeRequest(d, args, os.Stdin)
 	case "dismiss-cr":
 		return runDismissChangeRequest(d, args)
 	case "open-change-requests":
@@ -219,21 +217,6 @@ func runOpenChangeRequests(d *db.DB, args []string) error {
 	}
 	fmt.Println(string(out))
 	return nil
-}
-
-func runAppendChangeRequest(d *db.DB, args []string, stdin io.Reader) error {
-	if len(args) < 1 {
-		return fmt.Errorf("usage: tickets append-change-request <id>")
-	}
-	id, err := strconv.ParseInt(args[0], 10, 64)
-	if err != nil {
-		return fmt.Errorf("append-change-request: invalid id %q: %w", args[0], err)
-	}
-	text, err := io.ReadAll(stdin)
-	if err != nil {
-		return fmt.Errorf("append-change-request: read stdin: %w", err)
-	}
-	return d.AppendChangeRequestDescription(id, string(text))
 }
 
 func runDismissChangeRequest(d *db.DB, args []string) error {
