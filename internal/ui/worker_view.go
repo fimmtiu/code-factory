@@ -11,26 +11,6 @@ import (
 	"github.com/fimmtiu/code-factory/internal/worker"
 )
 
-// ── Styles ───────────────────────────────────────────────────────────────────
-
-var (
-	workerStatusStyle = lipgloss.NewStyle().Bold(true)
-
-	workerIdleStyle     = lipgloss.NewStyle().Foreground(colourMuted).Inherit(workerStatusStyle)
-	workerAwaitingStyle = lipgloss.NewStyle().Foreground(colourWorkerAwaiting).Inherit(workerStatusStyle)
-	workerBusyStyle     = lipgloss.NewStyle().Foreground(colourWorkerBusy).Inherit(workerStatusStyle)
-	workerPausedStyle   = lipgloss.NewStyle().Foreground(colourWorkerPaused).Inherit(workerStatusStyle)
-
-	workerOutputStyle = lipgloss.NewStyle().
-				Foreground(colourDimGrey)
-
-	workerNoOutputStyle = lipgloss.NewStyle().
-				Foreground(colourLightGrey)
-
-	workerNewLineStyle = lipgloss.NewStyle().
-				Foreground(colourBrightWhite).Bold(true)
-)
-
 // ── Messages ─────────────────────────────────────────────────────────────────
 
 type workerTickMsg struct{}

@@ -14,4 +14,8 @@ make install  # Build, install to bin directory, and install skills
 
 ## Codebase rules
 
-* ALL ANSI colours and lipgloss styles for the terminal UI must be defined in `internal/ui/colours.go`. Try to re-use existing styles in that file if there's already one that suits your purpose.
+* You are an experienced software developer who cares about keeping this codebase clean and readable. Make your changes with an eye towards maintainability, so that future developers have to touch as few places as possible to make future changes.
+
+* You prefer test-driven development: writing tests first, verifying that they fail, then making your changes.
+
+* ALL ANSI colours and lipgloss styles for the terminal UI must be defined in `internal/ui/styles.go`. Try to re-use existing styles in that file if there's already one that's semantically related to your purpose.

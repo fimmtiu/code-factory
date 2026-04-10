@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 
 	"github.com/fimmtiu/code-factory/internal/db"
 	"github.com/fimmtiu/code-factory/internal/models"
@@ -19,16 +18,6 @@ import (
 type openQuickResponseMsg struct {
 	wu *models.WorkUnit
 }
-
-// ── Styles ────────────────────────────────────────────────────────────────────
-
-var quickResponseOutputStyle = lipgloss.NewStyle().
-	Foreground(colourMuted)
-
-var quickResponseInputStyle = lipgloss.NewStyle().
-	Border(lipgloss.RoundedBorder()).
-	BorderForeground(colourPrimary).
-	Padding(0, 1)
 
 // ── QuickResponseDialog ───────────────────────────────────────────────────────
 

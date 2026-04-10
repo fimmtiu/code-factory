@@ -98,15 +98,6 @@ func (it tdItem) selectable() bool {
 	return it.kind == tdItemCR || it.kind == tdItemLog
 }
 
-// ── Styles ────────────────────────────────────────────────────────────────────
-
-var (
-	tdSelectedStyle  = lipgloss.NewStyle().Background(colourPrimary).Foreground(colourOnPrimary)
-	tdDismissedStyle = lipgloss.NewStyle().Foreground(colourDimGrey)
-	tdClosedStyle    = lipgloss.NewStyle().Foreground(colourWorkerBusy)
-	tdSectionStyle   = lipgloss.NewStyle().Bold(true)
-)
-
 // ── TicketDialog ──────────────────────────────────────────────────────────────
 
 type tdFocus int
@@ -567,10 +558,6 @@ func (d *TicketDialog) View() string {
 	)
 	return dialogBoxStyle.Width(d.width - 2).Render(body)
 }
-
-// hintInactiveStyle renders a hint segment that is currently unavailable
-// (e.g. "X dismiss" when the CR is already dismissed).
-var hintInactiveStyle = lipgloss.NewStyle().Foreground(colourLightGrey)
 
 func (d *TicketDialog) renderHint() string {
 	item := d.currentItem()

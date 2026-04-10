@@ -27,55 +27,6 @@ const (
 
 // ── Styles ───────────────────────────────────────────────────────────────────
 
-// accentBorder is a DoubleBorder variant that replaces the left edge with a
-// solid half-block character (▌) to draw a coloured accent bar on the focused pane.
-var accentBorder = func() lipgloss.Border {
-	b := lipgloss.DoubleBorder()
-	b.Left = "▌"
-	b.TopLeft = "╭"
-	b.BottomLeft = "╰"
-	return b
-}()
-
-var (
-	// Pane borders
-	focusedBorderStyle = lipgloss.NewStyle().
-				Border(accentBorder).
-				BorderForeground(colourBorderBlue)
-
-	unfocusedBorderStyle = lipgloss.NewStyle().
-				Border(lipgloss.NormalBorder()).
-				BorderForeground(colourMuted) // grey
-
-	// Status pane always unfocused
-	statusPaneStyle = unfocusedBorderStyle
-
-	// Tree item styles
-	treeBlockedStyle  = lipgloss.NewStyle().Foreground(colourMuted)
-	treeDoneStyle     = lipgloss.NewStyle().Underline(true)
-	treeDefaultStyle  = lipgloss.NewStyle()
-	treeSelectedStyle = lipgloss.NewStyle().
-				Background(colourPrimary).
-				Foreground(colourOnPrimary)
-
-	// Phase badge styles (keyed by ticket phase)
-	phaseBadgeStyles = map[models.TicketPhase]lipgloss.Style{
-		models.PhaseImplement: lipgloss.NewStyle().Foreground(colourPhaseImplement),
-		models.PhaseRefactor:  lipgloss.NewStyle().Foreground(colourPhaseRefactor),
-		models.PhaseReview:    lipgloss.NewStyle().Foreground(colourPhaseReview),
-		models.PhaseRespond:   lipgloss.NewStyle().Foreground(colourPhaseRespond),
-		models.PhaseBlocked:   lipgloss.NewStyle().Foreground(colourPhaseBlocked),
-		models.PhaseDone:      lipgloss.NewStyle().Foreground(colourSuccess),
-	}
-
-	// Detail pane label
-	detailLabelStyle = lipgloss.NewStyle().Bold(true)
-
-	// Progress bar segment styles
-	progressFilledStyle = lipgloss.NewStyle().Foreground(colourSuccess)
-	progressEmptyStyle  = lipgloss.NewStyle().Foreground(colourDarkGrey)
-)
-
 // Fixed width of the status pane (including border)
 const statusPaneWidth = 28
 
@@ -690,9 +641,6 @@ func (v ProjectView) View() string {
 
 	return lipgloss.JoinVertical(lipgloss.Left, topRow, detailPane)
 }
-
-// repoNameStyle renders the repository name bold and underlined.
-var repoNameStyle = lipgloss.NewStyle().Bold(true).Underline(true)
 
 // renderProgressBar returns a 10-cell Unicode block progress bar with coloured
 // segments followed by the percentage value, e.g. "████░░░░░░ 40%".

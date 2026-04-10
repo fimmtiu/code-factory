@@ -4,14 +4,7 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 )
-
-// hintKeyStyle renders a keystroke label bold in the muted hint colour.
-var hintKeyStyle = lipgloss.NewStyle().Foreground(colourMuted).Bold(true)
-
-// hintDescStyle renders hint description text in the normal muted colour.
-var hintDescStyle = lipgloss.NewStyle().Foreground(colourMuted)
 
 // buildHint renders alternating key/description pairs with each key bolded.
 // Example: buildHint("Q", "quit", "?", "help") → bold("Q")+" quit  "+bold("?")+" help"
@@ -26,17 +19,6 @@ func buildHint(pairs ...string) string {
 	}
 	return sb.String()
 }
-
-// viewPaneStyle is the blue single-line border applied to Command, Worker, and Log views.
-var viewPaneStyle = lipgloss.NewStyle().
-	Border(lipgloss.RoundedBorder()).
-	BorderForeground(colourBorderBlue)
-
-// emptyStateStyle is applied to placeholder messages such as "No actionable tickets"
-// so they read as secondary/hint text rather than content.
-var emptyStateStyle = lipgloss.NewStyle().
-	Foreground(colourSubtleGrey).
-	Italic(true)
 
 // viewBorderOverhead is the number of rows (and columns) consumed by viewPaneStyle.
 const viewBorderOverhead = 2

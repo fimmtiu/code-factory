@@ -14,15 +14,6 @@ import (
 	"github.com/fimmtiu/code-factory/internal/worker"
 )
 
-// ── Styles ────────────────────────────────────────────────────────────────────
-
-var permOptionNormalStyle = lipgloss.NewStyle().Padding(0, 1)
-
-var permOptionSelectedStyle = lipgloss.NewStyle().
-	Bold(true).
-	Reverse(true).
-	Padding(0, 1)
-
 // ── PermissionDialog ──────────────────────────────────────────────────────────
 
 // PermissionDialog is shown when the agent issues a permission request (or any

@@ -23,31 +23,6 @@ type openDiffViewMsg struct {
 	isProject  bool
 }
 
-// ── Styles ───────────────────────────────────────────────────────────────────
-
-var (
-	headerStyle = lipgloss.NewStyle().
-			Bold(true).
-			Padding(0, 1)
-
-	tabBaseStyle = lipgloss.NewStyle().
-			Bold(true).
-			Padding(0, 1)
-
-	activeTabStyle = lipgloss.NewStyle().
-			Foreground(colourOnPrimary).
-			Background(colourPrimary).
-			Inherit(tabBaseStyle)
-
-	inactiveTabStyle = lipgloss.NewStyle().
-				Foreground(colourAccent).
-				Inherit(tabBaseStyle)
-
-	// helpHintStyle adds padding around hint text; colouring is done by
-	// hintKeyStyle / hintDescStyle (defined in views.go).
-	helpHintStyle = lipgloss.NewStyle().Padding(0, 1)
-)
-
 // ── Model ────────────────────────────────────────────────────────────────────
 
 // Model is the root bubbletea model for the code-factory TUI.

@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 )
 
 // notifIconPath is the absolute path to the notification icon.
@@ -19,32 +18,11 @@ type startEditorMsg struct{ fn func() tea.Msg }
 // editorDoneMsg is delivered when the blocking editor goroutine exits.
 type editorDoneMsg struct{ result tea.Msg }
 
-// editorWaitingStyle is used for the "Waiting for editor..." overlay.
-var editorWaitingStyle = lipgloss.NewStyle().
-	Border(lipgloss.RoundedBorder()).
-	BorderForeground(colourBorderBlue).
-	BorderBackground(colourDarkGrey).
-	Background(colourDarkGrey).
-	Foreground(colourOnPrimary).
-	Bold(true).
-	Padding(0, 2)
-
 // wrapEditorCmd wraps fn so the root model can show "Waiting for editor..."
 // while fn (which calls a blocking editor) runs in a goroutine.
 func wrapEditorCmd(fn func() tea.Msg) tea.Cmd {
 	return func() tea.Msg { return startEditorMsg{fn: fn} }
 }
-
-// notifStyle is the visual style for ephemeral pop-up notifications.
-// Dark background with bright text and an amber border for high visibility.
-var notifStyle = lipgloss.NewStyle().
-	Border(lipgloss.RoundedBorder()).
-	BorderForeground(colourWarning).
-	BorderBackground(colourDarkGrey).
-	Background(colourDarkGrey).
-	Foreground(colourOnPrimary).
-	Bold(true).
-	Padding(0, 2)
 
 // notifMsg triggers a new notification popup.
 type notifMsg struct{ text string }

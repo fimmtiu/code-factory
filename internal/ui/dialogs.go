@@ -12,34 +12,6 @@ type dialog interface {
 	tea.Model
 }
 
-// ── Styles ───────────────────────────────────────────────────────────────────
-
-var (
-	dialogBoxStyle = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(colourPrimary).
-			Padding(1, 2)
-
-	dialogTitleStyle = lipgloss.NewStyle().
-				Bold(true).
-				Background(colourPrimary).
-				Foreground(colourOnPrimary).
-				Padding(0, 1).
-				MarginBottom(1)
-
-	buttonBaseStyle = lipgloss.NewStyle().Padding(0, 2)
-
-	buttonNormalStyle = lipgloss.NewStyle().
-				Background(colourLightGrey).
-				Foreground(colourBrightWhite).
-				Inherit(buttonBaseStyle)
-
-	buttonFocusedStyle = lipgloss.NewStyle().
-				Background(colourPrimary).
-				Foreground(colourOnPrimary).
-				Inherit(buttonBaseStyle)
-)
-
 // ── Quit dialog ──────────────────────────────────────────────────────────────
 
 // quitDialogFocused tracks which button has focus.

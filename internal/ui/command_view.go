@@ -21,20 +21,6 @@ import (
 	"github.com/fimmtiu/code-factory/internal/workflow"
 )
 
-// ── Styles ───────────────────────────────────────────────────────────────────
-
-var (
-	cmdSelectedStyle = lipgloss.NewStyle().
-				Background(colourPrimary).
-				Foreground(colourOnPrimary)
-
-	cmdNeedsAttentionStyle = lipgloss.NewStyle().
-				Foreground(colourWarning) // orange
-
-	cmdUserReviewStyle = lipgloss.NewStyle().
-				Foreground(colourWorkerBusy)
-)
-
 // ── Messages ─────────────────────────────────────────────────────────────────
 
 type commandRefreshMsg struct {
@@ -496,8 +482,6 @@ func (v CommandView) listHeight() int {
 }
 
 // ── View ──────────────────────────────────────────────────────────────────────
-
-var cmdErrorStyle = lipgloss.NewStyle().Foreground(colourDanger) // bright red
 
 func (v CommandView) View() string {
 	var sb strings.Builder

@@ -36,6 +36,12 @@ Prints the open change requests for the given ticket as a JSON array. (Dismissed
 
 ### Creating work units
 
+#### For humans
+
+Just run `tickets create-project` or `tickets create-ticket`. It'll bring up a terminal UI that allows you to pick a parent project, specify a name, then type or paste a description.
+
+#### For agents
+
 ```
 echo '{"description": "...", "dependencies": ["other/ticket"]}' | tickets create-project <identifier>
 echo '{"description": "...", "dependencies": ["other/ticket"]}' | tickets create-ticket <identifier>

@@ -13,17 +13,6 @@ import (
 	"github.com/fimmtiu/code-factory/internal/util"
 )
 
-// ── Styles ───────────────────────────────────────────────────────────────────
-
-var (
-	logSelectedStyle = lipgloss.NewStyle().
-				Background(colourPrimary).
-				Foreground(colourOnPrimary)
-
-	logWorkerStyle = lipgloss.NewStyle().
-			Foreground(colourLogWorker)
-)
-
 // logTimestampStyle returns a style that fades the timestamp colour based on
 // how long ago the entry was created:
 //

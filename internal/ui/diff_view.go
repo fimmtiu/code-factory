@@ -155,9 +155,6 @@ func buildCommitRows(commits []git.CommitEntry, forkPointIdx int, hasUncommit bo
 
 // ── Label rendering ──────────────────────────────────────────────────────────
 
-// commitHashStyle renders the short hash prefix in bold medium grey.
-var commitHashStyle = lipgloss.NewStyle().Bold(true).Foreground(colourMuted)
-
 // renderCommitLabel returns "<4-char hash> <message>" as plain text.
 // Hash styling is applied later by renderCommitRow for unselected rows.
 func renderCommitLabel(c git.CommitEntry) string {
@@ -640,9 +637,6 @@ func connectPaneTop(rendered string, left, right bool) string {
 	return strings.Join(lines, "\n")
 }
 
-// diffLabelBold is the style for the "Ticket: <id>" / "Project: <id>" label.
-var diffLabelBold = lipgloss.NewStyle().Bold(true)
-
 // renderDiffLabel returns the styled left-hand label for Diffs status bars,
 // e.g. "**Ticket: proj/ticket** (implement)".
 func renderDiffLabel(identifier, phase string, isProject bool) string {
@@ -653,9 +647,6 @@ func renderDiffLabel(identifier, phase string, isProject bool) string {
 	boldPart := diffLabelBold.Render(fmt.Sprintf("%s: %s", kind, identifier))
 	return fmt.Sprintf("%s (%s)", boldPart, phase)
 }
-
-// diffErrorStyle renders error messages in the diff view status bar.
-var diffErrorStyle = lipgloss.NewStyle().Foreground(colourDanger)
 
 // renderStatusBar renders the status bar with ticket info and selection count.
 // width is the inner content width (excluding border overhead).

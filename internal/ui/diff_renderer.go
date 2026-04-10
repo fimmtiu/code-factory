@@ -8,16 +8,6 @@ import (
 	"github.com/fimmtiu/code-factory/internal/diff"
 )
 
-// Diff rendering styles.
-var (
-	diffHunkHeaderStyle = lipgloss.NewStyle().Background(colourDiffHunkHeader)
-	diffAddedStyle      = lipgloss.NewStyle().Background(colourDiffAdded)
-	diffRemovedStyle    = lipgloss.NewStyle().Background(colourDiffRemoved)
-	diffFileHeaderStyle = lipgloss.NewStyle().Bold(true)
-	diffDeletedMsgStyle = lipgloss.NewStyle().Bold(true).Foreground(colourDiffDeleted)
-	diffRenamedMsgStyle = lipgloss.NewStyle().Bold(true).Foreground(colourDiffRenamed)
-)
-
 // renderedDiff holds the formatted diff output together with the line offsets
 // where each file section starts. Computing offsets during rendering avoids
 // fragile re-parsing of the output string.

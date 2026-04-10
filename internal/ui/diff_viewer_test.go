@@ -150,7 +150,7 @@ func TestViewerStatusBar_Content(t *testing.T) {
 	if !strings.Contains(lines[1], "internal/ui/app.go") {
 		t.Errorf("second line should contain filename, got %q", lines[1])
 	}
-	if !strings.Contains(lines[1], "Commit: abc1") {
+	if !strings.Contains(lines[1], "Commit abc1") {
 		t.Errorf("second line should contain commit hash, got %q", lines[1])
 	}
 }
