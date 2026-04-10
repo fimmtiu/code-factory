@@ -38,6 +38,10 @@ Terminology for the `tickets` system:
       "identifier-of-a-dependency",
       "another-dependency"
     ],
+    "write_scope": [
+      "path/to/package/",
+      "path/to/specific_file.go"
+    ],
     "description": "Full PRD content here (see below for format)..."
   }
   TICKET_JSON
@@ -50,18 +54,33 @@ Terminology for the `tickets` system:
     "dependencies": [
       "project-name/other-ticket"
     ],
+    "write_scope": [
+      "path/to/package/",
+      "path/to/specific_file.go"
+    ],
     "description": "Full user story content here..."
   }
   TICKET_JSON
   ```
 
-**Important:** Do NOT start implementing. Your job ends when all projects and tickets have been created with `tickets`. Do not write any code, modify any source files, or begin work on any ticket.
+6. **Cross-validate write scopes.** Review every ticket and project you just created. For each pair of sibling work units (work units that do NOT have a dependency relationship between them), verify their `write_scope` entries do not overlap. If they do, fix the decomposition before finishing: either add a dependency or extract a shared ticket. This is the last step — do not skip it.
+
+**Important:** Do NOT start implementing. Your job ends when all projects and tickets have been created with `tickets` and write scopes have been cross-validated. Do not write any code, modify any source files, or begin work on any ticket.
 
 ---
 
 ## How to divide the project
 
-Each project should either describe an individual feature of the proposed change or lay necessary groundwork for implementing future features. Each output PRD must be small enough that it's easily read and worked on in a single context window. Tickets should not generate duplicate code -- if multiple tickets need a particular function, it should be extracted to a separate ticket that the others depend on. We want to minimize the chances of merge conflicts when we merge the tickets' output commits together.
+Each project should either describe an individual feature of the proposed change or lay necessary groundwork for implementing future features. Each output PRD must be small enough that it's easily read and worked on in a single context window.
+
+### Preventing duplicate code and merge conflicts
+
+Each ticket must declare a **write scope** (`write_scope` in the JSON): the set of packages or files it will create or modify. Write scopes must not overlap between sibling tickets (tickets that have no dependency relationship). If two tickets both need to create or modify the same file or package, resolve it by one of:
+
+1. **Adding a dependency** — make one ticket depend on the other so it uses the other's output rather than reimplementing it.
+2. **Extracting a shared ticket** — pull the common functionality into a new ticket that both depend on.
+
+When in doubt, prefer extraction. A small "utility" ticket that two others depend on is far cheaper than a merge conflict.
 
 If the project encompasses a very broad, general feature, you may break that project into multiple subprojects of that parent project with their own short descriptive names and PRDs. Subprojects may themselves contain subprojects. There are no hard limits on nesting, but if you've gone deeper than three levels of nesting then something is wrong and you're probably making the projects too fine-grained.
 
@@ -149,7 +168,7 @@ Numbered list of specific functionalities:
 - "FR-1: The system must allow users to..."
 - "FR-2: When a user clicks X, the system must..."
 
-Be explicit and unambiguous.
+Be explicit and unambiguous. Each requirement should reference the specific package or file it affects (e.g., "FR-1: In `internal/models/`, add a Priority type..."). This helps ensure write scopes are correct and non-overlapping.
 
 ### 5. Non-Goals (Out of Scope)
 What this feature will NOT include. Critical for managing scope.
