@@ -25,18 +25,38 @@ Terminology for the `tickets` system:
 
 0. Run `tickets init` in the root directory of the git repository we're in
 1. Read the user-provided specification for the work to be done
-2. Divide the work into logical pieces, each with a short identifier (preferably less than 30 characters, following the identifier rules above). Each of these will become a Code Factory project.
-3. Collect all clarifying questions across all projects and present them to the user in a single batch (see "How to ask clarifying questions" below). Wait for answers before proceeding. If nothing is ambiguous, skip this step.
-4. Determine the dependencies between projects
-5. For each project, in dependency order (parents and dependencies first):
-  5a. Generate a structured PRD, guided by the user's answers from Step 3
-  5b. Create the project by piping a JSON description into `tickets create-project`:
+2. Choose a **top-level project name**: a short, descriptive kebab-case identifier that captures what the specification is trying to accomplish (e.g., `task-priority`, `auth-overhaul`, `csv-export`). Shorter is better — this name is prepended to every descendant identifier. Aim for 2–3 words / under 20 characters.
+3. Divide the work into logical pieces, each with a short identifier (preferably less than 30 characters, following the identifier rules above). Each of these will become a subproject of the top-level project.
+4. Collect all clarifying questions across all projects and present them to the user in a single batch (see "How to ask clarifying questions" below). Wait for answers before proceeding. If nothing is ambiguous, skip this step.
+5. Determine the dependencies between projects
+6. Create the **top-level project** first. Its description should be a brief overview of the entire specification — what is being built and why. It has no dependencies.
   ```bash
-  tickets create-project <project-identifier> <<'TICKET_JSON'
+  tickets create-project <top-level-name> <<'TICKET_JSON'
+  {
+    "description": "High-level overview of the entire specification..."
+  }
+  TICKET_JSON
+  ```
+7. For each subproject, in dependency order (parents and dependencies first):
+  7a. Generate a structured PRD, guided by the user's answers from Step 4
+  7b. Create the subproject by piping a JSON description into `tickets create-project`. The identifier MUST include the full path from the top-level project down to this subproject. A subproject can live directly under the top-level project or nested under another subproject:
+  ```bash
+  # Direct child of the top-level project:
+  tickets create-project <top-level-name>/<subproject> <<'TICKET_JSON'
+  { ... }
+  TICKET_JSON
+
+  # Nested under another subproject:
+  tickets create-project <top-level-name>/<parent-subproject>/<child-subproject> <<'TICKET_JSON'
+  { ... }
+  TICKET_JSON
+  ```
+  The JSON body is the same in both cases:
+  ```json
   {
     "dependencies": [
-      "identifier-of-a-dependency",
-      "another-dependency"
+      "<top-level-name>/path/to/a-dependency",
+      "<top-level-name>/path/to/another-dependency"
     ],
     "write_scope": [
       "path/to/package/",
@@ -44,15 +64,16 @@ Terminology for the `tickets` system:
     ],
     "description": "Full PRD content here (see below for format)..."
   }
-  TICKET_JSON
   ```
-  Omit `dependencies` or pass `[]` if the project has none.
-  5c. For each user story in the PRD, create a ticket. Derive the ticket identifier from the user story title, not its number — for a story titled "US-001: Add priority field" in project `task-priority`, the ticket identifier would be `task-priority/add-priority-field`.
+  Omit `dependencies` or pass `[]` if the subproject has none.
+  7c. For each user story in the PRD, create a ticket. Derive the ticket identifier from the user story title, not its number. The ticket identifier is the parent subproject's full identifier plus the ticket name. Examples:
+  - Story "US-001: Add priority field" in subproject `task-priority/models` → ticket `task-priority/models/add-priority-field`
+  - Story "US-002: Validate input" in nested subproject `task-priority/api/validation` → ticket `task-priority/api/validation/validate-input`
   ```bash
-  tickets create-ticket <project-identifier>/<ticket-name> <<'TICKET_JSON'
+  tickets create-ticket <full-parent-path>/<ticket-name> <<'TICKET_JSON'
   {
     "dependencies": [
-      "project-name/other-ticket"
+      "<top-level-name>/path/to/other-ticket"
     ],
     "write_scope": [
       "path/to/package/",
@@ -63,7 +84,7 @@ Terminology for the `tickets` system:
   TICKET_JSON
   ```
 
-6. **Cross-validate write scopes.** Review every ticket and project you just created. For each pair of sibling work units (work units that do NOT have a dependency relationship between them), verify their `write_scope` entries do not overlap. If they do, fix the decomposition before finishing: either add a dependency or extract a shared ticket. This is the last step — do not skip it.
+8. **Cross-validate write scopes.** Review every ticket and project you just created. For each pair of sibling work units (work units that do NOT have a dependency relationship between them), verify their `write_scope` entries do not overlap. If they do, fix the decomposition before finishing: either add a dependency or extract a shared ticket. This is the last step — do not skip it.
 
 **Important:** Do NOT start implementing. Your job ends when all projects and tickets have been created with `tickets` and write scopes have been cross-validated. Do not write any code, modify any source files, or begin work on any ticket.
 
@@ -71,7 +92,7 @@ Terminology for the `tickets` system:
 
 ## How to divide the project
 
-Each project should either describe an individual feature of the proposed change or lay necessary groundwork for implementing future features. Each output PRD must be small enough that it's easily read and worked on in a single context window.
+Each subproject should either describe an individual feature of the proposed change or lay necessary groundwork for implementing future features. Each output PRD must be small enough that it's easily read and worked on in a single context window. All subprojects and tickets live under the top-level project created in Step 6.
 
 ### Preventing duplicate code and merge conflicts
 
@@ -82,13 +103,13 @@ Each ticket must declare a **write scope** (`write_scope` in the JSON): the set 
 
 When in doubt, prefer extraction. A small "utility" ticket that two others depend on is far cheaper than a merge conflict.
 
-If the project encompasses a very broad, general feature, you may break that project into multiple subprojects of that parent project with their own short descriptive names and PRDs. Subprojects may themselves contain subprojects. There are no hard limits on nesting, but if you've gone deeper than three levels of nesting then something is wrong and you're probably making the projects too fine-grained.
+If a subproject encompasses a very broad, general feature, you may break it into further nested subprojects with their own short descriptive names and PRDs. For example, if the top-level project is `task-priority` and the subproject `api` is too broad, you could create `task-priority/api/routes` and `task-priority/api/validation` as children of `task-priority/api`. There are no hard limits on nesting below the top-level project, but if you've gone deeper than three levels of nesting (including the top-level project) then something is wrong and you're probably making the projects too fine-grained.
 
 ## How to choose project dependencies
 
-You should aim to split up the work into projects such that we can parallelize as much work as possible. Any changes (libraries, shared code, foundational functionality, etc.) which will be used by other projects MUST be marked as a dependency for those subsequent projects. A work unit MUST ONLY depend on functionality implemented by work units that are in its `dependencies` list, or functionality implemented by work units that the work units in the `dependencies` list themselves depend on. (It's a tree; the work you rely on must be in one of the ancestors.)
+You should aim to split up the work into subprojects such that we can parallelize as much work as possible. Any changes (libraries, shared code, foundational functionality, etc.) which will be used by other subprojects MUST be marked as a dependency for those subsequent subprojects. A work unit MUST ONLY depend on functionality implemented by work units that are in its `dependencies` list, or functionality implemented by work units that the work units in the `dependencies` list themselves depend on. (It's a tree; the work you rely on must be in one of the ancestors.)
 
-If you encounter a circular dependency situation, resolve it by splitting out common functionality into a separate project that's implemented first. Other projects can depend on that common functionality instead of depending on each other.
+If you encounter a circular dependency situation, resolve it by splitting out common functionality into a separate subproject that's implemented first. Other subprojects can depend on that common functionality instead of depending on each other.
 
 ## How to order the work units
 
