@@ -78,7 +78,7 @@ func Default() *Settings {
 		ModelImplement:        "sonnet",
 		ModelRefactor:         "opus",
 		ModelReview:           "opus",
-		ModelRespond:          "sonnet",
+		ModelRespond:          "opus",
 		Effort:                "high",
 	}
 }

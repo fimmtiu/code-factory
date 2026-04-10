@@ -5,7 +5,7 @@ Generates a realistic set of fake projects, tickets, worktrees, and change reque
 ## Usage
 
 ```
-cf-testdata [-seed <N>] [-target <dir>] [-reset]
+cf-testdata [--seed <N>] [--target <dir>] [--reset]
 ```
 
 Must be run from inside (or targeting) a git repository. The `.tickets/` directory is created automatically if it does not exist.
@@ -14,9 +14,9 @@ Must be run from inside (or targeting) a git repository. The `.tickets/` directo
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `-seed` | current time | Random seed for reproducible data generation |
-| `-target` | `.` | Path inside the target git repository |
-| `-reset` | off | Remove all existing `.tickets/` content before generating |
+| `--seed` | current time | Random seed for reproducible data generation |
+| `--target` | `.` | Path inside the target git repository |
+| `--reset` | off | Remove all existing `.tickets/` content before generating |
 
 ## What it generates
 
@@ -31,17 +31,17 @@ Change request locations are drawn from the repository's actual tracked source f
 
 ## Reproducibility
 
-Pass `-seed <N>` with the same value to regenerate identical data (same identifiers, descriptions, and structure). The seed is printed on each run.
+Pass `--seed <N>` with the same value to regenerate identical data (same identifiers, descriptions, and structure). The seed is printed on each run.
 
 ## Example
 
 ```sh
 # Generate fresh test data, wiping any existing data
-cf-testdata -reset
+cf-testdata --reset
 
 # Regenerate with the same seed for reproducible testing
-cf-testdata -reset -seed 1234567890
+cf-testdata --reset --seed 1234567890
 
 # Target a different repository
-cf-testdata -target /path/to/other-repo -reset
+cf-testdata --target /path/to/other-repo --reset
 ```

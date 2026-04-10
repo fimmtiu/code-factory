@@ -29,10 +29,10 @@ tickets status
 Prints all projects and tickets as pretty-printed JSON, including phase, status, dependencies, and change requests.
 
 ```
-tickets open-change-requests <identifier>
+tickets list-crs <identifier>
 ```
 
-Prints the open change requests for the given ticket as a JSON array.
+Prints the open change requests for the given ticket as a JSON array. (Dismissed or closed CRs aren't shown.)
 
 ### Creating work units
 
@@ -49,7 +49,7 @@ Creates a project or ticket with the given slash-separated identifier (e.g. `my-
 tickets set-status <identifier> <phase> [<status>]
 ```
 
-Updates a ticket's phase (e.g. `implement`, `refactor`, `review`, `respond`, `done`) and optionally its status (defaults to `idle`). Setting phase to `done` merges the ticket's worktree into its parent project's worktree (or the repo's default branch) and removes the worktree.
+Updates a ticket's phase (e.g. `implement`, `refactor`, `review`, `respond`, `done`) and optionally its status (defaults to `idle`). Setting phase to `done` automatically merges the ticket's worktree into its parent project's worktree (or the repo's default branch FIXME FIXME) and removes the worktree.
 
 ### Worker protocol
 
@@ -77,10 +77,10 @@ Adds an open change request to a ticket. `code-location` must be in `file:line` 
 
 ```
 tickets close-cr <id> [<explanation>]
-tickets dismiss-cr <id>
+tickets dismiss-cr <id> [<explanation>]
 ```
 
-Closes or dismisses the change request with the given numeric ID. An optional explanation can be provided to `close-cr`, which is appended to the change request's description before closing.
+Closes or dismisses the change request with the given numeric ID. The optional explanation, if provided, is appended to the change request's description before closing.
 
 ## Settings
 

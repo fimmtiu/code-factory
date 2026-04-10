@@ -57,7 +57,7 @@ func runCommand(subcommand string, args []string) error {
 		return runCloseChangeRequest(d, args)
 	case "dismiss-cr":
 		return runDismissChangeRequest(d, args)
-	case "open-change-requests":
+	case "list-crs":
 		return runOpenChangeRequests(d, args)
 	case "new":
 		return runWizard(d, "ticket")
@@ -202,7 +202,7 @@ func runCloseChangeRequest(d *db.DB, args []string) error {
 
 func runOpenChangeRequests(d *db.DB, args []string) error {
 	if len(args) < 1 {
-		return fmt.Errorf("usage: tickets open-change-requests <identifier>")
+		return fmt.Errorf("usage: tickets list-crs <identifier>")
 	}
 	crs, err := d.OpenChangeRequests(args[0])
 	if err != nil {

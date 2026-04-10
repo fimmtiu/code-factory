@@ -16,11 +16,12 @@ clean:
 clean-data:
 	rm -rf .tickets
 
+INSTALL_DIR ?= $(HOME)/bin
+
 install: build
-	GOBIN=$(HOME)/bin go install ./cmd/tickets ./cmd/cf-testdata ./cmd/code-factory
+	GOBIN=$(INSTALL_DIR) go install ./cmd/tickets ./cmd/cf-testdata ./cmd/code-factory
 	for skill in skills/*; do \
 		cp -rf $$skill $(HOME)/.claude/skills/; \
 	done
-	cp rules/* $(HOME)/.cursor/rules/
 
 .PHONY: build test lint clean clean-data install

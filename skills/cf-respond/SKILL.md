@@ -17,7 +17,7 @@ Trigger on `/respond` or `/cf-respond`.
 
 ## Step 1: Get change requests for the ticket
 
-Run `tickets open-change-requests <ticket-identifier>` to get a JSON dump of all change requests. If no change requests are returned by this command, report that there is nothing to do and stop.
+Run `tickets list-crs <ticket-identifier>` to get a JSON dump of all change requests. If no change requests are returned by this command, report that there is nothing to do and stop.
 
 ## Step 2: Respond to each open change request
 

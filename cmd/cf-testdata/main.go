@@ -5,9 +5,9 @@
 // Usage:
 //
 //	tickets-testdata [flags]
-//	  -seed int     random seed (default: current time)
-//	  -target dir   path inside the target git repository (default: ".")
-//	  -reset        remove all existing .tickets/ content before generating
+//	  --seed int     random seed (default: current time)
+//	  --target dir   path inside the target git repository (default: ".")
+//	  --reset        remove all existing .tickets/ content before generating
 package main
 
 import (

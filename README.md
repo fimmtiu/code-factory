@@ -8,22 +8,24 @@ Tickets live in a `.tickets/` directory inside your repository alongside your co
 
 ## How it works
 
-1. **Define work** — Create projects and tickets by running the `/cf-project` skill on your design doc. Each ticket has an identifier, a description, and an optional list of dependencies.
+1. **Define work** — Create projects and tickets by running the `/cf-project` skill on your design document. Each ticket will have a human-readable identifier, a description, and an optional list of dependencies.
 2. **Run agents** — Start `code-factory` to spawn a pool of Claude Code workers. Workers claim idle tickets, run the appropriate agent prompt, and advance tickets through a four-phase pipeline.
 3. **Supervise** — Watch progress in the terminal UI. Approve work, respond to agent questions, request changes, and merge completed tickets.
 
 ### Ticket phases
 
-Each ticket moves through four phases before it is done:
+Each ticket moves through four phases of work:
 
 | Phase | What the agent does |
 |-------|-------------------|
 | `implement` | Writes specs first, then implements the ticket |
 | `refactor` | Refactors and cleans up the resulting code |
 | `review` | Reviews the refactored changes and makes change requests |
-| `respond` | Applies any open change requests |
+| `respond` | Applies any open change requests which it deems worth doing |
 
-You approve each phase transition. When all phases are done, the ticket's branch is merged into its parent project's worktree (or the repo's default branch) and the worktree is removed.
+You approve each phase transition. When all phases are done, the ticket's branch is merged into its parent project's worktree (or the repo's `main` or `master` branch) and the worktree is removed.
+
+FIXME: Merging into main/master sucks for repos like themis. Let's make the destination branch specifiable.
 
 ---
 
@@ -43,7 +45,10 @@ cd code-factory
 make install
 ```
 
-This builds and installs three binaries to `~/bin/` and installs the Claude Code skills to `~/.claude/skills/`.
+This builds and installs three binaries to `~/bin/` and installs the Claude Code skills to `~/.claude/skills/`. To install the binaries to a different directory, specify `INSTALL_DIR` on the command line:
+```
+$ INSTALL_DIR=/usr/local/bin make install
+```
 
 ### Set up a repository
 
@@ -64,7 +69,11 @@ Supported editors: `cursor`, `vscode`. (For more settings, see [the `code-factor
 
 ### Create some work
 
-Write a specification, then run the `/cf-project` skill on it to decompose it into projects, subprojects, and tickets. (This is temporary; eventually we'll want to fold a more powerful project-decomposer into code-factory itself.)
+Write a specification, then open a Claude agent and run the `/cf-project` skill on it to decompose it into projects, subprojects, and tickets.
+```
+/cf-project @doc/design.md
+```
+For the planning work, it's best to use Opus as the model. (Run `/model opus` in Claude's terminal UI before you run `/cf-project`.)
 
 ### Start the agent manager
 
@@ -78,12 +87,13 @@ Workers will immediately start claiming and working on idle tickets. See `cmd/co
 
 ## Terminal UI
 
-The TUI has four views (switch with F1–F4 or Shift+Tab):
+The TUI has five views (switch with F1–F5 or Shift+Tab):
 
 - **F1: Projects** — Hierarchical tree of all work units, with a status pane and detail view. Press Enter on a ticket to see its change requests and logfiles.
 - **F2: Commands** — Actionable tickets waiting for your input (`needs-attention`) or review (`user-review`). Press A to approve, R to respond to an agent question, D to open a debug prompt.
 - **F3: Workers** — Live view of each agent worker: status, current output, and activity.
 - **F4: Log** — Timestamped history of all worker actions with access to raw agent logfiles.
+- **F4: Diffs** — Allows you to interactively look through a ticket's commit history and
 
 Here are some screenshots, though the terminal UI is in flux and these will be out of date quickly. (Note that the tickets and comments are all randomly generated placeholders from the `cf-testdata` program and are not expected to make sense.)
 
@@ -115,11 +125,11 @@ The `skills/` directory contains Claude Code skills that are installed to `~/.cl
 
 | Skill | Trigger | Purpose |
 |-------|---------|---------|
+| `cf-clarify` | `/cf-clarify` | Identify underspecified parts of a design document |
+| `cf-project` | `/cf-project` | Decompose a large project into tickets |
 | `cf-refactor` | `/cf-refactor` | Scan and refactor recent changes for code smells |
 | `cf-review` | `/cf-review` | Thorough multi-perspective code review |
 | `cf-respond` | `/cf-respond` | Apply change requests to a ticket's worktree |
-| `cf-project` | `/cf-project` | Decompose a large project into tickets |
-| `cf-clarify` | `/cf-clarify` | Identify underspecified parts of a design document |
 
 ---
 
@@ -136,7 +146,7 @@ make install  # Build, install to ~/bin/, and install skills
 For UI testing without running real agents:
 
 ```sh
-cf-testdata -reset        # Generate test data
+cf-testdata --reset       # Delete all existing tickets and generate test data
 code-factory --mock       # Run with fake workers
 ```
 
@@ -159,6 +169,5 @@ internal/
   util/           Shared utilities (editor, clipboard, terminal)
   worker/         Agent worker pool and ACP integration
   workflow/       Ticket approval and phase-transition logic
-skills/           Claude Code skills installed alongside the binaries
-rules/            Cursor rules installed to ~/.cursor/rules/
+skills/           Claude Code skills for working with code-factory projects
 ```
