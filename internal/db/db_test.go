@@ -501,6 +501,41 @@ func TestCreateProject_DefaultParentBranch(t *testing.T) {
 	}
 }
 
+func TestCreateProject_RejectsInvalidParentBranch(t *testing.T) {
+	d, _, _ := openTestDB(t)
+	cases := []struct {
+		branch string
+		bad    string
+	}{
+		{"@{-1}", "@{"},
+		{"main..dev", ".."},
+		{"branch~1", "~"},
+		{"branch^2", "^"},
+		{"a:b", ":"},
+		{"-flag", "-"},
+		{"a b", " "},
+	}
+	for _, c := range cases {
+		err := d.CreateProject("proj", "A project", nil, c.branch)
+		if err == nil {
+			t.Errorf("expected error for parent_branch %q, got nil", c.branch)
+		} else if !strings.Contains(err.Error(), c.bad) {
+			t.Errorf("expected error mentioning %q for parent_branch %q, got: %v", c.bad, c.branch, err)
+		}
+	}
+}
+
+func TestCreateTicket_RejectsInvalidParentBranch(t *testing.T) {
+	d, _, _ := openTestDB(t)
+	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	err := d.CreateTicket("proj/ticket", "A ticket", nil, "HEAD@{5}")
+	if err == nil {
+		t.Error("expected error for parent_branch with @{, got nil")
+	}
+}
+
 func TestCreateTicket_StoresParentBranch(t *testing.T) {
 	d, _, _ := openTestDB(t)
 	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
@@ -646,5 +681,47 @@ func TestSetProjectPhase_UsesParentBranch(t *testing.T) {
 	}
 	if git.MergeTargets[0] != expectedTarget {
 		t.Errorf("expected merge target %q, got %q", expectedTarget, git.MergeTargets[0])
+	}
+}
+
+func TestRebaseTicketOnParent_UsesParentBranch(t *testing.T) {
+	d, _, git := openTestDB(t)
+	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj/ticket", "A ticket", nil, "release-v2"); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := d.RebaseTicketOnParent("proj/ticket", "proj", "release-v2"); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(git.RebaseTargets) == 0 {
+		t.Fatal("expected RebaseOnto to be called")
+	}
+	if git.RebaseTargets[0] != "release-v2" {
+		t.Errorf("expected rebase onto %q, got %q", "release-v2", git.RebaseTargets[0])
+	}
+}
+
+func TestRebaseTicketOnParent_FallsBackToParentIdentifier(t *testing.T) {
+	d, _, git := openTestDB(t)
+	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj/ticket", "A ticket", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := d.RebaseTicketOnParent("proj/ticket", "proj", ""); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(git.RebaseTargets) == 0 {
+		t.Fatal("expected RebaseOnto to be called")
+	}
+	if git.RebaseTargets[0] != "proj" {
+		t.Errorf("expected rebase onto %q, got %q", "proj", git.RebaseTargets[0])
 	}
 }

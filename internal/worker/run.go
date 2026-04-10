@@ -62,7 +62,7 @@ func (w *Worker) processTicket(ctx context.Context, ticket *models.WorkUnit) {
 	// At the start of the implement phase, rebase onto the parent branch so
 	// the ticket sees work from sibling tickets that have already been merged.
 	if ticket.Phase == models.PhaseImplement {
-		if err := w.database.RebaseTicketOnParent(identifier, ticket.Parent); err != nil {
+		if err := w.database.RebaseTicketOnParent(identifier, ticket.Parent, ticket.ParentBranch); err != nil {
 			w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("warning: rebase failed for %s, continuing on stale base: %v", identifier, err))
 		}
 	}
