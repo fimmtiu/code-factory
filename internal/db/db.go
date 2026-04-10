@@ -206,7 +206,7 @@ func (d *DB) mergeTargetDir(parentBranch string, projectID sql.NullInt64) string
 	if projectID.Valid {
 		var parentIdentifier string
 		if err := d.db.QueryRow(`SELECT identifier FROM projects WHERE id = ?`, projectID.Int64).Scan(&parentIdentifier); err == nil {
-			return storage.TicketWorktreePathIn(d.ticketsDir, parentIdentifier)
+			return d.worktreePath(parentIdentifier)
 		}
 	}
 	return d.repoRoot
@@ -594,7 +594,6 @@ func (d *DB) SetStatus(identifier string, phase models.TicketPhase, status model
 func (d *DB) RebaseTicketOnParent(identifier, parentIdentifier string) error {
 	worktreePath := d.worktreePath(identifier)
 
-	// Check for a parent_branch override on the ticket.
 	var storedBranch string
 	_ = d.db.QueryRow(`SELECT parent_branch FROM tickets WHERE identifier = ?`, identifier).Scan(&storedBranch)
 

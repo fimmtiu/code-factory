@@ -34,6 +34,22 @@ func dirExists(path string) bool {
 	return err == nil && info.IsDir()
 }
 
+// findUnit calls Status() and returns the work unit matching identifier.
+func findUnit(t *testing.T, d *db.DB, identifier string) *models.WorkUnit {
+	t.Helper()
+	units, err := d.Status()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, u := range units {
+		if u.Identifier == identifier {
+			return u
+		}
+	}
+	t.Fatalf("work unit %q not found", identifier)
+	return nil
+}
+
 // ===== SetStatus last_updated trigger =====
 
 func TestSetStatus_UpdatesLastUpdated(t *testing.T) {
@@ -467,19 +483,10 @@ func TestCreateProject_StoresParentBranch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	units, err := d.Status()
-	if err != nil {
-		t.Fatal(err)
+	u := findUnit(t, d, "proj")
+	if u.ParentBranch != "custom-branch" {
+		t.Errorf("expected ParentBranch %q, got %q", "custom-branch", u.ParentBranch)
 	}
-	for _, u := range units {
-		if u.Identifier == "proj" {
-			if u.ParentBranch != "custom-branch" {
-				t.Errorf("expected ParentBranch %q, got %q", "custom-branch", u.ParentBranch)
-			}
-			return
-		}
-	}
-	t.Error("project not found")
 }
 
 func TestCreateProject_DefaultParentBranch(t *testing.T) {
@@ -488,19 +495,10 @@ func TestCreateProject_DefaultParentBranch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	units, err := d.Status()
-	if err != nil {
-		t.Fatal(err)
+	u := findUnit(t, d, "proj")
+	if u.ParentBranch != "" {
+		t.Errorf("expected empty ParentBranch, got %q", u.ParentBranch)
 	}
-	for _, u := range units {
-		if u.Identifier == "proj" {
-			if u.ParentBranch != "" {
-				t.Errorf("expected empty ParentBranch, got %q", u.ParentBranch)
-			}
-			return
-		}
-	}
-	t.Error("project not found")
 }
 
 func TestCreateTicket_StoresParentBranch(t *testing.T) {
@@ -512,19 +510,10 @@ func TestCreateTicket_StoresParentBranch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	units, err := d.Status()
-	if err != nil {
-		t.Fatal(err)
+	u := findUnit(t, d, "proj/ticket")
+	if u.ParentBranch != "custom-branch" {
+		t.Errorf("expected ParentBranch %q, got %q", "custom-branch", u.ParentBranch)
 	}
-	for _, u := range units {
-		if u.Identifier == "proj/ticket" {
-			if u.ParentBranch != "custom-branch" {
-				t.Errorf("expected ParentBranch %q, got %q", "custom-branch", u.ParentBranch)
-			}
-			return
-		}
-	}
-	t.Error("ticket not found")
 }
 
 func TestCreateTicket_DefaultParentBranch(t *testing.T) {
@@ -536,19 +525,10 @@ func TestCreateTicket_DefaultParentBranch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	units, err := d.Status()
-	if err != nil {
-		t.Fatal(err)
+	u := findUnit(t, d, "proj/ticket")
+	if u.ParentBranch != "" {
+		t.Errorf("expected empty ParentBranch, got %q", u.ParentBranch)
 	}
-	for _, u := range units {
-		if u.Identifier == "proj/ticket" {
-			if u.ParentBranch != "" {
-				t.Errorf("expected empty ParentBranch, got %q", u.ParentBranch)
-			}
-			return
-		}
-	}
-	t.Error("ticket not found")
 }
 
 func TestGetTicket_IncludesParentBranch(t *testing.T) {
@@ -572,27 +552,20 @@ func TestGetTicket_IncludesParentBranch(t *testing.T) {
 func TestMarkTicketDone_UsesParentBranch(t *testing.T) {
 	d, ticketsDir, git := openTestDB(t)
 
-	// Create two projects: "main-proj" and "other-proj".
 	if err := d.CreateProject("main-proj", "Main project", nil, ""); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.CreateProject("other-proj", "Other project", nil, ""); err != nil {
 		t.Fatal(err)
 	}
-	// Create a ticket under main-proj, but set parent_branch to other-proj's branch.
 	if err := d.CreateTicket("main-proj/ticket", "A ticket", nil, "other-proj"); err != nil {
 		t.Fatal(err)
 	}
 
-	// Mark the ticket done — it should merge into other-proj's worktree.
 	if err := d.SetStatus("main-proj/ticket", models.PhaseDone, models.StatusIdle); err != nil {
 		t.Fatal(err)
 	}
 
-	// The FakeGitClient records MergeBranch calls. Since it doesn't track args
-	// directly, verify by checking that the merge target was other-proj's worktree.
-	// MergeBranch is called with (worktreeDir, fromBranch). The worktreeDir should
-	// be other-proj's worktree path, not main-proj's.
 	expectedTarget := filepath.Join(ticketsDir, "other-proj", "worktree")
 	if len(git.MergeTargets) == 0 {
 		t.Fatal("expected MergeBranch to be called")
@@ -640,14 +613,11 @@ func TestMarkTicketDone_ParentBranchDefaultBranch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// "main" doesn't match any project identifier, so mergeTargetDir falls back to repoRoot.
 	if len(git.MergeTargets) == 0 {
 		t.Fatal("expected MergeBranch to be called")
 	}
-	// The repoRoot is the temp dir used by openTestDB.
-	// MergeTargets[0] should be the repoRoot (the ticketsDir in this case since
-	// openTestDB passes dir for both ticketsDir and repoRoot).
-	// Just verify it's NOT the parent project's worktree.
+	// openTestDB uses the same temp dir for both ticketsDir and repoRoot,
+	// so just verify the target is NOT a project worktree.
 	if strings.Contains(git.MergeTargets[0], "worktree") {
 		t.Errorf("expected merge into repoRoot, but got a worktree path: %q", git.MergeTargets[0])
 	}
@@ -656,14 +626,12 @@ func TestMarkTicketDone_ParentBranchDefaultBranch(t *testing.T) {
 func TestSetProjectPhase_UsesParentBranch(t *testing.T) {
 	d, ticketsDir, git := openTestDB(t)
 
-	// Create parent and child projects.
 	if err := d.CreateProject("parent-proj", "Parent", nil, ""); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.CreateProject("other-proj", "Other", nil, ""); err != nil {
 		t.Fatal(err)
 	}
-	// Child project with parent_branch pointing to other-proj.
 	if err := d.CreateProject("parent-proj/child", "Child", nil, "other-proj"); err != nil {
 		t.Fatal(err)
 	}
