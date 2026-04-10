@@ -76,11 +76,11 @@ tickets add-change-request <identifier> <code-location> <author> <description>
 Adds an open change request to a ticket. `code-location` must be in `file:line` format (e.g. `internal/db/db.go:42`). The commit hash is recorded automatically from the ticket's worktree HEAD.
 
 ```
-tickets close-change-request <id>
+tickets close-change-request <id> [<explanation>]
 tickets dismiss-change-request <id>
 ```
 
-Closes or dismisses the change request with the given numeric ID.
+Closes or dismisses the change request with the given numeric ID. An optional explanation can be provided to `close-change-request`, which is appended to the change request's description before closing.
 
 ## Settings
 

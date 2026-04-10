@@ -188,11 +188,16 @@ func runAddChangeRequest(d *db.DB, args []string, stdin io.Reader) error {
 
 func runCloseChangeRequest(d *db.DB, args []string) error {
 	if len(args) < 1 {
-		return fmt.Errorf("usage: tickets close-change-request <id>")
+		return fmt.Errorf("usage: tickets close-change-request <id> [<explanation>]")
 	}
 	id, err := strconv.ParseInt(args[0], 10, 64)
 	if err != nil {
 		return fmt.Errorf("close-change-request: invalid id %q: %w", args[0], err)
+	}
+	if len(args) >= 2 {
+		if err := d.AppendChangeRequestDescription(id, args[1]); err != nil {
+			return fmt.Errorf("close-change-request: append description: %w", err)
+		}
 	}
 	return d.CloseChangeRequest(id)
 }

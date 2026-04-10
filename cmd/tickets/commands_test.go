@@ -402,6 +402,56 @@ func TestRunCloseChangeRequest(t *testing.T) {
 	t.Error("change request not found after close-change-request")
 }
 
+func TestRunCloseChangeRequest_WithExplanation(t *testing.T) {
+	d := openTestDB(t)
+	if err := d.CreateProject("proj", "A project", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj/ticket", "A ticket", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.AddChangeRequest("proj/ticket", "main.go:42", "alice", "please fix"); err != nil {
+		t.Fatal(err)
+	}
+
+	units, err := d.Status()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var crID string
+	for _, u := range units {
+		if u.Identifier == "proj/ticket" && len(u.ChangeRequests) > 0 {
+			crID = u.ChangeRequests[0].ID
+			break
+		}
+	}
+	if crID == "" {
+		t.Fatal("no change request ID found")
+	}
+
+	if err := runCloseChangeRequest(d, []string{crID, "Fixed by refactoring"}); err != nil {
+		t.Fatalf("runCloseChangeRequest with explanation returned error: %v", err)
+	}
+
+	units, err = d.Status()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, u := range units {
+		if u.Identifier == "proj/ticket" && len(u.ChangeRequests) > 0 {
+			cr := u.ChangeRequests[0]
+			if cr.Status != "closed" {
+				t.Errorf("expected status 'closed', got %q", cr.Status)
+			}
+			if !strings.Contains(cr.Description, "Fixed by refactoring") {
+				t.Errorf("expected description to contain explanation, got %q", cr.Description)
+			}
+			return
+		}
+	}
+	t.Error("change request not found after close-change-request with explanation")
+}
+
 func TestRunCloseChangeRequest_MissingArg(t *testing.T) {
 	d := openTestDB(t)
 	err := runCloseChangeRequest(d, []string{})

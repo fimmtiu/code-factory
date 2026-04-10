@@ -31,4 +31,4 @@ For each open change request, in order:
    - Start with the prefix `cf-respond:` (e.g. `cf-respond: fix null check in parser`).
    - Include a summary of what was changed and why.
    - Include the change request ID (the `id` field from the JSON) and ticket identifier, e.g. `"Addresses change request #42 on my-project/my-ticket"`.
-6. Run `tickets close-change-request <id>` where `<id>` is the numeric `id` field from the change request JSON.
+6. Come up with a short explanation of the changes you made in the past tense, then run `tickets close-change-request <id> <explanation>` where `<id>` is the numeric `id` field from the change request JSON.

@@ -39,7 +39,7 @@ Subcommands:
   set-status <id> <phase> [status]  Set a ticket's phase and status
   claim <pid>                       Claim the next available ticket for the given process ID
   release <id>                      Release the claim on a ticket
-  add-change-request <id> <loc> <author>   Add a change request to a ticket (description read from stdin)
-  close-change-request <id>                Close a change request
-  dismiss-change-request <id> [<reason>]   Dismiss a change request`)
+  add-change-request <id> <loc> <author>    Add a change request to a ticket (description read from stdin)
+  close-change-request <id> [<explanation>] Close a change request
+  dismiss-change-request <id> [<reason>]    Dismiss a change request`)
 }
