@@ -57,12 +57,12 @@ func TestRunInit_CreatesTicketsDir(t *testing.T) {
 		}
 	})
 
-	ticketsDir := filepath.Join(tmp, ".tickets")
+	ticketsDir := filepath.Join(tmp, ".code-factory")
 	if _, err := os.Stat(ticketsDir); err != nil {
-		t.Errorf("expected .tickets/ to exist: %v", err)
+		t.Errorf("expected .code-factory/ to exist: %v", err)
 	}
-	if !strings.Contains(out, "Initialized .tickets/") {
-		t.Errorf("expected output to contain 'Initialized .tickets/', got: %q", out)
+	if !strings.Contains(out, "Initialized .code-factory/") {
+		t.Errorf("expected output to contain 'Initialized .code-factory/', got: %q", out)
 	}
 }
 

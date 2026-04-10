@@ -61,7 +61,7 @@ func TestFindRepoRoot_NotFound(t *testing.T) {
 func TestTicketsDirPath(t *testing.T) {
 	root := "/some/repo"
 	got := storage.TicketsDirPath(root)
-	want := filepath.Join(root, ".tickets")
+	want := filepath.Join(root, ".code-factory")
 	if got != want {
 		t.Errorf("expected %q, got %q", want, got)
 	}
@@ -74,13 +74,13 @@ func TestInitTicketsDir_CreatesDir(t *testing.T) {
 	if err := storage.InitTicketsDir(root); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	ticketsDir := filepath.Join(root, ".tickets")
+	ticketsDir := filepath.Join(root, ".code-factory")
 	info, err := os.Stat(ticketsDir)
 	if err != nil {
-		t.Fatalf("expected .tickets to exist: %v", err)
+		t.Fatalf("expected .code-factory to exist: %v", err)
 	}
 	if !info.IsDir() {
-		t.Errorf("expected .tickets to be a directory")
+		t.Errorf("expected .code-factory to be a directory")
 	}
 }
 
@@ -125,7 +125,7 @@ func TestInitTicketsDir_Idempotent(t *testing.T) {
 // ===== TicketDirPath / TicketWorktreePath =====
 
 func TestTicketDirPath(t *testing.T) {
-	ticketsDir := "/repo/.tickets"
+	ticketsDir := "/repo/.code-factory"
 	got := storage.TicketDirPath(ticketsDir, "my-project/fix-bug")
 	want := filepath.Join(ticketsDir, "my-project", "fix-bug")
 	if got != want {
@@ -134,7 +134,7 @@ func TestTicketDirPath(t *testing.T) {
 }
 
 func TestTicketWorktreePath(t *testing.T) {
-	ticketDir := "/repo/.tickets/my-project/fix-bug"
+	ticketDir := "/repo/.code-factory/my-project/fix-bug"
 	got := storage.TicketWorktreePath(ticketDir)
 	want := filepath.Join(ticketDir, "worktree")
 	if got != want {

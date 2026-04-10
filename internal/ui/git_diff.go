@@ -84,13 +84,13 @@ func extractGitHubRepo(url string) string {
 }
 
 // identifierFromLogfile extracts the ticket identifier from a logfile path.
-// Logfiles live at .tickets/<project>/<ticket>/<phase>.log, so the identifier
-// is the two path segments between .tickets/ and the filename.
+// Logfiles live at .code-factory/<project>/<ticket>/<phase>.log, so the identifier
+// is the two path segments between .code-factory/ and the filename.
 func identifierFromLogfile(logfile string) string {
 	// Normalise and split.
 	parts := strings.Split(filepath.ToSlash(logfile), "/")
 	for i, p := range parts {
-		if p == ".tickets" && i+3 < len(parts) {
+		if p == ".code-factory" && i+3 < len(parts) {
 			return parts[i+1] + "/" + parts[i+2]
 		}
 	}
@@ -98,12 +98,12 @@ func identifierFromLogfile(logfile string) string {
 }
 
 // phaseFromLogfile extracts the phase name from a logfile path.
-// Logfiles live at .tickets/<project>/<ticket>/<phase>.log (optionally
+// Logfiles live at .code-factory/<project>/<ticket>/<phase>.log (optionally
 // numbered as <phase>.log.N), so the phase is the filename base before ".log".
 func phaseFromLogfile(logfile string) string {
 	parts := strings.Split(filepath.ToSlash(logfile), "/")
 	for i, p := range parts {
-		if p == ".tickets" && i+3 < len(parts) {
+		if p == ".code-factory" && i+3 < len(parts) {
 			filename := parts[i+3]
 			// Strip ".log" or ".log.N" suffix to get the phase.
 			if idx := strings.Index(filename, ".log"); idx > 0 {

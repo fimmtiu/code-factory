@@ -1,4 +1,4 @@
-// Package storage provides path utilities and initialization for the .tickets/
+// Package storage provides path utilities and initialization for the .code-factory/
 // directory.
 package storage
 
@@ -34,19 +34,19 @@ func FindRepoRoot(startDir string) (string, error) {
 	}
 }
 
-// TicketsDirPath returns the path to the .tickets/ directory within repoRoot.
+// TicketsDirPath returns the path to the .code-factory/ directory within repoRoot.
 func TicketsDirPath(repoRoot string) string {
-	return filepath.Join(repoRoot, ".tickets")
+	return filepath.Join(repoRoot, ".code-factory")
 }
 
-// InitTicketsDir creates the .tickets/ directory under repoRoot (if it does not
+// InitTicketsDir creates the .code-factory/ directory under repoRoot (if it does not
 // already exist) and writes a default settings.json (if one does not already
 // exist). It is safe to call multiple times (idempotent).
 func InitTicketsDir(repoRoot string) error {
 	ticketsDir := TicketsDirPath(repoRoot)
 
 	if err := os.MkdirAll(ticketsDir, 0755); err != nil {
-		return fmt.Errorf("InitTicketsDir: create .tickets/: %w", err)
+		return fmt.Errorf("InitTicketsDir: create .code-factory/: %w", err)
 	}
 
 	if _, err := os.Stat(config.Path(ticketsDir)); errors.Is(err, os.ErrNotExist) {

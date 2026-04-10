@@ -20,7 +20,7 @@ Ticket view:
   - Human approval to move things to the next step? I don't think we can trust the steps to run independently yet.
 
 Workflow:
-  - An outside force pushes a bunch of projects and tickets into the .tickets directory
+  - An outside force pushes a bunch of projects and tickets into the .code-factory directory
   - We run code-factory. It reads the work units and spins up N agents to work on them
     - Each agent picks up a ticket with the `idle` status that's not `done` or `blocked`, sets status to `in-progress`,
       - `plan` phase: writes a `work_plan.md` file to the ticket directory
@@ -79,7 +79,7 @@ When the program runs without any arguments:
 When the program is invoked with the `--new` option:
 
 - Run `tmux new-window -d -n Tickets cf-tickets-ui`
-- Create a Unix-domain socket at the root of the `.tickets/` directory called `.factory.sock`.
+- Create a Unix-domain socket at the root of the `.code-factory/` directory called `.factory.sock`.
 - For each agent in the worker pool, run `tmux new-window -d -n WorkerN code-factory-worker N`, where `N` is the 1-based number of the agent. (At the default pool size of 4, that would be `Worker1` through `Worker4`).
 - Start the bubbletea-based terminal UI
 

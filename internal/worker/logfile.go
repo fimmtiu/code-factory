@@ -52,7 +52,7 @@ func LatestLogfilePath(ticketsDir, identifier, phase string) string {
 }
 
 // NextLogfilePath returns the next available logfile path for a ticket phase.
-// Logfiles are stored at .tickets/<identifier>/<phase>.log. If that file
+// Logfiles are stored at .code-factory/<identifier>/<phase>.log. If that file
 // already exists, a monotonically increasing numeric suffix is appended:
 // <phase>.log.1, <phase>.log.2, etc.
 func NextLogfilePath(ticketsDir, identifier, phase string) string {

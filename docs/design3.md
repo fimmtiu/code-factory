@@ -2,7 +2,7 @@
 
 We're going to create a command-line tool in this repository called `code-factory`. It's a terminal-based coding agent manager which spins up a pool of workers to tackle all of the tickets in a git repository.
 
-This is a program with a terminal UI (use bubbletea and lipgloss libraries) that runs a set of workers to process the tickets in `.tickets/`, with various views that allow users to monitor their progress and inspect/approve their work.
+This is a program with a terminal UI (use bubbletea and lipgloss libraries) that runs a set of workers to process the tickets in `.code-factory/`, with various views that allow users to monitor their progress and inspect/approve their work.
 
 ## Architecture notes
 
@@ -48,7 +48,7 @@ Whenever we run a subprocess (editor, `open`, `pbcopy`, etc.), we don't want the
 
 On startup, we do the following:
 
-- If we're not in a git repository or there's no top-level `.tickets/` directory, die with an error message.
+- If we're not in a git repository or there's no top-level `.code-factory/` directory, die with an error message.
 - Start a new worker goroutine for each worker in the pool
 - Start the bubbletea-based terminal UI
 
@@ -61,7 +61,7 @@ The worker goroutines' loop looks like this:
 - Use the [`acp-go-sdk` library](https://github.com/coder/acp-go-sdk) to run a Claude subprocess.
   - The ACP subprocess' working directory MUST be the ticket's worktree directory. Do this by setting the `Dir` field on an `exec.Cmd`. DO NOT USE `os.Chdir`, as it will cause bugs!
   - Pipe the prompt for the current phase into the ACP.
-  - All input to and output from Claude should be saved to a logfile. Claude logfiles should be named `.tickets/<ticket-identifier>/<ticket-phase>.log`. If that file already exists, append a `.1`, `.2`, etc. monotonically increasing number as a suffix to make it unique.
+  - All input to and output from Claude should be saved to a logfile. Claude logfiles should be named `.code-factory/<ticket-identifier>/<ticket-phase>.log`. If that file already exists, append a `.1`, `.2`, etc. monotonically increasing number as a suffix to make it unique.
     - This output MUST include Claude's "thinking" messages, so that we can use them to introspect on agent behaviour later.
   - If Claude requests clarification from the user or requests additional permissions, set the worker's status to "awaiting response", set the ticket's status to `needs-attention`, send the request to the main goroutine, and wait for a response.
   - When a response is received, send it back to Claude, set the ticket's status to `in-progress`, and set the worker's status to "busy".

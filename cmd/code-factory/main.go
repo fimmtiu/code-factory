@@ -66,10 +66,10 @@ Options:
 		os.Exit(1)
 	}
 
-	ticketsDir := filepath.Join(repoRoot, ".tickets")
+	ticketsDir := filepath.Join(repoRoot, ".code-factory")
 	info, err := os.Stat(ticketsDir)
 	if err != nil || !info.IsDir() {
-		fmt.Fprintln(os.Stderr, "error: .tickets/ directory not found; run 'cf-tickets init' first")
+		fmt.Fprintln(os.Stderr, "error: .code-factory/ directory not found; run 'cf-tickets init' first")
 		os.Exit(1)
 	}
 

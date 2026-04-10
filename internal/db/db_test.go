@@ -131,7 +131,7 @@ func TestCreateProject_CreatesDirectory(t *testing.T) {
 		t.Fatalf("CreateProject: %v", err)
 	}
 	if !dirExists(filepath.Join(ticketsDir, "my-proj")) {
-		t.Error("expected .tickets/my-proj/ to be created")
+		t.Error("expected .code-factory/my-proj/ to be created")
 	}
 }
 
@@ -144,7 +144,7 @@ func TestCreateProject_CreatesNestedDirectory(t *testing.T) {
 		t.Fatalf("CreateProject nested: %v", err)
 	}
 	if !dirExists(filepath.Join(ticketsDir, "my-proj", "sub-proj")) {
-		t.Error("expected .tickets/my-proj/sub-proj/ to be created")
+		t.Error("expected .code-factory/my-proj/sub-proj/ to be created")
 	}
 }
 
@@ -245,7 +245,7 @@ func TestCreateTicket_CreatesDirectory(t *testing.T) {
 		t.Fatalf("CreateTicket: %v", err)
 	}
 	if !dirExists(filepath.Join(ticketsDir, "my-proj", "my-ticket")) {
-		t.Error("expected .tickets/my-proj/my-ticket/ to be created")
+		t.Error("expected .code-factory/my-proj/my-ticket/ to be created")
 	}
 }
 
@@ -261,7 +261,7 @@ func TestCreateTicket_CreatesDirectoryDeeplyNested(t *testing.T) {
 		t.Fatalf("CreateTicket: %v", err)
 	}
 	if !dirExists(filepath.Join(ticketsDir, "proj", "sub", "ticket")) {
-		t.Error("expected .tickets/proj/sub/ticket/ to be created")
+		t.Error("expected .code-factory/proj/sub/ticket/ to be created")
 	}
 }
 

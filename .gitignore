@@ -1,8 +1,8 @@
-.tickets/
+.code-factory/
 .claude/
 tmp/
 design.md
 
 /code-factory
-/tickets
+/cf-tickets
 /cf-testdata

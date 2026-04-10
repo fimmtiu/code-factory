@@ -1,6 +1,6 @@
 # cf-tickets
 
-A command-line tool for managing the work units (projects and tickets) stored in a repository's `.tickets/` directory.
+A command-line tool for managing the work units (projects and tickets) stored in a repository's `.code-factory/` directory.
 
 ## Usage
 
@@ -18,7 +18,7 @@ Must be run from inside a git repository that has been initialised with `cf-tick
 cf-tickets init
 ```
 
-Creates the `.tickets/` directory and a default `settings.json` in the current git repository. Safe to run multiple times (idempotent).
+Creates the `.code-factory/` directory and a default `settings.json` in the current git repository. Safe to run multiple times (idempotent).
 
 ### Querying state
 
@@ -103,4 +103,4 @@ Closes or dismisses the change request with the given numeric ID. The optional e
 
 ## Settings
 
-On startup, `cf-tickets` reads `settings.json` from the `.tickets/` directory. See `internal/config` for available fields. If the file does not exist, defaults are used.
+On startup, `cf-tickets` reads `settings.json` from the `.code-factory/` directory. See `internal/config` for available fields. If the file does not exist, defaults are used.

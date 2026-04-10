@@ -17,7 +17,7 @@ func TestLogView_GKey_EmitsOpenDiffViewMsg(t *testing.T) {
 		entries: []models.LogEntry{
 			{
 				Message: "claimed proj/ticket",
-				Logfile: "/repo/.tickets/proj/ticket/implement.log",
+				Logfile: "/repo/.code-factory/proj/ticket/implement.log",
 			},
 		},
 		selected: 0,
@@ -48,7 +48,7 @@ func TestLogView_GKey_ReviewPhase(t *testing.T) {
 		entries: []models.LogEntry{
 			{
 				Message: "review output",
-				Logfile: "/repo/.tickets/proj/ticket/review.log",
+				Logfile: "/repo/.code-factory/proj/ticket/review.log",
 			},
 		},
 		selected: 0,

@@ -79,7 +79,7 @@ func runInit() error {
 	if err := storage.InitTicketsDir(repoRoot); err != nil {
 		return err
 	}
-	fmt.Printf("Initialized .tickets/ in %s\n", repoRoot)
+	fmt.Printf("Initialized .code-factory/ in %s\n", repoRoot)
 	return nil
 }
 

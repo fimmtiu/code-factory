@@ -2,7 +2,7 @@
 
 An AI coding agent manager that automates as much of the software-building process as possible. `code-factory` runs a pool of [Claude Code](https://claude.ai/code) agents that automatically work through your project's tickets — writing code, refactoring, reviewing, and responding to change requests — while you supervise from a terminal UI.
 
-Tickets live in a `.tickets/` directory inside your repository alongside your code. Each ticket gets its own git branch and worktree, so agent work is always isolated and reviewable before merging.
+Tickets live in a `.code-factory/` directory inside your repository alongside your code. Each ticket gets its own git branch and worktree, so agent work is always isolated and reviewable before merging.
 
 ---
 
@@ -18,10 +18,6 @@ Each ticket moves through four phases of work:
 | `respond` | Applies any open change requests which it deems worth doing |
 
 You approve each phase transition. When all phases are done, the ticket's branch is merged into its parent project's worktree (or the repo's `main` or `master` branch) and the worktree is removed.
-
-FIXME: Merging into main/master sucks for repos like themis. Let's make the destination branch specifiable.
-
-FIXME: Add new screenshots.
 
 ---
 
@@ -53,7 +49,7 @@ $ cd your-project
 $ cf-tickets init
 ```
 
-This creates `.tickets/` with a default `settings.json`. Edit `settings.json` to configure your editor:
+This creates `.code-factory/` with a default `settings.json`. Edit `settings.json` to configure your editor:
 
 ```json
 {
@@ -179,7 +175,7 @@ internal/
   db/             SQLite database layer
   gitutil/        Git worktree operations
   models/         Domain types (WorkUnit, ChangeRequest, etc.)
-  storage/        Path utilities and .tickets/ initialisation
+  storage/        Path utilities and .code-factory/ initialisation
   ui/             Bubbletea terminal UI
   util/           Shared utilities (editor, clipboard, terminal)
   worker/         Agent worker pool and ACP integration

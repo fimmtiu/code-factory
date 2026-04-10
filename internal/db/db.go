@@ -484,7 +484,7 @@ func (d *DB) loadChangeRequests(ticketByID map[int64]*models.WorkUnit) error {
 }
 
 // CreateProject inserts a new project (and its dependencies) in a single
-// transaction and creates its directory under .tickets/.
+// transaction and creates its directory under .code-factory/.
 // parentBranch is a git branch name (e.g. "main", "release-v2") that, if
 // non-empty, overrides the default branch this project merges into when
 // completed. The default is the parent project's worktree branch, or the

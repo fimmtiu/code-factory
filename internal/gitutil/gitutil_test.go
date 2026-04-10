@@ -68,7 +68,7 @@ func TestCreateWorktree(t *testing.T) {
 	client := gitutil.NewRealGitClient()
 
 	branchName := "my-feature"
-	worktreePath := filepath.Join(dir, ".tickets", "my-feature", "worktree")
+	worktreePath := filepath.Join(dir, ".code-factory", "my-feature", "worktree")
 	err := client.CreateWorktree(dir, worktreePath, branchName)
 	if err != nil {
 		t.Fatalf("CreateWorktree returned error: %v", err)
@@ -99,7 +99,7 @@ func TestCreateWorktreeCopiesClaudeSettings(t *testing.T) {
 		t.Fatalf("failed to write settings.json: %v", err)
 	}
 
-	worktreePath := filepath.Join(dir, ".tickets", "test-copy", "worktree")
+	worktreePath := filepath.Join(dir, ".code-factory", "test-copy", "worktree")
 	if err := client.CreateWorktree(dir, worktreePath, "test-copy"); err != nil {
 		t.Fatalf("CreateWorktree returned error: %v", err)
 	}
@@ -117,7 +117,7 @@ func TestCreateWorktreeNoSettingsNoCopy(t *testing.T) {
 	dir := initTestRepo(t)
 	client := gitutil.NewRealGitClient()
 
-	worktreePath := filepath.Join(dir, ".tickets", "no-settings", "worktree")
+	worktreePath := filepath.Join(dir, ".code-factory", "no-settings", "worktree")
 	if err := client.CreateWorktree(dir, worktreePath, "no-settings"); err != nil {
 		t.Fatalf("CreateWorktree returned error: %v", err)
 	}
@@ -135,7 +135,7 @@ func TestCreateWorktreeWithSlashIdentifier(t *testing.T) {
 	// CreateWorktree sanitises "/" to "_" in branch names so git accepts them.
 	branchName := "project/fix-bug"
 	safeBranch := "project_fix-bug"
-	worktreePath := filepath.Join(dir, ".tickets", "project", "fix-bug", "worktree")
+	worktreePath := filepath.Join(dir, ".code-factory", "project", "fix-bug", "worktree")
 	err := client.CreateWorktree(dir, worktreePath, branchName)
 	if err != nil {
 		t.Fatalf("CreateWorktree returned error for slash identifier: %v", err)
@@ -208,7 +208,7 @@ func TestRemoveWorktree(t *testing.T) {
 	client := gitutil.NewRealGitClient()
 
 	branchName := "remove-me"
-	worktreePath := filepath.Join(dir, ".tickets", "remove-me", "worktree")
+	worktreePath := filepath.Join(dir, ".code-factory", "remove-me", "worktree")
 
 	// Create the worktree first.
 	if err := client.CreateWorktree(dir, worktreePath, branchName); err != nil {

@@ -1,11 +1,11 @@
 # code-factory
 
-A terminal UI application that manages a pool of Claude Code agents to automatically work through the tickets in a repository's `.tickets/` directory. Workers claim tickets, run the appropriate agent prompt for each phase, and advance tickets through the implement → refactor → review → respond → done pipeline.
+A terminal UI application that manages a pool of Claude Code agents to automatically work through the tickets in a repository's `.code-factory/` directory. Workers claim tickets, run the appropriate agent prompt for each phase, and advance tickets through the implement → refactor → review → respond → done pipeline.
 
 ## Prerequisites
 
-- Run `cf-tickets init` in the repository first to create `.tickets/`.
-- Set `editor` in `.tickets/settings.json` to `"cursor"` or `"vscode"` (default: `"cursor"`).
+- Run `cf-tickets init` in the repository first to create `.code-factory/`.
+- Set `editor` in `.code-factory/settings.json` to `"cursor"` or `"vscode"` (default: `"cursor"`).
 
 ## Usage
 
@@ -13,7 +13,7 @@ A terminal UI application that manages a pool of Claude Code agents to automatic
 code-factory [-p <pool>] [-w <wait>] [--mock]
 ```
 
-Must be run from inside a git repository containing a `.tickets/` directory.
+Must be run from inside a git repository containing a `.code-factory/` directory.
 
 ### Options
 
@@ -57,10 +57,10 @@ If an agent asks a question or requests a permission, the ticket becomes `needs-
 
 ## Configuration
 
-Settings are read from `.tickets/settings.json` at startup. An unknown `editor` value causes an immediate exit with a clear error message.
+Settings are read from `.code-factory/settings.json` at startup. An unknown `editor` value causes an immediate exit with a clear error message.
 
 ```jsonc
-// .tickets/settings.json — all fields are optional; defaults shown below
+// .code-factory/settings.json — all fields are optional; defaults shown below
 {
   "stale_threshold_minutes": 30,
   "editor": "cursor",
@@ -86,4 +86,4 @@ Settings are read from `.tickets/settings.json` at startup. An unknown `editor` 
 
 ## Logfiles
 
-Each agent run produces a logfile at `.tickets/<identifier>/<phase>.log`. Multiple runs produce `.log.1`, `.log.2`, etc. Logfiles include the session ID (for `--resume`), the full prompt, and all agent output.
+Each agent run produces a logfile at `.code-factory/<identifier>/<phase>.log`. Multiple runs produce `.log.1`, `.log.2`, etc. Logfiles include the session ID (for `--resume`), the full prompt, and all agent output.

@@ -1,6 +1,6 @@
 # cf-testdata
 
-Generates a realistic set of fake projects, tickets, worktrees, and change requests in a repository's `.tickets/` directory. Intended for manual UI testing and local development of the `code-factory` and `cf-tickets` tools without needing to run real agents.
+Generates a realistic set of fake projects, tickets, worktrees, and change requests in a repository's `.code-factory/` directory. Intended for manual UI testing and local development of the `code-factory` and `cf-tickets` tools without needing to run real agents.
 
 ## Usage
 
@@ -8,7 +8,7 @@ Generates a realistic set of fake projects, tickets, worktrees, and change reque
 cf-testdata [--seed <N>] [--target <dir>] [--reset]
 ```
 
-Must be run from inside (or targeting) a git repository. The `.tickets/` directory is created automatically if it does not exist.
+Must be run from inside (or targeting) a git repository. The `.code-factory/` directory is created automatically if it does not exist.
 
 ### Options
 
@@ -16,14 +16,14 @@ Must be run from inside (or targeting) a git repository. The `.tickets/` directo
 |------|---------|-------------|
 | `--seed` | current time | Random seed for reproducible data generation |
 | `--target` | `.` | Path inside the target git repository |
-| `--reset` | off | Remove all existing `.tickets/` content before generating |
+| `--reset` | off | Remove all existing `.code-factory/` content before generating |
 
 ## What it generates
 
 - **5–7 projects** in a 2-level hierarchy (3–4 top-level, up to 2 subprojects each), each with a randomly generated description.
 - **24–28 tickets** distributed across the projects, with ~30% chance of a dependency chain between sibling tickets. Each ticket gets a git worktree immediately upon creation.
 - **Change requests** on ~40% of tickets (1–3 per ticket), referencing real tracked source files at real line numbers from the repository's git history. Real commit hashes are used so the ticket dialog can display actual code context.
-- **Mock logfiles** (`.tickets/<identifier>/implement.log`) for tickets that have change requests, including a session ID header in the standard `=== SESSION ===` / `=== PROMPT ===` / `=== OUTPUT ===` format.
+- **Mock logfiles** (`.code-factory/<identifier>/implement.log`) for tickets that have change requests, including a session ID header in the standard `=== SESSION ===` / `=== PROMPT ===` / `=== OUTPUT ===` format.
 
 ## Source file discovery
 

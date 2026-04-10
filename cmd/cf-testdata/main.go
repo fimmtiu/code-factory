@@ -1,13 +1,13 @@
-// tickets-testdata generates a realistic set of fake projects and tickets in the
-// .tickets/ directory of a git repository. It is intended for manual testing
-// and local development of the tickets tools.
+// cf-testdata generates a realistic set of fake projects and tickets in the
+// .code-factory/ directory of a git repository. It is intended for manual testing
+// and local development of the code-factory tools.
 //
 // Usage:
 //
-//	tickets-testdata [flags]
+//	cf-testdata [flags]
 //	  --seed int     random seed (default: current time)
 //	  --target dir   path inside the target git repository (default: ".")
-//	  --reset        remove all existing .tickets/ content before generating
+//	  --reset        remove all existing .code-factory/ content before generating
 package main
 
 import (
@@ -512,7 +512,7 @@ func printSummary(roots []*projectNode) {
 func main() {
 	seedFlag := flag.Int64("seed", time.Now().UnixNano(), "random seed for reproducibility")
 	targetFlag := flag.String("target", ".", "path inside the target git repository")
-	resetFlag := flag.Bool("reset", false, "remove existing .tickets/ content before generating")
+	resetFlag := flag.Bool("reset", false, "remove existing .code-factory/ content before generating")
 	flag.Parse()
 
 	if err := run(*seedFlag, *targetFlag, *resetFlag); err != nil {
@@ -531,13 +531,13 @@ func run(seed int64, target string, reset bool) error {
 
 	if reset {
 		if err := os.RemoveAll(ticketsDir); err != nil {
-			return fmt.Errorf("removing .tickets/: %w", err)
+			return fmt.Errorf("removing .code-factory/: %w", err)
 		}
-		fmt.Println("Removed existing .tickets/ directory.")
+		fmt.Println("Removed existing .code-factory/ directory.")
 	}
 
 	if err := storage.InitTicketsDir(repoRoot); err != nil {
-		return fmt.Errorf("initialising .tickets/: %w", err)
+		return fmt.Errorf("initialising .code-factory/: %w", err)
 	}
 
 	d, err := db.Open(ticketsDir, repoRoot)

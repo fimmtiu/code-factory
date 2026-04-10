@@ -14,7 +14,7 @@ clean:
 	rm -f cf-tickets cf-testdata code-factory
 
 clean-data:
-	rm -rf .tickets
+	rm -rf .code-factory
 
 INSTALL_DIR ?= $(HOME)/bin
 

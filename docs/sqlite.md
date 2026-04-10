@@ -6,7 +6,7 @@ Create a separate branch for this work. We're going to completely re-do how
 ## Changes to data storage
 
 We're going to move all the work unit data out of JSON files and into a SQLite
-database in `.tickets/data.sqlite`. We'll use `database/sql` with the
+database in `.code-factory/data.sqlite`. We'll use `database/sql` with the
 `mattn/go-sqlite3` driver to access it.
 
 It should have a schema similar to this:
