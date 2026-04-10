@@ -32,7 +32,7 @@ var (
 				Foreground(colourWarning) // orange
 
 	cmdUserReviewStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("22")) // dark green
+				Foreground(colourWorkerBusy)
 )
 
 // ── Messages ─────────────────────────────────────────────────────────────────

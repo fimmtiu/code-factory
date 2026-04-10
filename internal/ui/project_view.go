@@ -41,7 +41,7 @@ var (
 	// Pane borders
 	focusedBorderStyle = lipgloss.NewStyle().
 				Border(accentBorder).
-				BorderForeground(lipgloss.Color("12")) // blue
+				BorderForeground(colourBorderBlue)
 
 	unfocusedBorderStyle = lipgloss.NewStyle().
 				Border(lipgloss.NormalBorder()).
@@ -60,12 +60,12 @@ var (
 
 	// Phase badge styles (keyed by ticket phase)
 	phaseBadgeStyles = map[models.TicketPhase]lipgloss.Style{
-		models.PhaseImplement: lipgloss.NewStyle().Foreground(lipgloss.Color("37")),
-		models.PhaseRefactor:  lipgloss.NewStyle().Foreground(lipgloss.Color("166")),
-		models.PhaseReview:    lipgloss.NewStyle().Foreground(lipgloss.Color("69")),
-		models.PhaseRespond:   lipgloss.NewStyle().Foreground(lipgloss.Color("135")),
-		models.PhaseBlocked:   lipgloss.NewStyle().Foreground(lipgloss.Color("124")),
-		models.PhaseDone:      lipgloss.NewStyle().Foreground(lipgloss.Color("28")),
+		models.PhaseImplement: lipgloss.NewStyle().Foreground(colourPhaseImplement),
+		models.PhaseRefactor:  lipgloss.NewStyle().Foreground(colourPhaseRefactor),
+		models.PhaseReview:    lipgloss.NewStyle().Foreground(colourPhaseReview),
+		models.PhaseRespond:   lipgloss.NewStyle().Foreground(colourPhaseRespond),
+		models.PhaseBlocked:   lipgloss.NewStyle().Foreground(colourPhaseBlocked),
+		models.PhaseDone:      lipgloss.NewStyle().Foreground(colourSuccess),
 	}
 
 	// Detail pane label
@@ -73,7 +73,7 @@ var (
 
 	// Progress bar segment styles
 	progressFilledStyle = lipgloss.NewStyle().Foreground(colourSuccess)
-	progressEmptyStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("238"))
+	progressEmptyStyle  = lipgloss.NewStyle().Foreground(colourDarkGrey)
 )
 
 // Fixed width of the status pane (including border)

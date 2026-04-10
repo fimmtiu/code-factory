@@ -23,7 +23,7 @@ type openQuickResponseMsg struct {
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 var quickResponseOutputStyle = lipgloss.NewStyle().
-	Foreground(lipgloss.Color("240"))
+	Foreground(colourMuted)
 
 var quickResponseInputStyle = lipgloss.NewStyle().
 	Border(lipgloss.RoundedBorder()).

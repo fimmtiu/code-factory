@@ -102,8 +102,8 @@ func (it tdItem) selectable() bool {
 
 var (
 	tdSelectedStyle  = lipgloss.NewStyle().Background(colourPrimary).Foreground(colourOnPrimary)
-	tdDismissedStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
-	tdClosedStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("22"))
+	tdDismissedStyle = lipgloss.NewStyle().Foreground(colourDimGrey)
+	tdClosedStyle    = lipgloss.NewStyle().Foreground(colourWorkerBusy)
 	tdSectionStyle   = lipgloss.NewStyle().Bold(true)
 )
 
@@ -570,7 +570,7 @@ func (d *TicketDialog) View() string {
 
 // hintInactiveStyle renders a hint segment that is currently unavailable
 // (e.g. "X dismiss" when the CR is already dismissed).
-var hintInactiveStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("250"))
+var hintInactiveStyle = lipgloss.NewStyle().Foreground(colourLightGrey)
 
 func (d *TicketDialog) renderHint() string {
 	item := d.currentItem()

@@ -30,8 +30,8 @@ var (
 	buttonBaseStyle = lipgloss.NewStyle().Padding(0, 2)
 
 	buttonNormalStyle = lipgloss.NewStyle().
-				Background(lipgloss.Color("250")).
-				Foreground(lipgloss.Color("255")).
+				Background(colourLightGrey).
+				Foreground(colourBrightWhite).
 				Inherit(buttonBaseStyle)
 
 	buttonFocusedStyle = lipgloss.NewStyle().

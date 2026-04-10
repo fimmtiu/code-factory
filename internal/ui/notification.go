@@ -22,10 +22,10 @@ type editorDoneMsg struct{ result tea.Msg }
 // editorWaitingStyle is used for the "Waiting for editor..." overlay.
 var editorWaitingStyle = lipgloss.NewStyle().
 	Border(lipgloss.RoundedBorder()).
-	BorderForeground(lipgloss.Color("12")).
-	BorderBackground(lipgloss.Color("238")).
-	Background(lipgloss.Color("238")).
-	Foreground(lipgloss.Color("230")).
+	BorderForeground(colourBorderBlue).
+	BorderBackground(colourDarkGrey).
+	Background(colourDarkGrey).
+	Foreground(colourOnPrimary).
 	Bold(true).
 	Padding(0, 2)
 
@@ -39,10 +39,10 @@ func wrapEditorCmd(fn func() tea.Msg) tea.Cmd {
 // Dark background with bright text and an amber border for high visibility.
 var notifStyle = lipgloss.NewStyle().
 	Border(lipgloss.RoundedBorder()).
-	BorderForeground(lipgloss.Color("166")).
-	BorderBackground(lipgloss.Color("238")).
-	Background(lipgloss.Color("238")).
-	Foreground(lipgloss.Color("230")).
+	BorderForeground(colourWarning).
+	BorderBackground(colourDarkGrey).
+	Background(colourDarkGrey).
+	Foreground(colourOnPrimary).
 	Bold(true).
 	Padding(0, 2)
 

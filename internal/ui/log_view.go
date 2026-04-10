@@ -21,7 +21,7 @@ var (
 				Foreground(colourOnPrimary)
 
 	logWorkerStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("33"))
+			Foreground(colourLogWorker)
 )
 
 // logTimestampStyle returns a style that fades the timestamp colour based on
@@ -34,13 +34,13 @@ var (
 func logTimestampStyle(age time.Duration) lipgloss.Style {
 	switch {
 	case age < time.Minute:
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("236"))
+		return lipgloss.NewStyle().Foreground(colourTimestamp1)
 	case age < 5*time.Minute:
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("239"))
+		return lipgloss.NewStyle().Foreground(colourTimestamp3)
 	case age < 30*time.Minute:
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("242"))
+		return lipgloss.NewStyle().Foreground(colourSubtleGrey)
 	default:
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
+		return lipgloss.NewStyle().Foreground(colourDimGrey)
 	}
 }
 
@@ -469,28 +469,28 @@ func logMessageColor(msg string) lipgloss.Color {
 	switch {
 	// [mock] variants first so they don't fall through to the general cases.
 	case strings.HasPrefix(msg, "[mock] error"):
-		return lipgloss.Color("88") // error — dark red
+		return colourLogError
 	case strings.HasPrefix(msg, "[mock] asking user"):
-		return lipgloss.Color("94") // permission request — orange-brown
+		return colourLogPermReq
 	case strings.HasPrefix(msg, "[mock] received response"):
-		return lipgloss.Color("75") // permission response — soft blue
+		return colourLogPermResp
 	case strings.HasPrefix(msg, "[mock] committed"):
-		return lipgloss.Color("74") // commit — teal
+		return colourLogCommit
 	case strings.HasPrefix(msg, "claimed"):
-		return lipgloss.Color("34") // claim — green
+		return colourLogClaim
 	case strings.HasPrefix(msg, "released"),
 		strings.HasPrefix(msg, "housekeeping: released"):
-		return lipgloss.Color("21") // release — blue
+		return colourLogRelease
 	case strings.HasPrefix(msg, "error"),
 		strings.HasPrefix(msg, "ACP error"),
 		strings.HasPrefix(msg, "housekeeping: error"):
-		return lipgloss.Color("88") // error — dark red
+		return colourLogError
 	case strings.HasPrefix(msg, "permission request"):
-		return lipgloss.Color("94") // permission request — orange-brown
+		return colourLogPermReq
 	case strings.HasPrefix(msg, "permission response"):
-		return lipgloss.Color("75") // permission response — soft blue
+		return colourLogPermResp
 	default:
-		return lipgloss.Color("246") // agent output — mid grey
+		return colourMidGrey
 	}
 }
 

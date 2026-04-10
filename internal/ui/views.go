@@ -30,12 +30,12 @@ func buildHint(pairs ...string) string {
 // viewPaneStyle is the blue single-line border applied to Command, Worker, and Log views.
 var viewPaneStyle = lipgloss.NewStyle().
 	Border(lipgloss.RoundedBorder()).
-	BorderForeground(lipgloss.Color("12")) // blue
+	BorderForeground(colourBorderBlue)
 
 // emptyStateStyle is applied to placeholder messages such as "No actionable tickets"
 // so they read as secondary/hint text rather than content.
 var emptyStateStyle = lipgloss.NewStyle().
-	Foreground(lipgloss.Color("242")).
+	Foreground(colourSubtleGrey).
 	Italic(true)
 
 // viewBorderOverhead is the number of rows (and columns) consumed by viewPaneStyle.

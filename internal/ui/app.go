@@ -371,7 +371,7 @@ func (m Model) View() string {
 		if y < 0 {
 			y = 0
 		}
-		shadowLine := lipgloss.NewStyle().Background(lipgloss.Color("236")).Render(strings.Repeat(" ", dialogW))
+		shadowLine := lipgloss.NewStyle().Background(colourTimestamp1).Render(strings.Repeat(" ", dialogW))
 		shadowLines := make([]string, dialogH)
 		for i := range shadowLines {
 			shadowLines[i] = shadowLine

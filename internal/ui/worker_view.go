@@ -16,19 +16,19 @@ import (
 var (
 	workerStatusStyle = lipgloss.NewStyle().Bold(true)
 
-	workerIdleStyle     = lipgloss.NewStyle().Foreground(colourMuted).Inherit(workerStatusStyle)          // grey
-	workerAwaitingStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Inherit(workerStatusStyle)  // red
-	workerBusyStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("22")).Inherit(workerStatusStyle) // dark green
-	workerPausedStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("3")).Inherit(workerStatusStyle)  // yellow
+	workerIdleStyle     = lipgloss.NewStyle().Foreground(colourMuted).Inherit(workerStatusStyle)
+	workerAwaitingStyle = lipgloss.NewStyle().Foreground(colourWorkerAwaiting).Inherit(workerStatusStyle)
+	workerBusyStyle     = lipgloss.NewStyle().Foreground(colourWorkerBusy).Inherit(workerStatusStyle)
+	workerPausedStyle   = lipgloss.NewStyle().Foreground(colourWorkerPaused).Inherit(workerStatusStyle)
 
 	workerOutputStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("245")) // dim grey for output lines
+				Foreground(colourDimGrey)
 
 	workerNoOutputStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("250")) // light grey
+				Foreground(colourLightGrey)
 
 	workerNewLineStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("255")).Bold(true) // bright white for newly arrived lines
+				Foreground(colourBrightWhite).Bold(true)
 )
 
 // ── Messages ─────────────────────────────────────────────────────────────────
