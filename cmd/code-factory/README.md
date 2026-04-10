@@ -4,7 +4,7 @@ A terminal UI application that manages a pool of Claude Code agents to automatic
 
 ## Prerequisites
 
-- Run `tickets init` in the repository first to create `.tickets/`.
+- Run `cf-tickets init` in the repository first to create `.tickets/`.
 - Set `editor` in `.tickets/settings.json` to `"cursor"` or `"vscode"` (default: `"cursor"`).
 
 ## Usage

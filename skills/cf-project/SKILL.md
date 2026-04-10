@@ -8,7 +8,7 @@ user-invocable: true
 
 Takes a specification for a large proposed change and breaks it down into a series of Code Factory projects, each containing detailed Code Factory tickets that are clear, actionable, and suitable for implementation.
 
-Terminology for the `tickets` system:
+Terminology for the `cf-tickets` system:
 - A "work unit" means a project or ticket.
 - A "project" is a collection of tickets that share a single goal.
 - A "subproject" is a project nested under another project.
@@ -23,7 +23,7 @@ Terminology for the `tickets` system:
 
 ## The Job
 
-0. Run `tickets init` in the root directory of the git repository we're in
+0. Run `cf-tickets init` in the root directory of the git repository we're in
 1. **Ask the user for a target branch.** This is the branch that all project changes will be merged into when complete (the `parent_branch` of the top-level project). Prompt:
 
    > What branch should this project's changes merge into when complete? (default: `main` or `master`)
@@ -41,7 +41,7 @@ Terminology for the `tickets` system:
 6. Determine the dependencies between projects
 7. Create the **top-level project** first. Its description should be a brief overview of the entire specification — what is being built and why. It has no dependencies. If the user specified a target branch in Step 1, include `"parent_branch"` in the JSON.
   ```bash
-  tickets create-project <top-level-name> <<'TICKET_JSON'
+  cf-tickets create-project <top-level-name> <<'TICKET_JSON'
   {
     "description": "High-level overview of the entire specification...",
     "parent_branch": "<target-branch-from-step-1>"
@@ -51,15 +51,15 @@ Terminology for the `tickets` system:
   Omit the `"parent_branch"` field entirely if the user accepted the default.
 8. For each subproject, in dependency order (parents and dependencies first):
   8a. Generate a structured PRD, guided by the user's answers from Step 5
-  8b. Create the subproject by piping a JSON description into `tickets create-project`. The identifier MUST include the full path from the top-level project down to this subproject. A subproject can live directly under the top-level project or nested under another subproject:
+  8b. Create the subproject by piping a JSON description into `cf-tickets create-project`. The identifier MUST include the full path from the top-level project down to this subproject. A subproject can live directly under the top-level project or nested under another subproject:
   ```bash
   # Direct child of the top-level project:
-  tickets create-project <top-level-name>/<subproject> <<'TICKET_JSON'
+  cf-tickets create-project <top-level-name>/<subproject> <<'TICKET_JSON'
   { ... }
   TICKET_JSON
 
   # Nested under another subproject:
-  tickets create-project <top-level-name>/<parent-subproject>/<child-subproject> <<'TICKET_JSON'
+  cf-tickets create-project <top-level-name>/<parent-subproject>/<child-subproject> <<'TICKET_JSON'
   { ... }
   TICKET_JSON
   ```
@@ -82,7 +82,7 @@ Terminology for the `tickets` system:
   - Story "US-001: Add priority field" in subproject `task-priority/models` → ticket `task-priority/models/add-priority-field`
   - Story "US-002: Validate input" in nested subproject `task-priority/api/validation` → ticket `task-priority/api/validation/validate-input`
   ```bash
-  tickets create-ticket <full-parent-path>/<ticket-name> <<'TICKET_JSON'
+  cf-tickets create-ticket <full-parent-path>/<ticket-name> <<'TICKET_JSON'
   {
     "dependencies": [
       "<top-level-name>/path/to/other-ticket"
@@ -98,7 +98,7 @@ Terminology for the `tickets` system:
 
 9. **Cross-validate write scopes.** Review every ticket and project you just created. For each pair of sibling work units (work units that do NOT have a dependency relationship between them), verify their `write_scope` entries do not overlap. If they do, fix the decomposition before finishing: either add a dependency or extract a shared ticket. This is the last step — do not skip it.
 
-**Important:** Do NOT start implementing. Your job ends when all projects and tickets have been created with `tickets` and write scopes have been cross-validated. Do not write any code, modify any source files, or begin work on any ticket.
+**Important:** Do NOT start implementing. Your job ends when all projects and tickets have been created with `cf-tickets` and write scopes have been cross-validated. Do not write any code, modify any source files, or begin work on any ticket.
 
 ---
 
@@ -136,7 +136,7 @@ Ask only critical questions where the initial prompt is ambiguous. If the work t
 - **Scope/Boundaries:** What should it NOT do?
 - **Success Criteria:** How do we know it's done?
 
-NEVER put the questions in the output we send to `tickets`. Prompt the user directly for an answer before projects or tickets are generated.
+NEVER put the questions in the output we send to `cf-tickets`. Prompt the user directly for an answer before projects or tickets are generated.
 
 #### Format questions like this:
 

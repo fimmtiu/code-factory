@@ -67,7 +67,7 @@ Example: [{"filename": "cmd/main.go", "line_number": "42", "description": "**Fit
 
 **Post-processing (parent agent does this, not the subagent):** Parse the JSON array returned by the subagent. For each object in the array, pipe the `description` value into standard input of:
 
-    tickets create-cr TICKET_ID FILENAME:LINE_NUMBER cf-review
+    cf-tickets create-cr TICKET_ID FILENAME:LINE_NUMBER cf-review
 
 Replace `TICKET_ID` with the value from prerequisite step 1. Replace `FILENAME` and `LINE_NUMBER` with values from the JSON object.
 
@@ -105,7 +105,7 @@ Example: [{"filename": "api/auth.go", "line_number": "87", "description": "**Sec
 
 **Post-processing (parent agent does this, not the subagent):** Parse the JSON array returned by the subagent. For each object, pipe `description` into standard input of:
 
-    tickets create-cr TICKET_ID FILENAME:LINE_NUMBER cf-review
+    cf-tickets create-cr TICKET_ID FILENAME:LINE_NUMBER cf-review
 
 ### Phase 3: Performance analysis
 
@@ -146,7 +146,7 @@ Example: [{"filename": "db/queries.go", "line_number": "112", "description": "**
 
 **Post-processing (parent agent does this, not the subagent):** Parse the JSON array returned by the subagent. For each object, pipe `description` into standard input of:
 
-    tickets create-cr TICKET_ID FILENAME:LINE_NUMBER cf-review
+    cf-tickets create-cr TICKET_ID FILENAME:LINE_NUMBER cf-review
 
 ### Phase 4: Code quality
 
@@ -187,7 +187,7 @@ Example: [{"filename": "internal/service.go", "line_number": "55", "description"
 
 **Post-processing (parent agent does this, not the subagent):** Parse the JSON array returned by the subagent. For each object, pipe `description` into standard input of:
 
-    tickets create-cr TICKET_ID FILENAME:LINE_NUMBER cf-review
+    cf-tickets create-cr TICKET_ID FILENAME:LINE_NUMBER cf-review
 
 ### Phase 5: Abstraction
 
@@ -225,7 +225,7 @@ Example: [{"filename": "internal/handler.go", "line_number": "30", "description"
 
 **Post-processing (parent agent does this, not the subagent):** Abstraction findings are structural suggestions, so they are filed as **change requests**. Parse the JSON array returned by the subagent. For each object, pipe `description` into standard input of:
 
-    tickets create-cr TICKET_ID FILENAME:LINE_NUMBER cf-review
+    cf-tickets create-cr TICKET_ID FILENAME:LINE_NUMBER cf-review
 
 ## Completion
 

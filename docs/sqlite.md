@@ -1,7 +1,7 @@
 sqlite
 
 Create a separate branch for this work. We're going to completely re-do how
-`tickets` stores data.
+`cf-tickets` stores data.
 
 ## Changes to data storage
 
@@ -67,6 +67,6 @@ All updates must be atomic and take place within a single transaction.
 The `ticketsd` command is no longer needed, since SQLite can handle concurrent
 access for us. Delete it. (Most of its code will end up being moved to `internal`.)
 
-## Changes to `tickets` command
+## Changes to `cf-tickets` command
 
-The `tickets` command will now read/write from the SQLite database instead of talking through a socket to another process. It must use the code in `internal` to access the SQLite database; the `cmd/tickets` directory should contain no SQLite-related code.
+The `cf-tickets` command will now read/write from the SQLite database instead of talking through a socket to another process. It must use the code in `internal` to access the SQLite database; the `cmd/cf-tickets` directory should contain no SQLite-related code.

@@ -1,6 +1,6 @@
 # cf-testdata
 
-Generates a realistic set of fake projects, tickets, worktrees, and change requests in a repository's `.tickets/` directory. Intended for manual UI testing and local development of the `code-factory` and `tickets` tools without needing to run real agents.
+Generates a realistic set of fake projects, tickets, worktrees, and change requests in a repository's `.tickets/` directory. Intended for manual UI testing and local development of the `code-factory` and `cf-tickets` tools without needing to run real agents.
 
 ## Usage
 

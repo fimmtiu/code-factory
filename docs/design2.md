@@ -8,7 +8,7 @@ We're going to create a command-line tool in this repository called `code-factor
 
 Basically a combination ticket viewer/worker viewer. Separate windows tmux-style?
 
-Projects view: Same as current tickets-ui, except it shows which tickets are being worked on and the status of the ticket on the navigator pane. Hit enter on a ticket to get to...
+Projects view: Same as current cf-tickets-ui, except it shows which tickets are being worked on and the status of the ticket on the navigator pane. Hit enter on a ticket to get to...
 
 Ticket view:
   - Top status bar: ticket name, status
@@ -55,12 +55,12 @@ Status: one of `idle`, `needs-attention`, `user-review`, `in-progress`
 
 We want to change the `set-status` command to take three arguments: an identifier, a phase, and an optional status. If the status is not provided, it defaults to `idle`. It will set both the phase and status fields on the ticket.
 
-Let's remove the `status` field from projects altogether. For now, make `tickets-ui` no longer show project statistics.
+Let's remove the `status` field from projects altogether. For now, make `cf-tickets-ui` no longer show project statistics.
 
 
 FIXME DO IN SEPARATE STEP
 
-Ensure that `tickets claim` only hands out tickets which have `idle` status and any phase besides `blocked` or `done`. Blocked tickets, done tickets, needs-attention tickets, or in-progress tickets should not be returned by `claim`.
+Ensure that `cf-tickets claim` only hands out tickets which have `idle` status and any phase besides `blocked` or `done`. Blocked tickets, done tickets, needs-attention tickets, or in-progress tickets should not be returned by `claim`.
 
 ### Command-line arguments
 
@@ -78,7 +78,7 @@ When the program runs without any arguments:
 
 When the program is invoked with the `--new` option:
 
-- Run `tmux new-window -d -n Tickets tickets-ui`
+- Run `tmux new-window -d -n Tickets cf-tickets-ui`
 - Create a Unix-domain socket at the root of the `.tickets/` directory called `.factory.sock`.
 - For each agent in the worker pool, run `tmux new-window -d -n WorkerN code-factory-worker N`, where `N` is the 1-based number of the agent. (At the default pool size of 4, that would be `Worker1` through `Worker4`).
 - Start the bubbletea-based terminal UI

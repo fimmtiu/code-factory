@@ -50,7 +50,7 @@ $ INSTALL_DIR=/usr/local/bin make install
 
 ```sh
 $ cd your-project
-$ tickets init
+$ cf-tickets init
 ```
 
 This creates `.tickets/` with a default `settings.json`. Edit `settings.json` to configure your editor:
@@ -127,7 +127,7 @@ Here are some screenshots, though the terminal UI is in flux and these will be o
 | Binary | Purpose |
 |--------|---------|
 | `code-factory` | Terminal UI agent manager — the main program |
-| `tickets` | CLI for managing projects, tickets, and change requests |
+| `cf-tickets` | CLI for managing projects, tickets, and change requests |
 | `cf-testdata` | Generates test data for UI development and testing |
 
 See each binary's README in `cmd/` for full documentation.
@@ -172,7 +172,7 @@ $ code-factory --mock       # Run with fake workers
 ```
 cmd/
   code-factory/   Terminal UI agent manager
-  tickets/        CLI management tool
+  cf-tickets/     CLI management tool
   cf-testdata/    Test data generator
 internal/
   config/         Settings loading and validation

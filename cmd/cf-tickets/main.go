@@ -27,7 +27,7 @@ func main() {
 }
 
 func printUsage() {
-	fmt.Fprintln(os.Stderr, `Usage: tickets <subcommand> [args]
+	fmt.Fprintln(os.Stderr, `Usage: cf-tickets <subcommand> [args]
 
 Subcommands:
   new                               Interactively create a new ticket

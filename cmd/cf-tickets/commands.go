@@ -67,7 +67,7 @@ func runCommand(subcommand string, args []string) error {
 	case "new-project":
 		return runWizard(d, "project")
 	default:
-		return fmt.Errorf("unknown subcommand %q; run 'tickets' for usage", subcommand)
+		return fmt.Errorf("unknown subcommand %q; run 'cf-tickets' for usage", subcommand)
 	}
 }
 
@@ -119,7 +119,7 @@ func parseStdinInput(cmdName string, r io.Reader) (stdinInput, error) {
 
 func runCreateProject(d *db.DB, args []string, stdin io.Reader) error {
 	if len(args) < 1 {
-		return fmt.Errorf("usage: tickets create-project <identifier>")
+		return fmt.Errorf("usage: cf-tickets create-project <identifier>")
 	}
 	input, err := parseStdinInput("create-project", stdin)
 	if err != nil {
@@ -130,7 +130,7 @@ func runCreateProject(d *db.DB, args []string, stdin io.Reader) error {
 
 func runCreateTicket(d *db.DB, args []string, stdin io.Reader) error {
 	if len(args) < 1 {
-		return fmt.Errorf("usage: tickets create-ticket <identifier>")
+		return fmt.Errorf("usage: cf-tickets create-ticket <identifier>")
 	}
 	input, err := parseStdinInput("create-ticket", stdin)
 	if err != nil {
@@ -141,7 +141,7 @@ func runCreateTicket(d *db.DB, args []string, stdin io.Reader) error {
 
 func runSetStatus(d *db.DB, args []string) error {
 	if len(args) < 2 {
-		return fmt.Errorf("usage: tickets set-status <identifier> <phase> [<status>]")
+		return fmt.Errorf("usage: cf-tickets set-status <identifier> <phase> [<status>]")
 	}
 	status := models.StatusIdle
 	if len(args) >= 3 {
@@ -152,7 +152,7 @@ func runSetStatus(d *db.DB, args []string) error {
 
 func runClaim(d *db.DB, args []string) error {
 	if len(args) < 1 {
-		return fmt.Errorf("usage: tickets claim <pid>")
+		return fmt.Errorf("usage: cf-tickets claim <pid>")
 	}
 	pid, err := strconv.Atoi(args[0])
 	if err != nil {
@@ -172,14 +172,14 @@ func runClaim(d *db.DB, args []string) error {
 
 func runRelease(d *db.DB, args []string) error {
 	if len(args) < 1 {
-		return fmt.Errorf("usage: tickets release <identifier>")
+		return fmt.Errorf("usage: cf-tickets release <identifier>")
 	}
 	return d.Release(args[0])
 }
 
 func runAddChangeRequest(d *db.DB, args []string, stdin io.Reader) error {
 	if len(args) < 3 {
-		return fmt.Errorf("usage: tickets create-cr <identifier> <code-location> <author>")
+		return fmt.Errorf("usage: cf-tickets create-cr <identifier> <code-location> <author>")
 	}
 	text, err := io.ReadAll(stdin)
 	if err != nil {
@@ -190,7 +190,7 @@ func runAddChangeRequest(d *db.DB, args []string, stdin io.Reader) error {
 
 func runCloseChangeRequest(d *db.DB, args []string) error {
 	if len(args) < 1 {
-		return fmt.Errorf("usage: tickets close-cr <id> [<explanation>]")
+		return fmt.Errorf("usage: cf-tickets close-cr <id> [<explanation>]")
 	}
 	id, err := strconv.ParseInt(args[0], 10, 64)
 	if err != nil {
@@ -206,7 +206,7 @@ func runCloseChangeRequest(d *db.DB, args []string) error {
 
 func runOpenChangeRequests(d *db.DB, args []string) error {
 	if len(args) < 1 {
-		return fmt.Errorf("usage: tickets list-crs <identifier>")
+		return fmt.Errorf("usage: cf-tickets list-crs <identifier>")
 	}
 	crs, err := d.OpenChangeRequests(args[0])
 	if err != nil {
@@ -225,7 +225,7 @@ func runOpenChangeRequests(d *db.DB, args []string) error {
 
 func runDismissChangeRequest(d *db.DB, args []string) error {
 	if len(args) < 1 {
-		return fmt.Errorf("usage: tickets dismiss-cr <id> [<reason>]")
+		return fmt.Errorf("usage: cf-tickets dismiss-cr <id> [<reason>]")
 	}
 	id, err := strconv.ParseInt(args[0], 10, 64)
 	if err != nil {
@@ -278,7 +278,7 @@ func runWizard(d *db.DB, kind string) error {
 
 func runReset(d *db.DB, args []string) error {
 	if len(args) < 1 {
-		return fmt.Errorf("usage: tickets reset <ticket-identifier>")
+		return fmt.Errorf("usage: cf-tickets reset <ticket-identifier>")
 	}
 	identifier := args[0]
 
