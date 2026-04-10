@@ -113,10 +113,10 @@ func TestRunStatus_Empty(t *testing.T) {
 
 func TestRunStatus_WithData(t *testing.T) {
 	d := openTestDB(t)
-	if err := d.CreateProject("my-proj", "A test project", nil); err != nil {
+	if err := d.CreateProject("my-proj", "A test project", nil, ""); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("my-proj/my-ticket", "A test ticket", nil); err != nil {
+	if err := d.CreateTicket("my-proj/my-ticket", "A test ticket", nil, ""); err != nil {
 		t.Fatal(err)
 	}
 
@@ -158,6 +158,28 @@ func TestRunCreateProject(t *testing.T) {
 	}
 }
 
+func TestRunCreateProject_WithParentBranch(t *testing.T) {
+	d := openTestDB(t)
+	stdin := strings.NewReader(`{"description":"A project","parent_branch":"release-v2"}`)
+	if err := runCreateProject(d, []string{"my-proj"}, stdin); err != nil {
+		t.Fatalf("runCreateProject returned error: %v", err)
+	}
+
+	units, err := d.Status()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, u := range units {
+		if u.Identifier == "my-proj" {
+			if u.ParentBranch != "release-v2" {
+				t.Errorf("expected ParentBranch %q, got %q", "release-v2", u.ParentBranch)
+			}
+			return
+		}
+	}
+	t.Error("project not found")
+}
+
 func TestRunCreateProject_MissingIdentifier(t *testing.T) {
 	d := openTestDB(t)
 	err := runCreateProject(d, []string{}, strings.NewReader(`{"description":"test"}`))
@@ -178,7 +200,7 @@ func TestRunCreateProject_MissingDescription(t *testing.T) {
 
 func TestRunCreateTicket(t *testing.T) {
 	d := openTestDB(t)
-	if err := d.CreateProject("my-proj", "A project", nil); err != nil {
+	if err := d.CreateProject("my-proj", "A project", nil, ""); err != nil {
 		t.Fatal(err)
 	}
 	stdin := strings.NewReader(`{"description":"A test ticket"}`)
@@ -202,6 +224,31 @@ func TestRunCreateTicket(t *testing.T) {
 	}
 }
 
+func TestRunCreateTicket_WithParentBranch(t *testing.T) {
+	d := openTestDB(t)
+	if err := d.CreateProject("my-proj", "A project", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	stdin := strings.NewReader(`{"description":"A ticket","parent_branch":"custom-branch"}`)
+	if err := runCreateTicket(d, []string{"my-proj/my-ticket"}, stdin); err != nil {
+		t.Fatalf("runCreateTicket returned error: %v", err)
+	}
+
+	units, err := d.Status()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, u := range units {
+		if u.Identifier == "my-proj/my-ticket" {
+			if u.ParentBranch != "custom-branch" {
+				t.Errorf("expected ParentBranch %q, got %q", "custom-branch", u.ParentBranch)
+			}
+			return
+		}
+	}
+	t.Error("ticket not found")
+}
+
 func TestRunCreateTicket_MissingIdentifier(t *testing.T) {
 	d := openTestDB(t)
 	err := runCreateTicket(d, []string{}, strings.NewReader(`{"description":"test"}`))
@@ -214,10 +261,10 @@ func TestRunCreateTicket_MissingIdentifier(t *testing.T) {
 
 func TestRunSetStatus(t *testing.T) {
 	d := openTestDB(t)
-	if err := d.CreateProject("proj", "A project", nil); err != nil {
+	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/ticket", "A ticket", nil); err != nil {
+	if err := d.CreateTicket("proj/ticket", "A ticket", nil, ""); err != nil {
 		t.Fatal(err)
 	}
 
@@ -252,10 +299,10 @@ func TestRunSetStatus_MissingArgs(t *testing.T) {
 
 func TestRunClaim(t *testing.T) {
 	d := openTestDB(t)
-	if err := d.CreateProject("proj", "A project", nil); err != nil {
+	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/ticket", "A ticket", nil); err != nil {
+	if err := d.CreateTicket("proj/ticket", "A ticket", nil, ""); err != nil {
 		t.Fatal(err)
 	}
 
@@ -292,10 +339,10 @@ func TestRunClaim_NoneAvailable(t *testing.T) {
 
 func TestRunRelease(t *testing.T) {
 	d := openTestDB(t)
-	if err := d.CreateProject("proj", "A project", nil); err != nil {
+	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/ticket", "A ticket", nil); err != nil {
+	if err := d.CreateTicket("proj/ticket", "A ticket", nil, ""); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := d.Claim(1234); err != nil {
@@ -319,10 +366,10 @@ func TestRunRelease_MissingIdentifier(t *testing.T) {
 
 func TestRunAddChangeRequest(t *testing.T) {
 	d := openTestDB(t)
-	if err := d.CreateProject("proj", "A project", nil); err != nil {
+	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/ticket", "A ticket", nil); err != nil {
+	if err := d.CreateTicket("proj/ticket", "A ticket", nil, ""); err != nil {
 		t.Fatal(err)
 	}
 
@@ -358,10 +405,10 @@ func TestRunAddChangeRequest_MissingArgs(t *testing.T) {
 
 func TestRunCloseChangeRequest(t *testing.T) {
 	d := openTestDB(t)
-	if err := d.CreateProject("proj", "A project", nil); err != nil {
+	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/ticket", "A ticket", nil); err != nil {
+	if err := d.CreateTicket("proj/ticket", "A ticket", nil, ""); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.AddChangeRequest("proj/ticket", "main.go:42", "alice", "please fix"); err != nil {
@@ -404,10 +451,10 @@ func TestRunCloseChangeRequest(t *testing.T) {
 
 func TestRunCloseChangeRequest_WithExplanation(t *testing.T) {
 	d := openTestDB(t)
-	if err := d.CreateProject("proj", "A project", nil); err != nil {
+	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/ticket", "A ticket", nil); err != nil {
+	if err := d.CreateTicket("proj/ticket", "A ticket", nil, ""); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.AddChangeRequest("proj/ticket", "main.go:42", "alice", "please fix"); err != nil {
@@ -464,10 +511,10 @@ func TestRunCloseChangeRequest_MissingArg(t *testing.T) {
 
 func TestRunDismissChangeRequest(t *testing.T) {
 	d := openTestDB(t)
-	if err := d.CreateProject("proj", "A project", nil); err != nil {
+	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/ticket", "A ticket", nil); err != nil {
+	if err := d.CreateTicket("proj/ticket", "A ticket", nil, ""); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.AddChangeRequest("proj/ticket", "main.go:42", "alice", "please fix"); err != nil {
@@ -539,10 +586,10 @@ func TestRunReset_TicketNotFound(t *testing.T) {
 
 func TestRunReset_BlockedPhaseRejected(t *testing.T) {
 	d := openTestDB(t)
-	if err := d.CreateProject("proj", "A project", nil); err != nil {
+	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/ticket", "A ticket", nil); err != nil {
+	if err := d.CreateTicket("proj/ticket", "A ticket", nil, ""); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.SetStatus("proj/ticket", "blocked", "idle"); err != nil {
@@ -560,10 +607,10 @@ func TestRunReset_BlockedPhaseRejected(t *testing.T) {
 
 func TestRunReset_DonePhaseRejected(t *testing.T) {
 	d := openTestDB(t)
-	if err := d.CreateProject("proj", "A project", nil); err != nil {
+	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/ticket", "A ticket", nil); err != nil {
+	if err := d.CreateTicket("proj/ticket", "A ticket", nil, ""); err != nil {
 		t.Fatal(err)
 	}
 	// SetStatus to done triggers merge+worktree removal via the FakeGitClient.

@@ -52,10 +52,10 @@ func projectPhase(t *testing.T, d *db.DB, identifier string) models.TicketPhase 
 
 func TestApprove_ImplementToRefactor(t *testing.T) {
 	d := openTestDB(t)
-	if err := d.CreateProject("proj", "A project", nil); err != nil {
+	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/t1", "A ticket", nil); err != nil {
+	if err := d.CreateTicket("proj/t1", "A ticket", nil, ""); err != nil {
 		t.Fatal(err)
 	}
 	// Set ticket to user-review so it looks like it was worked on.
@@ -74,10 +74,10 @@ func TestApprove_ImplementToRefactor(t *testing.T) {
 
 func TestApprove_RefactorToReview(t *testing.T) {
 	d := openTestDB(t)
-	if err := d.CreateProject("proj", "A project", nil); err != nil {
+	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/t1", "A ticket", nil); err != nil {
+	if err := d.CreateTicket("proj/t1", "A ticket", nil, ""); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.SetStatus("proj/t1", models.PhaseRefactor, models.StatusIdle); err != nil {
@@ -95,10 +95,10 @@ func TestApprove_RefactorToReview(t *testing.T) {
 
 func TestApprove_ReviewToRespond(t *testing.T) {
 	d := openTestDB(t)
-	if err := d.CreateProject("proj", "A project", nil); err != nil {
+	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/t1", "A ticket", nil); err != nil {
+	if err := d.CreateTicket("proj/t1", "A ticket", nil, ""); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.SetStatus("proj/t1", models.PhaseReview, models.StatusIdle); err != nil {
@@ -116,10 +116,10 @@ func TestApprove_ReviewToRespond(t *testing.T) {
 
 func TestApprove_RespondToDone(t *testing.T) {
 	d := openTestDB(t)
-	if err := d.CreateProject("proj", "A project", nil); err != nil {
+	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/t1", "A ticket", nil); err != nil {
+	if err := d.CreateTicket("proj/t1", "A ticket", nil, ""); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.SetStatus("proj/t1", models.PhaseRespond, models.StatusIdle); err != nil {
@@ -139,14 +139,14 @@ func TestApprove_RespondToDone(t *testing.T) {
 
 func TestApprove_BlockedReturnsError(t *testing.T) {
 	d := openTestDB(t)
-	if err := d.CreateProject("proj", "A project", nil); err != nil {
+	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
 		t.Fatal(err)
 	}
 	// Create two tickets; t1 depends on t2 so it starts blocked.
-	if err := d.CreateTicket("proj/t2", "dep", nil); err != nil {
+	if err := d.CreateTicket("proj/t2", "dep", nil, ""); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/t1", "blocker", []string{"proj/t2"}); err != nil {
+	if err := d.CreateTicket("proj/t1", "blocker", []string{"proj/t2"}, ""); err != nil {
 		t.Fatal(err)
 	}
 
@@ -158,10 +158,10 @@ func TestApprove_BlockedReturnsError(t *testing.T) {
 
 func TestApprove_DoneReturnsError(t *testing.T) {
 	d := openTestDB(t)
-	if err := d.CreateProject("proj", "A project", nil); err != nil {
+	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/t1", "A ticket", nil); err != nil {
+	if err := d.CreateTicket("proj/t1", "A ticket", nil, ""); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.SetStatus("proj/t1", models.PhaseRespond, models.StatusIdle); err != nil {
@@ -191,10 +191,10 @@ func TestApprove_NotFoundReturnsError(t *testing.T) {
 
 func TestApprove_SingleTicketMarkesProjectDone(t *testing.T) {
 	d := openTestDB(t)
-	if err := d.CreateProject("proj", "A project", nil); err != nil {
+	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/t1", "A ticket", nil); err != nil {
+	if err := d.CreateTicket("proj/t1", "A ticket", nil, ""); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.SetStatus("proj/t1", models.PhaseRespond, models.StatusIdle); err != nil {
@@ -212,13 +212,13 @@ func TestApprove_SingleTicketMarkesProjectDone(t *testing.T) {
 
 func TestApprove_NotAllTicketsDone_ProjectRemainsOpen(t *testing.T) {
 	d := openTestDB(t)
-	if err := d.CreateProject("proj", "A project", nil); err != nil {
+	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/t1", "ticket 1", nil); err != nil {
+	if err := d.CreateTicket("proj/t1", "ticket 1", nil, ""); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/t2", "ticket 2", nil); err != nil {
+	if err := d.CreateTicket("proj/t2", "ticket 2", nil, ""); err != nil {
 		t.Fatal(err)
 	}
 	// Only approve t1 (respond → done).
@@ -243,11 +243,11 @@ func TestApprove_NestedProjectCompletion(t *testing.T) {
 	//       t1
 	d := openTestDB(t)
 	for _, id := range []string{"grandparent", "grandparent/parent"} {
-		if err := d.CreateProject(id, "A project", nil); err != nil {
+		if err := d.CreateProject(id, "A project", nil, ""); err != nil {
 			t.Fatalf("CreateProject %q: %v", id, err)
 		}
 	}
-	if err := d.CreateTicket("grandparent/parent/t1", "A ticket", nil); err != nil {
+	if err := d.CreateTicket("grandparent/parent/t1", "A ticket", nil, ""); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.SetStatus("grandparent/parent/t1", models.PhaseRespond, models.StatusIdle); err != nil {
@@ -275,10 +275,10 @@ func TestApprove_TopLevelTicketNoParent(t *testing.T) {
 	// a slash in the identifier to verify the no-parent path works.
 	// The DB validates identifiers — top-level tickets need no parent project lookup.
 	// We'll just use respond → done and confirm no panic/error.
-	if err := d.CreateProject("proj", "A project", nil); err != nil {
+	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/t1", "A ticket", nil); err != nil {
+	if err := d.CreateTicket("proj/t1", "A ticket", nil, ""); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.SetStatus("proj/t1", models.PhaseImplement, models.StatusIdle); err != nil {

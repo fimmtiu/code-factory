@@ -52,7 +52,7 @@ func TestBuildPrompt_Implement(t *testing.T) {
 
 func TestBuildPrompt_ImplementWithParentContext(t *testing.T) {
 	d, ticketsDir := openTestDB(t)
-	if err := d.CreateProject("proj", "Parent project description", nil); err != nil {
+	if err := d.CreateProject("proj", "Parent project description", nil, ""); err != nil {
 		t.Fatalf("CreateProject: %v", err)
 	}
 	createTicket(t, d, "proj/ticket-1")
@@ -73,10 +73,10 @@ func TestBuildPrompt_ImplementWithParentContext(t *testing.T) {
 
 func TestBuildPrompt_ImplementWithNestedProjectContext(t *testing.T) {
 	d, ticketsDir := openTestDB(t)
-	if err := d.CreateProject("grandparent", "Top-level project", nil); err != nil {
+	if err := d.CreateProject("grandparent", "Top-level project", nil, ""); err != nil {
 		t.Fatalf("CreateProject grandparent: %v", err)
 	}
-	if err := d.CreateProject("grandparent/parent", "Mid-level project", nil); err != nil {
+	if err := d.CreateProject("grandparent/parent", "Mid-level project", nil, ""); err != nil {
 		t.Fatalf("CreateProject parent: %v", err)
 	}
 	createTicket(t, d, "grandparent/parent/ticket-1")

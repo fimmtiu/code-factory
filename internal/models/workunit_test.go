@@ -73,6 +73,7 @@ func TestWorkUnitJSONRoundTrip(t *testing.T) {
 		LastUpdated:  now,
 		IsProject:    false,
 		Parent:       "my-project",
+		ParentBranch: "release-v2",
 	}
 
 	data, err := json.Marshal(original)
@@ -107,6 +108,50 @@ func TestWorkUnitJSONRoundTrip(t *testing.T) {
 	}
 	if decoded.Parent != original.Parent {
 		t.Errorf("Parent: got %q, want %q", decoded.Parent, original.Parent)
+	}
+	if decoded.ParentBranch != original.ParentBranch {
+		t.Errorf("ParentBranch: got %q, want %q", decoded.ParentBranch, original.ParentBranch)
+	}
+}
+
+func TestWorkUnitJSON_ParentBranchOmittedWhenEmpty(t *testing.T) {
+	wu := NewTicket("fix-bug", "desc")
+
+	data, err := json.Marshal(wu)
+	if err != nil {
+		t.Fatalf("json.Marshal failed: %v", err)
+	}
+
+	var raw map[string]interface{}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("json.Unmarshal failed: %v", err)
+	}
+
+	if _, ok := raw["parent_branch"]; ok {
+		t.Error("expected parent_branch to be omitted when empty, but it was present")
+	}
+}
+
+func TestWorkUnitJSON_ParentBranchPresentWhenSet(t *testing.T) {
+	wu := NewTicket("fix-bug", "desc")
+	wu.ParentBranch = "release-v2"
+
+	data, err := json.Marshal(wu)
+	if err != nil {
+		t.Fatalf("json.Marshal failed: %v", err)
+	}
+
+	var raw map[string]interface{}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("json.Unmarshal failed: %v", err)
+	}
+
+	val, ok := raw["parent_branch"]
+	if !ok {
+		t.Fatal("expected parent_branch to be present in JSON")
+	}
+	if val != "release-v2" {
+		t.Errorf("parent_branch = %v, want %q", val, "release-v2")
 	}
 }
 

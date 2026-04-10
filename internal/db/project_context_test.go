@@ -6,10 +6,10 @@ import (
 
 func TestGetProjectContext_NoParent(t *testing.T) {
 	d, _, _ := openTestDB(t)
-	if err := d.CreateProject("root", "Root project", nil); err != nil {
+	if err := d.CreateProject("root", "Root project", nil, ""); err != nil {
 		t.Fatalf("CreateProject: %v", err)
 	}
-	if err := d.CreateTicket("root/ticket", "A ticket", nil); err != nil {
+	if err := d.CreateTicket("root/ticket", "A ticket", nil, ""); err != nil {
 		t.Fatalf("CreateTicket: %v", err)
 	}
 
@@ -31,13 +31,13 @@ func TestGetProjectContext_NoParent(t *testing.T) {
 
 func TestGetProjectContext_TwoLevels(t *testing.T) {
 	d, _, _ := openTestDB(t)
-	if err := d.CreateProject("gp", "Grandparent project", nil); err != nil {
+	if err := d.CreateProject("gp", "Grandparent project", nil, ""); err != nil {
 		t.Fatalf("CreateProject gp: %v", err)
 	}
-	if err := d.CreateProject("gp/parent", "Parent project", nil); err != nil {
+	if err := d.CreateProject("gp/parent", "Parent project", nil, ""); err != nil {
 		t.Fatalf("CreateProject parent: %v", err)
 	}
-	if err := d.CreateTicket("gp/parent/ticket", "A ticket", nil); err != nil {
+	if err := d.CreateTicket("gp/parent/ticket", "A ticket", nil, ""); err != nil {
 		t.Fatalf("CreateTicket: %v", err)
 	}
 
@@ -71,11 +71,11 @@ func TestGetProjectContext_ThreeLevels(t *testing.T) {
 		{"a/b", "Level B"},
 		{"a/b/c", "Level C"},
 	} {
-		if err := d.CreateProject(pair.id, pair.desc, nil); err != nil {
+		if err := d.CreateProject(pair.id, pair.desc, nil, ""); err != nil {
 			t.Fatalf("CreateProject %q: %v", pair.id, err)
 		}
 	}
-	if err := d.CreateTicket("a/b/c/ticket", "A ticket", nil); err != nil {
+	if err := d.CreateTicket("a/b/c/ticket", "A ticket", nil, ""); err != nil {
 		t.Fatalf("CreateTicket: %v", err)
 	}
 

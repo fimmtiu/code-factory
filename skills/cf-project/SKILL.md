@@ -24,22 +24,34 @@ Terminology for the `tickets` system:
 ## The Job
 
 0. Run `tickets init` in the root directory of the git repository we're in
-1. Read the user-provided specification for the work to be done
-2. Choose a **top-level project name**: a short, descriptive kebab-case identifier that captures what the specification is trying to accomplish (e.g., `task-priority`, `auth-overhaul`, `csv-export`). Shorter is better — this name is prepended to every descendant identifier. Aim for 2–3 words / under 20 characters.
-3. Divide the work into logical pieces, each with a short identifier (preferably less than 30 characters, following the identifier rules above). Each of these will become a subproject of the top-level project.
-4. Collect all clarifying questions across all projects and present them to the user in a single batch (see "How to ask clarifying questions" below). Wait for answers before proceeding. If nothing is ambiguous, skip this step.
-5. Determine the dependencies between projects
-6. Create the **top-level project** first. Its description should be a brief overview of the entire specification — what is being built and why. It has no dependencies.
+1. **Ask the user for a target branch.** This is the branch that all project changes will be merged into when complete (the `parent_branch` of the top-level project). Prompt:
+
+   > What branch should this project's changes merge into when complete? (default: `main` or `master`)
+
+   If the user specifies a branch:
+   - Check whether it exists: `git branch --list <branch-name>`
+   - If it does NOT exist, create it from the current HEAD: `git branch <branch-name>`
+
+   Store the answer for use in Step 7 below. If the user accepts the default (empty response), leave `parent_branch` unset.
+
+2. Read the user-provided specification for the work to be done
+3. Choose a **top-level project name**: a short, descriptive kebab-case identifier that captures what the specification is trying to accomplish (e.g., `task-priority`, `auth-overhaul`, `csv-export`). Shorter is better — this name is prepended to every descendant identifier. Aim for 2–3 words / under 20 characters.
+4. Divide the work into logical pieces, each with a short identifier (preferably less than 30 characters, following the identifier rules above). Each of these will become a subproject of the top-level project.
+5. Collect all clarifying questions across all projects and present them to the user in a single batch (see "How to ask clarifying questions" below). Wait for answers before proceeding. If nothing is ambiguous, skip this step.
+6. Determine the dependencies between projects
+7. Create the **top-level project** first. Its description should be a brief overview of the entire specification — what is being built and why. It has no dependencies. If the user specified a target branch in Step 1, include `"parent_branch"` in the JSON.
   ```bash
   tickets create-project <top-level-name> <<'TICKET_JSON'
   {
-    "description": "High-level overview of the entire specification..."
+    "description": "High-level overview of the entire specification...",
+    "parent_branch": "<target-branch-from-step-1>"
   }
   TICKET_JSON
   ```
-7. For each subproject, in dependency order (parents and dependencies first):
-  7a. Generate a structured PRD, guided by the user's answers from Step 4
-  7b. Create the subproject by piping a JSON description into `tickets create-project`. The identifier MUST include the full path from the top-level project down to this subproject. A subproject can live directly under the top-level project or nested under another subproject:
+  Omit the `"parent_branch"` field entirely if the user accepted the default.
+8. For each subproject, in dependency order (parents and dependencies first):
+  8a. Generate a structured PRD, guided by the user's answers from Step 5
+  8b. Create the subproject by piping a JSON description into `tickets create-project`. The identifier MUST include the full path from the top-level project down to this subproject. A subproject can live directly under the top-level project or nested under another subproject:
   ```bash
   # Direct child of the top-level project:
   tickets create-project <top-level-name>/<subproject> <<'TICKET_JSON'
@@ -66,7 +78,7 @@ Terminology for the `tickets` system:
   }
   ```
   Omit `dependencies` or pass `[]` if the subproject has none.
-  7c. For each user story in the PRD, create a ticket. Derive the ticket identifier from the user story title, not its number. The ticket identifier is the parent subproject's full identifier plus the ticket name. Examples:
+  8c. For each user story in the PRD, create a ticket. Derive the ticket identifier from the user story title, not its number. The ticket identifier is the parent subproject's full identifier plus the ticket name. Examples:
   - Story "US-001: Add priority field" in subproject `task-priority/models` → ticket `task-priority/models/add-priority-field`
   - Story "US-002: Validate input" in nested subproject `task-priority/api/validation` → ticket `task-priority/api/validation/validate-input`
   ```bash
@@ -84,7 +96,7 @@ Terminology for the `tickets` system:
   TICKET_JSON
   ```
 
-8. **Cross-validate write scopes.** Review every ticket and project you just created. For each pair of sibling work units (work units that do NOT have a dependency relationship between them), verify their `write_scope` entries do not overlap. If they do, fix the decomposition before finishing: either add a dependency or extract a shared ticket. This is the last step — do not skip it.
+9. **Cross-validate write scopes.** Review every ticket and project you just created. For each pair of sibling work units (work units that do NOT have a dependency relationship between them), verify their `write_scope` entries do not overlap. If they do, fix the decomposition before finishing: either add a dependency or extract a shared ticket. This is the last step — do not skip it.
 
 **Important:** Do NOT start implementing. Your job ends when all projects and tickets have been created with `tickets` and write scopes have been cross-validated. Do not write any code, modify any source files, or begin work on any ticket.
 
@@ -92,7 +104,7 @@ Terminology for the `tickets` system:
 
 ## How to divide the project
 
-Each subproject should either describe an individual feature of the proposed change or lay necessary groundwork for implementing future features. Each output PRD must be small enough that it's easily read and worked on in a single context window. All subprojects and tickets live under the top-level project created in Step 6.
+Each subproject should either describe an individual feature of the proposed change or lay necessary groundwork for implementing future features. Each output PRD must be small enough that it's easily read and worked on in a single context window. All subprojects and tickets live under the top-level project created in Step 7.
 
 ### Preventing duplicate code and merge conflicts
 

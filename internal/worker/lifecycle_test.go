@@ -29,14 +29,14 @@ func openTestDB(t *testing.T) (*db.DB, string) {
 
 func createProject(t *testing.T, d *db.DB, id string) {
 	t.Helper()
-	if err := d.CreateProject(id, "test project", nil); err != nil {
+	if err := d.CreateProject(id, "test project", nil, ""); err != nil {
 		t.Fatalf("CreateProject %q: %v", id, err)
 	}
 }
 
 func createTicket(t *testing.T, d *db.DB, id string) {
 	t.Helper()
-	if err := d.CreateTicket(id, "test ticket", nil); err != nil {
+	if err := d.CreateTicket(id, "test ticket", nil, ""); err != nil {
 		t.Fatalf("CreateTicket %q: %v", id, err)
 	}
 }

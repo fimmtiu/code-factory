@@ -35,6 +35,7 @@ type WorkUnit struct {
 	LastUpdated    time.Time       `json:"last_updated"`
 	IsProject      bool            `json:"is_project,omitempty"`
 	Parent         string          `json:"parent,omitempty"`
+	ParentBranch   string          `json:"parent_branch,omitempty"`
 	ClaimedBy      string          `json:"claimed_by,omitempty"`
 	ChangeRequests []ChangeRequest `json:"change_requests,omitempty"`
 }

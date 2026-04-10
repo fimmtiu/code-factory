@@ -370,7 +370,7 @@ func (g *generator) write(roots []*projectNode) error {
 }
 
 func (g *generator) writeProject(p *projectNode) error {
-	if err := g.db.CreateProject(p.identifier, p.description, nil); err != nil {
+	if err := g.db.CreateProject(p.identifier, p.description, nil, ""); err != nil {
 		return fmt.Errorf("project %s: %w", p.identifier, err)
 	}
 	if err := g.writeTickets(p); err != nil {
@@ -390,7 +390,7 @@ func (g *generator) writeTickets(p *projectNode) error {
 		if dep := p.depIdentifier(spec); dep != "" {
 			deps = []string{dep}
 		}
-		if err := g.db.CreateTicket(spec.identifier, spec.description, deps); err != nil {
+		if err := g.db.CreateTicket(spec.identifier, spec.description, deps, ""); err != nil {
 			return fmt.Errorf("ticket %d (%s): %w", i, spec.identifier, err)
 		}
 		for _, cr := range g.generateChangeRequests() {

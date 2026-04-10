@@ -99,6 +99,7 @@ func runStatus(d *db.DB) error {
 type stdinInput struct {
 	Description  string   `json:"description"`
 	Dependencies []string `json:"dependencies"`
+	ParentBranch string   `json:"parent_branch"`
 }
 
 func parseStdinInput(cmdName string, r io.Reader) (stdinInput, error) {
@@ -124,7 +125,7 @@ func runCreateProject(d *db.DB, args []string, stdin io.Reader) error {
 	if err != nil {
 		return err
 	}
-	return d.CreateProject(args[0], input.Description, input.Dependencies)
+	return d.CreateProject(args[0], input.Description, input.Dependencies, input.ParentBranch)
 }
 
 func runCreateTicket(d *db.DB, args []string, stdin io.Reader) error {
@@ -135,7 +136,7 @@ func runCreateTicket(d *db.DB, args []string, stdin io.Reader) error {
 	if err != nil {
 		return err
 	}
-	return d.CreateTicket(args[0], input.Description, input.Dependencies)
+	return d.CreateTicket(args[0], input.Description, input.Dependencies, input.ParentBranch)
 }
 
 func runSetStatus(d *db.DB, args []string) error {
@@ -270,9 +271,9 @@ func runWizard(d *db.DB, kind string) error {
 	}
 	desc := strings.TrimSpace(final.descText)
 	if kind == "project" {
-		return d.CreateProject(final.fullIdentifier(), desc, []string{})
+		return d.CreateProject(final.fullIdentifier(), desc, []string{}, "")
 	}
-	return d.CreateTicket(final.fullIdentifier(), desc, []string{})
+	return d.CreateTicket(final.fullIdentifier(), desc, []string{}, "")
 }
 
 func runReset(d *db.DB, args []string) error {

@@ -1,18 +1,12 @@
 # code-factory
 
-A self-hosted AI coding agent manager. `code-factory` runs a pool of [Claude Code](https://claude.ai/code) agents that automatically work through your project's tickets — writing code, refactoring, reviewing, and responding to change requests — while you supervise from a terminal UI.
+An AI coding agent manager that automates as much of the software-building process as possible. `code-factory` runs a pool of [Claude Code](https://claude.ai/code) agents that automatically work through your project's tickets — writing code, refactoring, reviewing, and responding to change requests — while you supervise from a terminal UI.
 
 Tickets live in a `.tickets/` directory inside your repository alongside your code. Each ticket gets its own git branch and worktree, so agent work is always isolated and reviewable before merging.
 
 ---
 
-## How it works
-
-1. **Define work** — Create projects and tickets by running the `/cf-project` skill on your design document. Each ticket will have a human-readable identifier, a description, and an optional list of dependencies.
-2. **Run agents** — Start `code-factory` to spawn a pool of Claude Code workers. Workers claim idle tickets, run the appropriate agent prompt, and advance tickets through a four-phase pipeline.
-3. **Supervise** — Watch progress in the terminal UI. Approve work, respond to agent questions, request changes, and merge completed tickets.
-
-### Ticket phases
+## Ticket phases
 
 Each ticket moves through four phases of work:
 
@@ -27,6 +21,8 @@ You approve each phase transition. When all phases are done, the ticket's branch
 
 FIXME: Merging into main/master sucks for repos like themis. Let's make the destination branch specifiable.
 
+FIXME: Add new screenshots.
+
 ---
 
 ## Getting started
@@ -40,21 +36,21 @@ FIXME: Merging into main/master sucks for repos like themis. Let's make the dest
 ### Install
 
 ```sh
-git clone https://github.com/fimmtiu/code-factory
-cd code-factory
-make install
+$ git clone https://github.com/fimmtiu/code-factory
+$ cd code-factory
+$ make install
 ```
 
 This builds and installs three binaries to `~/bin/` and installs the Claude Code skills to `~/.claude/skills/`. To install the binaries to a different directory, specify `INSTALL_DIR` on the command line:
-```
+```sh
 $ INSTALL_DIR=/usr/local/bin make install
 ```
 
 ### Set up a repository
 
 ```sh
-cd your-project
-tickets init
+$ cd your-project
+$ tickets init
 ```
 
 This creates `.tickets/` with a default `settings.json`. Edit `settings.json` to configure your editor:
@@ -67,21 +63,40 @@ This creates `.tickets/` with a default `settings.json`. Edit `settings.json` to
 
 Supported editors: `cursor`, `vscode`. (For more settings, see [the `code-factory` README](cmd/code-factory/README.md).)
 
-### Create some work
+## Using code-factory
 
-Write a specification, then open a Claude agent and run the `/cf-project` skill on it to decompose it into projects, subprojects, and tickets.
+It's best to use Opus as the model when you're planning the work, so run `/model opus` in Claude's terminal UI before you start running any skills.
+
+**Step 1: Write a specification.** Create a markdown document that describes in detail what you want your new program or feature to do.
+
+**Step 2: Revise the specification.** Open a Claude agent and run the `/cf-clarify` skill on your specification to have it identify parts of your specification that are unclear or contradictory.
+```
+/cf-clarify @doc/design.md
+```
+
+You can address its comments manually, or just ask it to update the specification with its suggestions. When you're ready, proceed to...
+
+**Step 3: Make tickets.** In your Claude agent, run the `/cf-project` skill on the specification to decompose it into projects, subprojects, and tickets.
 ```
 /cf-project @doc/design.md
 ```
-For the planning work, it's best to use Opus as the model. (Run `/model opus` in Claude's terminal UI before you run `/cf-project`.)
 
-### Start the agent manager
-
+**Step 4: Start code-factory.**
 ```sh
-code-factory
+$ code-factory
 ```
+Workers will immediately start claiming and working on idle tickets.
 
-Workers will immediately start claiming and working on idle tickets. See `cmd/code-factory/README.md` for all options.
+**Step 5: Keep a watchful eye on it.** When a worker needs to ask you for permission to run a command, you'll get a macOS notification. On the Commands view, that ticket will be at the top of the list in the `needs-attention` state. Hit Enter on the ticket to see what command it's trying to run, then choose whether to approve or deny it.
+
+Whenever a worker completes a particular phase on a ticket, it will show up in the Commands view in the `user-review` state. Inspect the work:
+
+* Hit Enter to see all the agent logs and change requests for the ticket
+* Hit `g` to inspect the commits on that ticket's worktree
+* Hit `t` to open a terminal in the ticket's worktree
+* Hit `e` to open an editor window in the ticket's worktree
+
+If you're satisfied with the changes, press `a` to approve the changes and push the ticket to the next phase.
 
 ---
 
@@ -136,18 +151,18 @@ The `skills/` directory contains Claude Code skills that are installed to `~/.cl
 ## Development
 
 ```sh
-make build    # Build all three binaries
-make test     # Run the test suite
-make lint     # Run go vet and gofmt
-make clean    # Remove built binaries
-make install  # Build, install to ~/bin/, and install skills
+$ make build    # Build all three binaries
+$ make test     # Run the test suite
+$ make lint     # Run go vet and gofmt
+$ make clean    # Remove built binaries
+$ make install  # Build, install to ~/bin/, and install skills
 ```
 
 For UI testing without running real agents:
 
 ```sh
-cf-testdata --reset       # Delete all existing tickets and generate test data
-code-factory --mock       # Run with fake workers
+$ cf-testdata --reset       # Delete all existing tickets and generate test data
+$ code-factory --mock       # Run with fake workers
 ```
 
 ---
@@ -171,3 +186,11 @@ internal/
   workflow/       Ticket approval and phase-transition logic
 skills/           Claude Code skills for working with code-factory projects
 ```
+
+# TO DO
+
+* Terminal themes, especially new themes for dark mode and all-white terminals. (This was developed on terminals with a light tan background.)
+
+* Support for more editors. (Currently we only support VS Code and Cursor.)
+
+* Auto-detect whether the user is using iTerm or macOS Terminal, then set the "open terminal window" command automatically.

@@ -104,6 +104,7 @@ var schemaStatements = []string{
 		"last_updated" integer NOT NULL,
 		"phase" text NOT NULL DEFAULT 'open',
 		"project_id" integer DEFAULT NULL,
+		"parent_branch" text NOT NULL DEFAULT '',
 		FOREIGN KEY ("project_id") REFERENCES "projects"("id") ON DELETE CASCADE
 	)`,
 	`CREATE TABLE IF NOT EXISTS "tickets" (
@@ -115,6 +116,7 @@ var schemaStatements = []string{
 		"claimed_by" integer DEFAULT NULL,
 		"last_updated" integer NOT NULL,
 		"project_id" integer DEFAULT NULL,
+		"parent_branch" text NOT NULL DEFAULT '',
 		FOREIGN KEY ("project_id") REFERENCES "projects"("id") ON DELETE CASCADE
 	)`,
 	`CREATE TABLE IF NOT EXISTS "dependencies" (
@@ -161,7 +163,10 @@ var schemaStatements = []string{
 // migrations are ALTER TABLE statements run after the schema is created to
 // handle columns added after initial deployment. Each entry is idempotent:
 // we ignore "duplicate column name" errors so they are safe to re-run.
-var migrations = []string{}
+var migrations = []string{
+	`ALTER TABLE "projects" ADD COLUMN "parent_branch" text NOT NULL DEFAULT ''`,
+	`ALTER TABLE "tickets" ADD COLUMN "parent_branch" text NOT NULL DEFAULT ''`,
+}
 
 func (d *DB) createSchema() error {
 	return d.withTx(func(tx *sql.Tx) error {
@@ -182,6 +187,29 @@ func (d *DB) createSchema() error {
 // worktreePath returns the git worktree path for a ticket identifier.
 func (d *DB) worktreePath(identifier string) string {
 	return storage.TicketWorktreePathIn(d.ticketsDir, identifier)
+}
+
+// mergeTargetDir returns the directory to merge into when a work unit is
+// completed. If parentBranch is set, it looks up the corresponding project's
+// worktree (by converting the branch name back to an identifier). Otherwise
+// it falls back to the parent project's worktree (via projectID) or the
+// repository root.
+func (d *DB) mergeTargetDir(parentBranch string, projectID sql.NullInt64) string {
+	if parentBranch != "" {
+		identifier := strings.ReplaceAll(parentBranch, "_", "/")
+		var exists int
+		if err := d.db.QueryRow(`SELECT 1 FROM projects WHERE identifier = ?`, identifier).Scan(&exists); err == nil {
+			return d.worktreePath(identifier)
+		}
+		return d.repoRoot
+	}
+	if projectID.Valid {
+		var parentIdentifier string
+		if err := d.db.QueryRow(`SELECT identifier FROM projects WHERE id = ?`, projectID.Int64).Scan(&parentIdentifier); err == nil {
+			return storage.TicketWorktreePathIn(d.ticketsDir, parentIdentifier)
+		}
+	}
+	return d.repoRoot
 }
 
 // parseCodeLocation splits "file.go:42" into ("file.go", 42, nil).
@@ -275,16 +303,16 @@ func (d *DB) Status() ([]*models.WorkUnit, error) {
 
 func (d *DB) loadProjects() (map[int64]*models.WorkUnit, error) {
 	projectByID := make(map[int64]*models.WorkUnit)
-	rows, err := d.db.Query(`SELECT id, identifier, description, last_updated, phase FROM projects`)
+	rows, err := d.db.Query(`SELECT id, identifier, description, last_updated, phase, parent_branch FROM projects`)
 	if err != nil {
 		return nil, fmt.Errorf("load projects: %w", err)
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var id int64
-		var identifier, description, phase string
+		var identifier, description, phase, parentBranch string
 		var lastUpdated int64
-		if err := rows.Scan(&id, &identifier, &description, &lastUpdated, &phase); err != nil {
+		if err := rows.Scan(&id, &identifier, &description, &lastUpdated, &phase, &parentBranch); err != nil {
 			return nil, fmt.Errorf("scan project: %w", err)
 		}
 		projectByID[id] = &models.WorkUnit{
@@ -294,6 +322,7 @@ func (d *DB) loadProjects() (map[int64]*models.WorkUnit, error) {
 			IsProject:    true,
 			LastUpdated:  time.Unix(lastUpdated, 0),
 			Dependencies: []string{},
+			ParentBranch: parentBranch,
 		}
 	}
 	if err := rows.Err(); err != nil {
@@ -311,7 +340,7 @@ func (d *DB) loadProjects() (map[int64]*models.WorkUnit, error) {
 func (d *DB) loadTickets(projectByID map[int64]*models.WorkUnit) (map[int64]*models.WorkUnit, error) {
 	ticketByID := make(map[int64]*models.WorkUnit)
 	rows, err := d.db.Query(
-		`SELECT id, identifier, description, phase, status, claimed_by, last_updated, project_id FROM tickets`,
+		`SELECT id, identifier, description, phase, status, claimed_by, last_updated, project_id, parent_branch FROM tickets`,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("load tickets: %w", err)
@@ -319,11 +348,11 @@ func (d *DB) loadTickets(projectByID map[int64]*models.WorkUnit) (map[int64]*mod
 	defer rows.Close()
 	for rows.Next() {
 		var id int64
-		var identifier, description, phase, status string
+		var identifier, description, phase, status, parentBranch string
 		var claimedBy sql.NullInt64
 		var lastUpdated int64
 		var projectID sql.NullInt64
-		if err := rows.Scan(&id, &identifier, &description, &phase, &status, &claimedBy, &lastUpdated, &projectID); err != nil {
+		if err := rows.Scan(&id, &identifier, &description, &phase, &status, &claimedBy, &lastUpdated, &projectID, &parentBranch); err != nil {
 			return nil, fmt.Errorf("scan ticket: %w", err)
 		}
 		wu := &models.WorkUnit{
@@ -334,6 +363,7 @@ func (d *DB) loadTickets(projectByID map[int64]*models.WorkUnit) (map[int64]*mod
 			IsProject:    false,
 			LastUpdated:  time.Unix(lastUpdated, 0),
 			Dependencies: []string{},
+			ParentBranch: parentBranch,
 		}
 		if claimedBy.Valid {
 			wu.ClaimedBy = strconv.FormatInt(claimedBy.Int64, 10)
@@ -434,7 +464,10 @@ func (d *DB) loadChangeRequests(ticketByID map[int64]*models.WorkUnit) error {
 
 // CreateProject inserts a new project (and its dependencies) in a single
 // transaction and creates its directory under .tickets/.
-func (d *DB) CreateProject(identifier, description string, deps []string) error {
+// parentBranch, if non-empty, overrides the default branch that this project
+// merges into when completed. The default is the parent project's worktree
+// branch, or the repository's default branch for top-level projects.
+func (d *DB) CreateProject(identifier, description string, deps []string, parentBranch string) error {
 	if err := models.ValidateIdentifier(identifier); err != nil {
 		return err
 	}
@@ -448,8 +481,8 @@ func (d *DB) CreateProject(identifier, description string, deps []string) error 
 			parentID = sql.NullInt64{Int64: pid, Valid: true}
 		}
 		res, err := tx.Exec(
-			`INSERT INTO projects (identifier, description, last_updated, project_id) VALUES (?, ?, ?, ?)`,
-			identifier, description, time.Now().Unix(), parentID,
+			`INSERT INTO projects (identifier, description, last_updated, project_id, parent_branch) VALUES (?, ?, ?, ?, ?)`,
+			identifier, description, time.Now().Unix(), parentID, parentBranch,
 		)
 		if err != nil {
 			return fmt.Errorf("insert project: %w", err)
@@ -470,7 +503,10 @@ func (d *DB) CreateProject(identifier, description string, deps []string) error 
 
 // CreateTicket inserts a new ticket (and its dependencies) in a single
 // transaction, then creates a git worktree for it immediately.
-func (d *DB) CreateTicket(identifier, description string, deps []string) error {
+// parentBranch, if non-empty, overrides the default branch that this ticket
+// merges into when completed. The default is the parent project's worktree
+// branch, or the repository's default branch for top-level tickets.
+func (d *DB) CreateTicket(identifier, description string, deps []string, parentBranch string) error {
 	if err := models.ValidateIdentifier(identifier); err != nil {
 		return err
 	}
@@ -490,8 +526,8 @@ func (d *DB) CreateTicket(identifier, description string, deps []string) error {
 		}
 
 		res, err := tx.Exec(
-			`INSERT INTO tickets (identifier, description, phase, status, last_updated, project_id) VALUES (?, ?, ?, ?, ?, ?)`,
-			identifier, description, string(phase), string(models.StatusIdle), time.Now().Unix(), projectID,
+			`INSERT INTO tickets (identifier, description, phase, status, last_updated, project_id, parent_branch) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+			identifier, description, string(phase), string(models.StatusIdle), time.Now().Unix(), projectID, parentBranch,
 		)
 		if err != nil {
 			return fmt.Errorf("insert ticket: %w", err)
@@ -522,9 +558,10 @@ func (d *DB) SetStatus(identifier string, phase models.TicketPhase, status model
 
 	var ticketID int64
 	var projectID sql.NullInt64
+	var parentBranch string
 	err := d.db.QueryRow(
-		`SELECT id, project_id FROM tickets WHERE identifier = ?`, identifier,
-	).Scan(&ticketID, &projectID)
+		`SELECT id, project_id, parent_branch FROM tickets WHERE identifier = ?`, identifier,
+	).Scan(&ticketID, &projectID, &parentBranch)
 	if err == sql.ErrNoRows {
 		var projID int64
 		if err2 := d.db.QueryRow(`SELECT id FROM projects WHERE identifier = ?`, identifier).Scan(&projID); err2 == nil {
@@ -537,7 +574,7 @@ func (d *DB) SetStatus(identifier string, phase models.TicketPhase, status model
 	}
 
 	if phase == models.PhaseDone {
-		return d.markTicketDone(ticketID, identifier, projectID)
+		return d.markTicketDone(ticketID, identifier, projectID, parentBranch)
 	}
 
 	return d.withTx(func(tx *sql.Tx) error {
@@ -550,15 +587,21 @@ func (d *DB) SetStatus(identifier string, phase models.TicketPhase, status model
 }
 
 // RebaseTicketOnParent rebases the ticket's worktree branch onto the current
-// HEAD of its parent's branch. For tickets under a project, this is the
-// project's worktree branch; for top-level tickets, it is whatever branch is
-// checked out at the repo root (typically main). This pulls in work from
-// sibling tickets that have already been merged into the parent.
+// HEAD of its parent's branch. If the ticket has a parent_branch override, that
+// is used instead. For tickets under a project, the default is the project's
+// worktree branch; for top-level tickets, it is whatever branch is checked out
+// at the repo root (typically main).
 func (d *DB) RebaseTicketOnParent(identifier, parentIdentifier string) error {
 	worktreePath := d.worktreePath(identifier)
 
+	// Check for a parent_branch override on the ticket.
+	var storedBranch string
+	_ = d.db.QueryRow(`SELECT parent_branch FROM tickets WHERE identifier = ?`, identifier).Scan(&storedBranch)
+
 	var ontoBranch string
-	if parentIdentifier != "" {
+	if storedBranch != "" {
+		ontoBranch = storedBranch
+	} else if parentIdentifier != "" {
 		ontoBranch = strings.ReplaceAll(parentIdentifier, "/", "_")
 	} else {
 		branch, err := d.git.GetCurrentBranch(d.repoRoot)
@@ -573,14 +616,9 @@ func (d *DB) RebaseTicketOnParent(identifier, parentIdentifier string) error {
 
 // markTicketDone merges the ticket's branch into the parent project's worktree
 // (or repoRoot if there is no parent), updates the DB, and removes the worktree.
-func (d *DB) markTicketDone(ticketID int64, identifier string, projectID sql.NullInt64) error {
-	mergeTarget := d.repoRoot
-	if projectID.Valid {
-		var parentIdentifier string
-		if err := d.db.QueryRow(`SELECT identifier FROM projects WHERE id = ?`, projectID.Int64).Scan(&parentIdentifier); err == nil {
-			mergeTarget = storage.TicketWorktreePathIn(d.ticketsDir, parentIdentifier)
-		}
-	}
+// If parentBranch is non-empty, it overrides the default merge target.
+func (d *DB) markTicketDone(ticketID int64, identifier string, projectID sql.NullInt64, parentBranch string) error {
+	mergeTarget := d.mergeTargetDir(parentBranch, projectID)
 
 	if err := d.git.MergeBranch(mergeTarget, identifier); err != nil {
 		return &MergeConflictError{WorktreePath: mergeTarget, Branch: identifier, Err: err}
@@ -1192,14 +1230,14 @@ func (d *DB) ActionableTickets() ([]*models.WorkUnit, error) {
 // ticket is needed.
 func (d *DB) GetTicket(identifier string) (*models.WorkUnit, error) {
 	var id int64
-	var description, phase, status string
+	var description, phase, status, parentBranch string
 	var claimedBy sql.NullInt64
 	var lastUpdated int64
 	var projectID sql.NullInt64
 	err := d.db.QueryRow(
-		`SELECT id, description, phase, status, claimed_by, last_updated, project_id
+		`SELECT id, description, phase, status, claimed_by, last_updated, project_id, parent_branch
 		 FROM tickets WHERE identifier = ?`, identifier,
-	).Scan(&id, &description, &phase, &status, &claimedBy, &lastUpdated, &projectID)
+	).Scan(&id, &description, &phase, &status, &claimedBy, &lastUpdated, &projectID, &parentBranch)
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("ticket %q not found", identifier)
 	}
@@ -1215,6 +1253,7 @@ func (d *DB) GetTicket(identifier string) (*models.WorkUnit, error) {
 		IsProject:    false,
 		LastUpdated:  time.Unix(lastUpdated, 0),
 		Dependencies: []string{},
+		ParentBranch: parentBranch,
 	}
 	if claimedBy.Valid {
 		wu.ClaimedBy = strconv.FormatInt(claimedBy.Int64, 10)
@@ -1310,14 +1349,12 @@ func (d *DB) GetTicketPhase(identifier string) (models.TicketPhase, error) {
 // worktree (or repoRoot if there is no parent).
 func (d *DB) SetProjectPhase(identifier, phase string) error {
 	if phase == string(models.ProjectPhaseDone) {
-		mergeTarget := d.repoRoot
 		var parentProjectID sql.NullInt64
-		if err := d.db.QueryRow(`SELECT project_id FROM projects WHERE identifier = ?`, identifier).Scan(&parentProjectID); err == nil && parentProjectID.Valid {
-			var parentIdentifier string
-			if err := d.db.QueryRow(`SELECT identifier FROM projects WHERE id = ?`, parentProjectID.Int64).Scan(&parentIdentifier); err == nil {
-				mergeTarget = storage.TicketWorktreePathIn(d.ticketsDir, parentIdentifier)
-			}
+		var parentBranch string
+		if err := d.db.QueryRow(`SELECT project_id, parent_branch FROM projects WHERE identifier = ?`, identifier).Scan(&parentProjectID, &parentBranch); err != nil {
+			return fmt.Errorf("project %q not found", identifier)
 		}
+		mergeTarget := d.mergeTargetDir(parentBranch, parentProjectID)
 		if err := d.git.MergeBranch(mergeTarget, identifier); err != nil {
 			return &MergeConflictError{WorktreePath: mergeTarget, Branch: identifier, Err: err}
 		}
