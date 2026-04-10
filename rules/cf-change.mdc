@@ -22,7 +22,7 @@ When the user's instruction begins with `/cf-change`, follow these steps exactly
 
 3. **Run the command** (and nothing else):
    ```
-   tickets add-change-request <ticket-identifier> <code-location> manual << 'DESC'
+   tickets create-cr <ticket-identifier> <code-location> manual << 'DESC'
    <everything in the user's instruction after "/cf-change">
    DESC
    ```

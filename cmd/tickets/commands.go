@@ -51,13 +51,13 @@ func runCommand(subcommand string, args []string) error {
 		return runClaim(d, args)
 	case "release":
 		return runRelease(d, args)
-	case "add-change-request":
+	case "create-cr":
 		return runAddChangeRequest(d, args, os.Stdin)
-	case "close-change-request":
+	case "close-cr":
 		return runCloseChangeRequest(d, args)
 	case "append-change-request":
 		return runAppendChangeRequest(d, args, os.Stdin)
-	case "dismiss-change-request":
+	case "dismiss-cr":
 		return runDismissChangeRequest(d, args)
 	case "open-change-requests":
 		return runOpenChangeRequests(d, args)
@@ -177,26 +177,26 @@ func runRelease(d *db.DB, args []string) error {
 
 func runAddChangeRequest(d *db.DB, args []string, stdin io.Reader) error {
 	if len(args) < 3 {
-		return fmt.Errorf("usage: tickets add-change-request <identifier> <code-location> <author>")
+		return fmt.Errorf("usage: tickets create-cr <identifier> <code-location> <author>")
 	}
 	text, err := io.ReadAll(stdin)
 	if err != nil {
-		return fmt.Errorf("add-change-request: read stdin: %w", err)
+		return fmt.Errorf("create-cr: read stdin: %w", err)
 	}
 	return d.AddChangeRequest(args[0], args[1], args[2], string(text))
 }
 
 func runCloseChangeRequest(d *db.DB, args []string) error {
 	if len(args) < 1 {
-		return fmt.Errorf("usage: tickets close-change-request <id> [<explanation>]")
+		return fmt.Errorf("usage: tickets close-cr <id> [<explanation>]")
 	}
 	id, err := strconv.ParseInt(args[0], 10, 64)
 	if err != nil {
-		return fmt.Errorf("close-change-request: invalid id %q: %w", args[0], err)
+		return fmt.Errorf("close-cr: invalid id %q: %w", args[0], err)
 	}
 	if len(args) >= 2 {
 		if err := d.AppendChangeRequestDescription(id, args[1]); err != nil {
-			return fmt.Errorf("close-change-request: append description: %w", err)
+			return fmt.Errorf("close-cr: append description: %w", err)
 		}
 	}
 	return d.CloseChangeRequest(id)
@@ -238,11 +238,11 @@ func runAppendChangeRequest(d *db.DB, args []string, stdin io.Reader) error {
 
 func runDismissChangeRequest(d *db.DB, args []string) error {
 	if len(args) < 1 {
-		return fmt.Errorf("usage: tickets dismiss-change-request <id> [<reason>]")
+		return fmt.Errorf("usage: tickets dismiss-cr <id> [<reason>]")
 	}
 	id, err := strconv.ParseInt(args[0], 10, 64)
 	if err != nil {
-		return fmt.Errorf("dismiss-change-request: invalid id %q: %w", args[0], err)
+		return fmt.Errorf("dismiss-cr: invalid id %q: %w", args[0], err)
 	}
 	if len(args) >= 2 {
 		if err := d.AppendChangeRequestDescription(id, args[1]); err != nil {

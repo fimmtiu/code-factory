@@ -24,11 +24,11 @@ Run `tickets open-change-requests <ticket-identifier>` to get a JSON dump of all
 For each open change request, in order:
 
 1. Read the `code_location` and `description` fields to understand what needs to change.
-2. Examine the code and decide if the described change request is an actual problem. If the proposed change is unnecessary or an overreaction, compose a detailed description of the reason why you think it's not required, run `tickets dismiss-change-request <id> <reason>`, then stop processing this change request. Otherwise, if making the proposed change would fix a real problem or make the code cleaner, continue.
+2. Examine the code and decide if the described change request is an actual problem. If the proposed change is unnecessary or an overreaction, compose a detailed description of the reason why you think it's not required, run `tickets dismiss-cr <id> <reason>`, then stop processing this change request. Otherwise, if making the proposed change would fix a real problem or make the code cleaner, continue.
 3. Write or update tests first to cover the requested change, then modify the implementation code.
 4. Run the project's lint and test commands. Check `CLAUDE.md` or the project's Makefile for the correct commands. If you don't find them there, consult project conventions or infer the correct commands from the language.
 5. Commit the changes in a single commit. The commit message must:
    - Start with the prefix `cf-respond:` (e.g. `cf-respond: fix null check in parser`).
    - Include a summary of what was changed and why.
    - Include the change request ID (the `id` field from the JSON) and ticket identifier, e.g. `"Addresses change request #42 on my-project/my-ticket"`.
-6. Come up with a short explanation of the changes you made in the past tense, then run `tickets close-change-request <id> <explanation>` where `<id>` is the numeric `id` field from the change request JSON.
+6. Come up with a short explanation of the changes you made in the past tense, then run `tickets close-cr <id> <explanation>` where `<id>` is the numeric `id` field from the change request JSON.

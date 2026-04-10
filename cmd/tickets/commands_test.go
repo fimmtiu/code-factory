@@ -338,12 +338,12 @@ func TestRunAddChangeRequest(t *testing.T) {
 	for _, u := range units {
 		if u.Identifier == "proj/ticket" {
 			if len(u.ChangeRequests) == 0 {
-				t.Error("expected change request on ticket after add-change-request")
+				t.Error("expected change request on ticket after create-cr")
 			}
 			return
 		}
 	}
-	t.Error("ticket not found after add-change-request")
+	t.Error("ticket not found after create-cr")
 }
 
 func TestRunAddChangeRequest_MissingArgs(t *testing.T) {
@@ -399,7 +399,7 @@ func TestRunCloseChangeRequest(t *testing.T) {
 			return
 		}
 	}
-	t.Error("change request not found after close-change-request")
+	t.Error("change request not found after close-cr")
 }
 
 func TestRunCloseChangeRequest_WithExplanation(t *testing.T) {
@@ -449,7 +449,7 @@ func TestRunCloseChangeRequest_WithExplanation(t *testing.T) {
 			return
 		}
 	}
-	t.Error("change request not found after close-change-request with explanation")
+	t.Error("change request not found after close-cr with explanation")
 }
 
 func TestRunCloseChangeRequest_MissingArg(t *testing.T) {
@@ -505,7 +505,7 @@ func TestRunDismissChangeRequest(t *testing.T) {
 			return
 		}
 	}
-	t.Error("change request not found after dismiss-change-request")
+	t.Error("change request not found after dismiss-cr")
 }
 
 func TestRunDismissChangeRequest_MissingArg(t *testing.T) {
