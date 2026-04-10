@@ -355,3 +355,105 @@ func TestGetTicket_NotFound(t *testing.T) {
 		t.Fatal("expected error for nonexistent ticket")
 	}
 }
+
+// ===== DeleteChangeRequestsForTicket =====
+
+func TestDeleteChangeRequestsForTicket(t *testing.T) {
+	d, _, _ := openTestDB(t)
+	if err := d.CreateProject("proj", "A project", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj/ticket", "A ticket", nil); err != nil {
+		t.Fatal(err)
+	}
+	for _, author := range []string{"alice", "bob", "charlie"} {
+		if err := d.AddChangeRequest("proj/ticket", "main.go:1", author, "fix"); err != nil {
+			t.Fatalf("AddChangeRequest(%s): %v", author, err)
+		}
+	}
+
+	// Verify CRs exist.
+	crs, err := d.OpenChangeRequests("proj/ticket")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(crs) != 3 {
+		t.Fatalf("expected 3 change requests before delete, got %d", len(crs))
+	}
+
+	if err := d.DeleteChangeRequestsForTicket("proj/ticket"); err != nil {
+		t.Fatalf("DeleteChangeRequestsForTicket: %v", err)
+	}
+
+	crs, err = d.OpenChangeRequests("proj/ticket")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(crs) != 0 {
+		t.Errorf("expected 0 change requests after delete, got %d", len(crs))
+	}
+}
+
+func TestDeleteChangeRequestsForTicket_NoChangeRequests(t *testing.T) {
+	d, _, _ := openTestDB(t)
+	if err := d.CreateProject("proj", "A project", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj/ticket", "A ticket", nil); err != nil {
+		t.Fatal(err)
+	}
+
+	// Should succeed even with no CRs to delete.
+	if err := d.DeleteChangeRequestsForTicket("proj/ticket"); err != nil {
+		t.Fatalf("DeleteChangeRequestsForTicket: %v", err)
+	}
+}
+
+func TestDeleteChangeRequestsForTicket_NotFound(t *testing.T) {
+	d, _, _ := openTestDB(t)
+	err := d.DeleteChangeRequestsForTicket("nonexistent")
+	if err == nil {
+		t.Error("expected error for nonexistent ticket, got nil")
+	}
+}
+
+func TestDeleteChangeRequestsForTicket_LeavesOtherTickets(t *testing.T) {
+	d, _, _ := openTestDB(t)
+	if err := d.CreateProject("proj", "A project", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj/t1", "Ticket 1", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj/t2", "Ticket 2", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.AddChangeRequest("proj/t1", "a.go:1", "alice", "fix t1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.AddChangeRequest("proj/t2", "b.go:1", "bob", "fix t2"); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := d.DeleteChangeRequestsForTicket("proj/t1"); err != nil {
+		t.Fatalf("DeleteChangeRequestsForTicket: %v", err)
+	}
+
+	// t1's CRs should be gone.
+	crs, err := d.OpenChangeRequests("proj/t1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(crs) != 0 {
+		t.Errorf("expected 0 CRs on t1, got %d", len(crs))
+	}
+
+	// t2's CRs should be untouched.
+	crs, err = d.OpenChangeRequests("proj/t2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(crs) != 1 {
+		t.Errorf("expected 1 CR on t2, got %d", len(crs))
+	}
+}

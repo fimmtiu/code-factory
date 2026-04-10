@@ -516,6 +516,70 @@ func TestRunDismissChangeRequest_MissingArg(t *testing.T) {
 	}
 }
 
+// ===== runReset =====
+
+func TestRunReset_MissingArgs(t *testing.T) {
+	d := openTestDB(t)
+	err := runReset(d, []string{})
+	if err == nil {
+		t.Error("expected error when identifier is missing, got nil")
+	}
+}
+
+func TestRunReset_TicketNotFound(t *testing.T) {
+	d := openTestDB(t)
+	err := runReset(d, []string{"nonexistent/ticket"})
+	if err == nil {
+		t.Error("expected error for nonexistent ticket, got nil")
+	}
+	if !strings.Contains(err.Error(), "not found") {
+		t.Errorf("expected 'not found' in error, got: %v", err)
+	}
+}
+
+func TestRunReset_BlockedPhaseRejected(t *testing.T) {
+	d := openTestDB(t)
+	if err := d.CreateProject("proj", "A project", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj/ticket", "A ticket", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.SetStatus("proj/ticket", "blocked", "idle"); err != nil {
+		t.Fatal(err)
+	}
+
+	err := runReset(d, []string{"proj/ticket"})
+	if err == nil {
+		t.Error("expected error for blocked ticket, got nil")
+	}
+	if !strings.Contains(err.Error(), "blocked") {
+		t.Errorf("expected 'blocked' in error, got: %v", err)
+	}
+}
+
+func TestRunReset_DonePhaseRejected(t *testing.T) {
+	d := openTestDB(t)
+	if err := d.CreateProject("proj", "A project", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj/ticket", "A ticket", nil); err != nil {
+		t.Fatal(err)
+	}
+	// SetStatus to done triggers merge+worktree removal via the FakeGitClient.
+	if err := d.SetStatus("proj/ticket", "done", "idle"); err != nil {
+		t.Fatal(err)
+	}
+
+	err := runReset(d, []string{"proj/ticket"})
+	if err == nil {
+		t.Error("expected error for done ticket, got nil")
+	}
+	if !strings.Contains(err.Error(), "done") {
+		t.Errorf("expected 'done' in error, got: %v", err)
+	}
+}
+
 // ===== runCommand =====
 
 func TestRunCommand_UnknownSubcommand(t *testing.T) {

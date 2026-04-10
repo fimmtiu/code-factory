@@ -41,5 +41,6 @@ Subcommands:
   release <id>                      Release the claim on a ticket
   create-cr <id> <loc> <author>     Add a change request to a ticket (description read from stdin)
   close-cr <id> [explanation]       Close a change request
-  dismiss-cr <id> [reason]          Dismiss a change request`)
+  dismiss-cr <id> [reason]          Dismiss a change request
+  reset <id>                        Reset a ticket to implement/idle`)
 }

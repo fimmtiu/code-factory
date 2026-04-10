@@ -12,6 +12,7 @@ import (
 	"github.com/mattn/go-isatty"
 
 	"github.com/fimmtiu/code-factory/internal/db"
+	"github.com/fimmtiu/code-factory/internal/git"
 	"github.com/fimmtiu/code-factory/internal/models"
 	"github.com/fimmtiu/code-factory/internal/storage"
 )
@@ -59,6 +60,8 @@ func runCommand(subcommand string, args []string) error {
 		return runDismissChangeRequest(d, args)
 	case "list-crs":
 		return runOpenChangeRequests(d, args)
+	case "reset":
+		return runReset(d, args)
 	case "new":
 		return runWizard(d, "ticket")
 	case "new-project":
@@ -270,4 +273,78 @@ func runWizard(d *db.DB, kind string) error {
 		return d.CreateProject(final.fullIdentifier(), desc, []string{})
 	}
 	return d.CreateTicket(final.fullIdentifier(), desc, []string{})
+}
+
+func runReset(d *db.DB, args []string) error {
+	if len(args) < 1 {
+		return fmt.Errorf("usage: tickets reset <ticket-identifier>")
+	}
+	identifier := args[0]
+
+	// Look up the ticket and guard against blocked/done phase.
+	units, err := d.Status()
+	if err != nil {
+		return err
+	}
+	var found *models.WorkUnit
+	for _, u := range units {
+		if u.Identifier == identifier {
+			found = u
+			break
+		}
+	}
+	if found == nil {
+		return fmt.Errorf("ticket %q not found", identifier)
+	}
+	if found.Phase == models.PhaseBlocked || found.Phase == models.PhaseDone {
+		return fmt.Errorf("cannot reset ticket %q in %q phase", identifier, found.Phase)
+	}
+
+	// Resolve the target HEAD: parent worktree HEAD or default branch HEAD.
+	worktreePath, err := storage.WorktreePathForIdentifier(identifier)
+	if err != nil {
+		return fmt.Errorf("reset: resolve worktree path: %w", err)
+	}
+
+	var targetHEAD string
+	if parentID, ok := models.ParentIdentifierOf(identifier); ok {
+		parentPath, err := storage.WorktreePathForIdentifier(parentID)
+		if err != nil {
+			return fmt.Errorf("reset: resolve parent worktree: %w", err)
+		}
+		targetHEAD, err = git.Output(parentPath, "rev-parse", "HEAD")
+		if err != nil {
+			return fmt.Errorf("reset: get parent HEAD: %w", err)
+		}
+	} else {
+		branch := git.DetectDefaultBranch(worktreePath)
+		targetHEAD, err = git.Output(worktreePath, "rev-parse", branch)
+		if err != nil {
+			return fmt.Errorf("reset: get default branch HEAD: %w", err)
+		}
+	}
+
+	// Clean uncommitted work and reset to target HEAD.
+	if _, err := git.Output(worktreePath, "checkout", "--", "."); err != nil {
+		return fmt.Errorf("reset: discard changes: %w", err)
+	}
+	if _, err := git.Output(worktreePath, "clean", "-fd"); err != nil {
+		return fmt.Errorf("reset: clean untracked files: %w", err)
+	}
+	if _, err := git.Output(worktreePath, "reset", "--hard", targetHEAD); err != nil {
+		return fmt.Errorf("reset: reset HEAD: %w", err)
+	}
+
+	// Delete all change requests.
+	if err := d.DeleteChangeRequestsForTicket(identifier); err != nil {
+		return fmt.Errorf("reset: delete change requests: %w", err)
+	}
+
+	// Set ticket to implement/idle.
+	if err := d.SetStatus(identifier, models.PhaseImplement, models.StatusIdle); err != nil {
+		return fmt.Errorf("reset: set status: %w", err)
+	}
+
+	fmt.Printf("Reset ticket %q to implement/idle\n", identifier)
+	return nil
 }

@@ -701,7 +701,7 @@ func buildDebugTemplate(wu *models.WorkUnit, phase models.TicketPhase, worktreeP
 		logRef = "`" + logfilePath + "`"
 	}
 
-	return fmt.Sprintf("I ran %s:\n\nName: %s\nGit worktree: %s\nDescription:\n%s\n\nWhat I expected was ...\n\nWhat I got was ...\n\nRead the full prompt and agent output from %s, then tell me how I could adjust %s to make an agent more likely to do what I expect.\n",
+	return fmt.Sprintf("I ran %s:\n\nName: %s\nGit worktree: %s\nDescription:\n%s\n\nWhat I expected was ...\n\n------\n\nWhat I got was ...\n\nRead the full prompt and agent output from %s, then tell me how I could adjust %s to make an agent more likely to do what I expect.\n",
 		pi.intro, wu.Identifier, worktreePath, wu.Description, logRef, pi.adjust)
 }
 

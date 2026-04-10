@@ -57,6 +57,19 @@ tickets set-status <identifier> <phase> [<status>]
 
 Updates a ticket's phase (e.g. `implement`, `refactor`, `review`, `respond`, `done`) and optionally its status (defaults to `idle`). Setting phase to `done` automatically merges the ticket's worktree into its parent project's worktree (or the repo's default branch FIXME FIXME) and removes the worktree.
 
+### Resetting a ticket
+
+```
+tickets reset <identifier>
+```
+
+Undoes all work on a ticket, returning it to a clean `implement/idle` state. The command:
+
+1. Discards all uncommitted changes in the worktree.
+2. Resets the worktree HEAD to the parent worktree's HEAD (or the default branch for top-level tickets).
+3. Deletes all change requests associated with the ticket.
+4. Sets the ticket to `implement/idle`.
+
 ### Worker protocol
 
 These subcommands are used by `code-factory` workers and are rarely called directly.

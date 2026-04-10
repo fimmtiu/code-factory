@@ -925,6 +925,23 @@ func (d *DB) ReopenChangeRequest(id int64) error {
 	return d.setChangeRequestStatus(id, models.ChangeRequestOpen)
 }
 
+// DeleteChangeRequestsForTicket deletes all change requests associated with
+// the given ticket identifier.
+func (d *DB) DeleteChangeRequestsForTicket(identifier string) error {
+	return d.withTx(func(tx *sql.Tx) error {
+		var ticketID int64
+		err := tx.QueryRow(`SELECT id FROM tickets WHERE identifier = ?`, identifier).Scan(&ticketID)
+		if err == sql.ErrNoRows {
+			return fmt.Errorf("ticket %q not found", identifier)
+		}
+		if err != nil {
+			return err
+		}
+		_, err = tx.Exec(`DELETE FROM change_requests WHERE ticket_id = ?`, ticketID)
+		return err
+	})
+}
+
 // OpenChangeRequests returns all change requests with status "open" for the
 // ticket with the given identifier, ordered by date ascending.
 func (d *DB) OpenChangeRequests(identifier string) ([]models.ChangeRequest, error) {
