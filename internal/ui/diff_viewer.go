@@ -259,8 +259,8 @@ func renderViewerStatusBar(width int, identifier, phase string, isProject bool, 
 	return line1 + "\n" + line2
 }
 
-// shortCommitLabel returns "Commit: <hash>" for a single commit or
-// "Commits: <start>..<end>" for a range, using 4-character short hashes.
+// shortCommitLabel returns "Commit <hash>" for a single commit or
+// "Commits <start> - <end>" for a range, using 4-character short hashes.
 func shortCommitLabel(startHash, endHash string) string {
 	short := func(h string) string {
 		if len(h) > 4 {
@@ -269,9 +269,9 @@ func shortCommitLabel(startHash, endHash string) string {
 		return h
 	}
 	if startHash == endHash {
-		return "Commit: " + short(endHash)
+		return "Commit " + short(endHash)
 	}
-	return "Commits: " + short(startHash) + ".." + short(endHash)
+	return "Commits " + short(startHash) + " to " + short(endHash)
 }
 
 // renderPane renders just the diff content pane (no status bar or separator).
