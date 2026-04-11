@@ -64,6 +64,13 @@ func FetchForkPoint(worktreePath, defaultBranch string) (string, error) {
 	return Output(worktreePath, "merge-base", defaultBranch, "HEAD")
 }
 
+// FirstNonMergeAncestor returns the hash of the most recent non-merge commit
+// reachable from the given commit (inclusive). This is useful when the fork
+// point is itself a merge commit and won't appear in --no-merges log output.
+func FirstNonMergeAncestor(worktreePath, commitHash string) (string, error) {
+	return Output(worktreePath, "log", "--no-merges", "--format=%H", "-1", commitHash)
+}
+
 // FetchShowStat returns the commit message followed by the --stat file list
 // for the given commit. For the uncommitted pseudo-commit, it returns
 // git diff --stat instead.

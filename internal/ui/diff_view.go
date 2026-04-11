@@ -401,7 +401,9 @@ func fetchCommitsCmd(worktreePath, identifier string) tea.Cmd {
 }
 
 // matchForkPoint finds the index in commits that matches the fork point of
-// the given branch, or -1 if not found.
+// the given branch, or -1 if not found. If the fork point is a merge commit
+// (absent from the --no-merges commit list), it falls back to the nearest
+// non-merge ancestor of the fork point.
 func matchForkPoint(commits []git.CommitEntry, worktreePath, defaultBranch string) int {
 	forkHash, err := git.FetchForkPoint(worktreePath, defaultBranch)
 	if err != nil || forkHash == "" {
@@ -409,6 +411,17 @@ func matchForkPoint(commits []git.CommitEntry, worktreePath, defaultBranch strin
 	}
 	for i, c := range commits {
 		if c.Hash == forkHash {
+			return i
+		}
+	}
+	// Fork point may be a merge commit filtered out by --no-merges.
+	// Fall back to the nearest non-merge ancestor.
+	fallback, err := git.FirstNonMergeAncestor(worktreePath, forkHash)
+	if err != nil || fallback == "" {
+		return -1
+	}
+	for i, c := range commits {
+		if c.Hash == fallback {
 			return i
 		}
 	}
