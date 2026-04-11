@@ -197,3 +197,5 @@ skills/           Claude Code skills for working with code-factory projects
 * Support for more editors. (Currently we only support VS Code and Cursor.)
 
 * Auto-detect whether the user is using iTerm or macOS Terminal, then set the "open terminal window" command automatically.
+
+* Fix the hard-coded file path for the terminal notifications' app icon image.

@@ -55,9 +55,13 @@ Each worker continuously:
 
 If an agent asks a question or requests a permission, the ticket becomes `needs-attention` and the worker pauses until the user responds with `R`.
 
+### Logfiles
+
+Each agent run produces a logfile at `.code-factory/<identifier>/<phase>.log`. Multiple runs produce `.log.1`, `.log.2`, etc. Logfiles include the session ID (for `--resume`), the full prompt, and all agent output.
+
 ## Configuration
 
-Settings are read from `.code-factory/settings.json` at startup. An unknown `editor` value causes an immediate exit with a clear error message.
+Settings are read from `.code-factory/settings.json` at startup.
 
 ```jsonc
 // .code-factory/settings.json — all fields are optional; defaults shown below
@@ -83,7 +87,3 @@ Settings are read from `.code-factory/settings.json` at startup. An unknown `edi
 | `model_review` | `"opus"` | Claude model for the review phase |
 | `model_respond` | `"sonnet"` | Claude model for the response phase |
 | `effort` | `"high"` | Effort level for the agent (`"low"`, `"normal"`, `"high"`, or `"max"`) |
-
-## Logfiles
-
-Each agent run produces a logfile at `.code-factory/<identifier>/<phase>.log`. Multiple runs produce `.log.1`, `.log.2`, etc. Logfiles include the session ID (for `--resume`), the full prompt, and all agent output.
