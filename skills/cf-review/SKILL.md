@@ -31,13 +31,14 @@ Before starting, run through ALL of the following steps in order:
    git diff --stat BRANCHPOINT
    ```
    If there's no output, tell the user "No changes found on this branch" and stop.
-6. **What does it do?**: Examine the commit messages between HEAD and BRANCHPOINT and generate a summary of what you think the branch does. Store the result as `PURPOSE`.
+6. **Capture the full diff**: Run `git diff BRANCHPOINT` and store the complete output as `DIFF`. This will be passed directly to each review subagent so they don't need to fetch it themselves.
+7. **What does it do?**: Examine the commit messages between HEAD and BRANCHPOINT and generate a summary of what you think the branch does. Store the result as `PURPOSE`.
 
 ## Running the Phases
 
 Launch **all five phases in parallel** as separate Task subagents. They are independent — they all take the same `BRANCHPOINT` and `PURPOSE` inputs and produce the same JSON output format.
 
-In every subagent prompt below, replace `BRANCHPOINT` with the value from prerequisite step 4, and `PURPOSE` with the value from prerequisite step 6. These are literal text substitutions — the subagent receives the actual values, not the placeholder names.
+In every subagent prompt below, replace `BRANCHPOINT` with the value from prerequisite step 4, `DIFF` with the value from prerequisite step 6, and `PURPOSE` with the value from prerequisite step 7. These are literal text substitutions — the subagent receives the actual values, not the placeholder names.
 
 ### Phase 1: Fitness for purpose
 
@@ -49,9 +50,13 @@ Spawn a **Task subagent** with:
 ---BEGIN PROMPT---
 You are an experienced senior software developer, and you're reviewing changes on a branch which you've never seen before. The author describes the purpose of this branch as: "PURPOSE"
 
-Run `git diff BRANCHPOINT` to examine the changes. Decide whether the code changes actually fulfill the stated purpose. (Whitespace changes are an exception -- we can include whitespace changes in any unrelated PR.)
+Here is the full diff for the branch:
 
-Use the Unblocked MCP (`unblocked_context_engine` tool) to gather context about the modified code.
+```diff
+DIFF
+```
+
+Decide whether the code changes actually fulfill the stated purpose. (Whitespace changes are an exception -- we can include whitespace changes in any unrelated PR.)
 
 If there are changes that look unrelated to the purpose, or there are changes that don't make sense to you, describe up to five of them in Markdown format. You MUST include a guess at what you think the unrelated change is trying to do. ONLY describe changes that are unclear or don't make sense.
 
@@ -81,9 +86,13 @@ Spawn a **Task subagent** with:
 ---BEGIN PROMPT---
 You are an experienced, insightful security researcher, and you're hunting for security holes in the recent changelog of this codebase.
 
-Run `git diff BRANCHPOINT` to examine the changes. Determine whether they potentially introduce any security holes that an attacker could use to leak data, impersonate users, escalate privileges, run untrusted commands, or cause any other unwanted security violation.
+Here is the full diff for the branch:
 
-Use the Unblocked MCP (`unblocked_context_engine` tool) to gather information about the codebase.
+```diff
+DIFF
+```
+
+Determine whether the changes potentially introduce any security holes that an attacker could use to leak data, impersonate users, escalate privileges, run untrusted commands, or cause any other unwanted security violation.
 
 If you find anything potentially worrying, describe it in Markdown format. You MUST include an explanation of why it worries you and a description of how an attacker could make use of it.
 
@@ -117,7 +126,13 @@ Spawn a **Task subagent** with:
 ---BEGIN PROMPT---
 You are an experienced, insightful senior developer, and you're examining the changes on this branch to determine if they could introduce performance issues.
 
-Run `git diff BRANCHPOINT` to examine the changes. Determine whether they potentially introduce any performance issues that would be significant enough for a human to notice.
+Here is the full diff for the branch:
+
+```diff
+DIFF
+```
+
+Determine whether the changes potentially introduce any performance issues that would be significant enough for a human to notice.
 
 In particular, look out for:
 - Inefficient procedures (O(n^2) algorithms, duplicated work, etc.)
@@ -126,7 +141,7 @@ In particular, look out for:
 - Memory leaks, or large memory allocations that don't get freed by garbage collection
 - Anything else that could be unexpectedly slow or resource-intensive
 
-Use the Unblocked MCP (`unblocked_context_engine` tool) to gather information about the codebase. Assume that this code is for a large, busy application with thousands of users and billions of total database records.
+Assume that this code is for a large, busy application with thousands of users and billions of total database records.
 
 If you find anything potentially worrying, describe it in Markdown format. You MUST include an explanation of why it worries you, and the details of a scenario where it could cause a problem.
 
@@ -158,7 +173,13 @@ Spawn a **Task subagent** with:
 ---BEGIN PROMPT---
 You are an experienced, insightful senior developer, and you're inspecting the changes on this branch to find code quality issues. You want to use this as a teaching opportunity for the code author.
 
-Run `git diff BRANCHPOINT` to examine the changes. Determine whether the code quality is up to our high standards. Particular areas to consider include, but are not limited to:
+Here is the full diff for the branch:
+
+```diff
+DIFF
+```
+
+Determine whether the code quality is up to our high standards. Particular areas to consider include, but are not limited to:
 
 - Unclear code, where the intent isn't obvious from the code itself and no comments explain it
 - Useless comments that just explain what the code is doing without explaining why
@@ -168,8 +189,6 @@ Run `git diff BRANCHPOINT` to examine the changes. Determine whether the code qu
 - Duplicated code — does the codebase already have a way to do this that we're not using?
 - Ignoring established patterns that already exist in the codebase
 - Places where necessary error handling is missing, or errors are being unnecessarily suppressed
-
-Use the Unblocked MCP (`unblocked_context_engine` tool) to gather information about the codebase.
 
 If you find anything potentially worrying, describe it in Markdown format. You MUST include an explanation of why it worries you, and a suggestion for how to improve that code.
 
@@ -199,15 +218,19 @@ Spawn a **Task subagent** with:
 ---BEGIN PROMPT---
 You are an experienced, insightful senior developer, and you're inspecting the changes on this branch to decide whether the abstractions it uses make sense. You want to use this as a teaching opportunity for the code author.
 
-Run `git diff BRANCHPOINT` to examine the changes. For each change, consider:
+Here is the full diff for the branch:
+
+```diff
+DIFF
+```
+
+For each change, consider:
 
 - Is this the right place for this change to live?
 - Does this code own the data that it's modifying?
 - If we're passing parameters, would it make more sense for them to be member data of the object that's being operated on instead?
 - Does this change increase the number of files we'll have to touch the next time this functionality has to change?
 - Is there a deeper structural change we could make that would make this change simpler?
-
-Use the Unblocked MCP (`unblocked_context_engine` tool) to gather information about the codebase.
 
 If you find anything potentially worrying, describe it in Markdown format. You MUST include an explanation of why it worries you, and a suggestion for how to improve that code.
 
