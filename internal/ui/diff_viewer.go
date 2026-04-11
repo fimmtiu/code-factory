@@ -200,7 +200,7 @@ func (m *DiffViewerModel) handleKey(msg tea.KeyMsg) tea.Cmd {
 		m.scrollUp(1)
 	case "down":
 		m.scrollDown(1)
-	case "pgup":
+	case "pgup", "b":
 		m.scrollUp(m.paneHeight)
 	case "pgdown", " ":
 		m.scrollDown(m.paneHeight)
@@ -307,7 +307,7 @@ func (m *DiffViewerModel) renderPane() string {
 func (m *DiffViewerModel) KeyBindings() []KeyBinding {
 	return []KeyBinding{
 		{Key: "↑/↓", Description: "Scroll"},
-		{Key: "PgUp/PgDn", Description: "Page scroll"},
+		{Key: "b/Space", Description: "Page up/down"},
 		{Key: "C", Description: "Collapse/expand file"},
 		{Key: "Tab/Esc/Enter", Description: "Back to selector"},
 	}
