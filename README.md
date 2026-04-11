@@ -51,13 +51,15 @@ $ cf-tickets init
 
 This creates `.code-factory/` with a default `settings.json`. Edit `settings.json` to configure your editor:
 
-```json
+```jsonc
 {
-  "editor": "cursor"
+  "editor": "cursor",
+  "terminal_theme": "tan",
+  // ...
 }
 ```
 
-Supported editors: `cursor`, `vscode`. (For more settings, see [the `code-factory` README](cmd/code-factory/README.md).)
+Currently supported editors are `cursor` and `vscode`, but PRs to add more are welcome! You can also set `terminal_theme` to `"dark"`, `"light"`, or `"tan"` to match your terminal background. (For more settings, see [the `code-factory` README](cmd/code-factory/README.md).)
 
 ## Using code-factory
 

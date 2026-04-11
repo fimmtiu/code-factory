@@ -5,45 +5,60 @@ import (
 	"testing"
 )
 
-// TestInitTanSetsCurrent verifies that Init("tan") populates Current.
-func TestInitTanSetsCurrent(t *testing.T) {
-	Current = nil
-	if err := Init("tan"); err != nil {
-		t.Fatalf("Init(\"tan\") returned error: %v", err)
-	}
-	if Current == nil {
-		t.Fatal("Init(\"tan\") did not set Current")
+func TestDefaultThemeIsNonNil(t *testing.T) {
+	// Current() should be usable even before Init is called.
+	if Current() == nil {
+		t.Fatal("Current() should default to a non-nil theme")
 	}
 }
 
-// TestInitDarkSetsCurrent verifies that Init("dark") populates Current
-// (placeholder returns Tan for now).
-func TestInitDarkSetsCurrent(t *testing.T) {
-	Current = nil
-	if err := Init("dark"); err != nil {
-		t.Fatalf("Init(\"dark\") returned error: %v", err)
-	}
-	if Current == nil {
-		t.Fatal("Init(\"dark\") did not set Current")
+func TestInitValidThemes(t *testing.T) {
+	original := Current()
+	t.Cleanup(func() { SetCurrent(original) })
+
+	for _, name := range []string{"tan", "dark", "light"} {
+		t.Run(name, func(t *testing.T) {
+			currentTheme.Store(nil)
+			t.Cleanup(func() { currentTheme.Store(nil) })
+			if err := Init(name); err != nil {
+				t.Fatalf("Init(%q) returned error: %v", name, err)
+			}
+			if Current() == nil {
+				t.Fatalf("Init(%q) did not set current theme", name)
+			}
+		})
 	}
 }
 
-// TestInitLightSetsCurrent verifies that Init("light") populates Current
-// (placeholder returns Tan for now).
-func TestInitLightSetsCurrent(t *testing.T) {
-	Current = nil
-	if err := Init("light"); err != nil {
-		t.Fatalf("Init(\"light\") returned error: %v", err)
+func TestInitEmptyNameDefaultsToTan(t *testing.T) {
+	original := Current()
+	t.Cleanup(func() { SetCurrent(original) })
+
+	currentTheme.Store(nil)
+	if err := Init(""); err != nil {
+		t.Fatalf("Init(\"\") returned error: %v", err)
 	}
-	if Current == nil {
-		t.Fatal("Init(\"light\") did not set Current")
+	if Current() == nil {
+		t.Fatal("Init(\"\") did not set current theme")
 	}
 }
 
-// TestInitInvalidReturnsError verifies that Init rejects unknown theme names
-// with a helpful error message.
-func TestInitInvalidReturnsError(t *testing.T) {
-	Current = nil
+func TestInitInvalidThemes(t *testing.T) {
+	for _, name := range []string{"neon", "retro", "matrix"} {
+		t.Run(name, func(t *testing.T) {
+			before := Current()
+			err := Init(name)
+			if err == nil {
+				t.Fatalf("Init(%q) should return an error", name)
+			}
+			if Current() != before {
+				t.Errorf("current theme should remain unchanged after failed Init(%q)", name)
+			}
+		})
+	}
+}
+
+func TestInitInvalidErrorMessage(t *testing.T) {
 	err := Init("neon")
 	if err == nil {
 		t.Fatal("Init(\"neon\") should return an error")
@@ -52,19 +67,9 @@ func TestInitInvalidReturnsError(t *testing.T) {
 	if !strings.Contains(msg, "neon") {
 		t.Errorf("error should mention the invalid name, got: %s", msg)
 	}
-	if !strings.Contains(msg, "tan") || !strings.Contains(msg, "dark") || !strings.Contains(msg, "light") {
-		t.Errorf("error should list valid themes, got: %s", msg)
-	}
-	if Current != nil {
-		t.Error("Current should remain nil after failed Init")
-	}
-}
-
-// TestInitEmptyStringReturnsError verifies that empty string is rejected.
-func TestInitEmptyStringReturnsError(t *testing.T) {
-	Current = nil
-	err := Init("")
-	if err == nil {
-		t.Fatal("Init(\"\") should return an error")
+	for name := range themes {
+		if !strings.Contains(msg, name) {
+			t.Errorf("error should list valid theme %q, got: %s", name, msg)
+		}
 	}
 }

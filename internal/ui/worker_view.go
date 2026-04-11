@@ -6,8 +6,8 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 
+	"github.com/fimmtiu/code-factory/internal/ui/theme"
 	"github.com/fimmtiu/code-factory/internal/worker"
 )
 
@@ -147,7 +147,7 @@ func (v WorkerView) totalLines() int {
 
 func (v WorkerView) View() string {
 	if v.pool == nil || len(v.pool.Workers) == 0 {
-		return viewPaneStyle.Width(v.width - viewBorderOverhead).Height(v.viewHeight()).Render(emptyStateStyle.Render("(no workers)"))
+		return theme.Current().ViewPaneStyle.Width(v.width - viewBorderOverhead).Height(v.viewHeight()).Render(theme.Current().EmptyStateStyle.Render("(no workers)"))
 	}
 
 	// Build all lines for all workers.
@@ -167,7 +167,7 @@ func (v WorkerView) View() string {
 	}
 
 	content := strings.Join(all[start:end], "\n")
-	return viewPaneStyle.Width(v.width - viewBorderOverhead).Height(vh).Render(clipLines(content, vh))
+	return theme.Current().ViewPaneStyle.Width(v.width - viewBorderOverhead).Height(vh).Render(clipLines(content, vh))
 }
 
 // renderAllLines builds the full list of display lines for every worker.
@@ -176,7 +176,7 @@ func (v WorkerView) renderAllLines() []string {
 	if innerW <= 0 {
 		innerW = 1
 	}
-	separator := lipgloss.NewStyle().Foreground(colourMuted).Render(strings.Repeat("─", innerW))
+	separator := theme.Current().SeparatorStyle.Render(strings.Repeat("─", innerW))
 
 	var lines []string
 	for _, w := range v.pool.Workers {
@@ -206,13 +206,13 @@ func (v WorkerView) renderAllLines() []string {
 		for i, dl := range displayLines {
 			switch {
 			case dl == "" && i == 1 && len(output) == 0:
-				lines = append(lines, workerNoOutputStyle.Render("(no output)"))
+				lines = append(lines, theme.Current().WorkerNoOutputStyle.Render("(no output)"))
 			case dl == "":
 				lines = append(lines, "")
 			case highlight && i == lastContentIdx:
-				lines = append(lines, workerNewLineStyle.Render(dl))
+				lines = append(lines, theme.Current().WorkerNewLineStyle.Render(dl))
 			default:
-				lines = append(lines, workerOutputStyle.Render(dl))
+				lines = append(lines, theme.Current().WorkerOutputStyle.Render(dl))
 			}
 		}
 
@@ -267,19 +267,19 @@ func (v WorkerView) renderStatusLine(w *worker.Worker) string {
 	var styled string
 	switch {
 	case w.Paused:
-		styled = workerPausedStyle.Render(text)
+		styled = theme.Current().WorkerPausedStyle.Render(text)
 	case w.Status == worker.StatusIdle:
-		styled = workerIdleStyle.Render(text)
+		styled = theme.Current().WorkerIdleStyle.Render(text)
 	case w.Status == worker.StatusAwaitingResponse:
-		styled = workerAwaitingStyle.Render(text)
+		styled = theme.Current().WorkerAwaitingStyle.Render(text)
 	case w.Status == worker.StatusBusy:
-		styled = workerBusyStyle.Render(text)
+		styled = theme.Current().WorkerBusyStyle.Render(text)
 	default:
-		styled = workerIdleStyle.Render(text)
+		styled = theme.Current().WorkerIdleStyle.Render(text)
 	}
 
 	if suffix != "" {
-		styled += workerOutputStyle.Render(suffix)
+		styled += theme.Current().WorkerOutputStyle.Render(suffix)
 	}
 	return styled
 }

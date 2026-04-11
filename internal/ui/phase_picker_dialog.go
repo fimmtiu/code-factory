@@ -8,6 +8,7 @@ import (
 
 	"github.com/fimmtiu/code-factory/internal/db"
 	"github.com/fimmtiu/code-factory/internal/models"
+	"github.com/fimmtiu/code-factory/internal/ui/theme"
 )
 
 // ── Messages ─────────────────────────────────────────────────────────────────
@@ -132,11 +133,9 @@ func (d PhasePickerDialog) View() string {
 		if i == d.selected {
 			cursor := " > "
 			if d.focus == ppFocusList {
-				cursor = " > "
-				label = cmdSelectedStyle.Render(fmt.Sprintf(" %-12s", label))
+				label = theme.Current().CmdSelectedStyle.Render(fmt.Sprintf(" %-12s", label))
 			} else {
-				label = fmt.Sprintf(" %-12s", label)
-				label = lipgloss.NewStyle().Foreground(colourAccent).Render(label)
+				label = theme.Current().CmdSelectedUnfocusedStyle.Render(fmt.Sprintf(" %-12s", label))
 			}
 			listItems = append(listItems, cursor+label)
 		} else {

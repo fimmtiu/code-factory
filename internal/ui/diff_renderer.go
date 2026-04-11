@@ -5,7 +5,9 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+
 	"github.com/fimmtiu/code-factory/internal/diff"
+	"github.com/fimmtiu/code-factory/internal/ui/theme"
 )
 
 // renderedDiff holds the formatted diff output together with the line offsets
@@ -46,7 +48,7 @@ func renderDiffResult(files []diff.File, paneWidth int, collapsed []bool) render
 		if isCollapsed {
 			indicator = "▶ "
 		}
-		sb.WriteString(diffFileHeaderStyle.Render(indicator + f.Name + ":"))
+		sb.WriteString(theme.Current().DiffFileHeaderStyle.Render(indicator + f.Name + ":"))
 		sb.WriteString("\n")
 		lineCount++
 
@@ -57,17 +59,17 @@ func renderDiffResult(files []diff.File, paneWidth int, collapsed []bool) render
 		switch f.Type {
 		case diff.Binary:
 			sb.WriteString("  ")
-			sb.WriteString(emptyStateStyle.Render("(binary stuff)"))
+			sb.WriteString(theme.Current().EmptyStateStyle.Render("(binary stuff)"))
 			sb.WriteString("\n")
 			lineCount++
 		case diff.Delete:
 			sb.WriteString("  ")
-			sb.WriteString(diffDeletedMsgStyle.Render("Deleted"))
+			sb.WriteString(theme.Current().DiffDeletedMsgStyle.Render("Deleted"))
 			sb.WriteString("\n")
 			lineCount++
 		case diff.Rename:
 			sb.WriteString("  ")
-			sb.WriteString(diffRenamedMsgStyle.Render("Renamed to "))
+			sb.WriteString(theme.Current().DiffRenamedMsgStyle.Render("Renamed to "))
 			sb.WriteString(f.RenameTo)
 			sb.WriteString("\n")
 			lineCount++
@@ -99,7 +101,7 @@ func renderHunk(sb *strings.Builder, h diff.Hunk, paneWidth int) int {
 	if h.Context != "" {
 		header += " " + h.Context
 	}
-	styled, n := padToWidth(diffHunkHeaderStyle, header, paneWidth)
+	styled, n := padToWidth(theme.Current().DiffHunkHeaderStyle, header, paneWidth)
 	sb.WriteString(styled)
 	sb.WriteString("\n")
 	lines += n
@@ -116,14 +118,14 @@ func renderHunk(sb *strings.Builder, h diff.Hunk, paneWidth int) int {
 			// Blank line-number space, then content with pink background.
 			prefix := strings.Repeat(" ", numWidth) + " "
 			content := prefix + text
-			styled, n := padToWidth(diffRemovedStyle, content, paneWidth)
+			styled, n := padToWidth(theme.Current().DiffRemovedStyle, content, paneWidth)
 			sb.WriteString(styled)
 			lines += n
 		case diff.LineAdded:
 			// Line number on the left, then content with green background.
 			prefix := fmt.Sprintf("%*d ", numWidth, lineNum)
 			content := prefix + text
-			styled, n := padToWidth(diffAddedStyle, content, paneWidth)
+			styled, n := padToWidth(theme.Current().DiffAddedStyle, content, paneWidth)
 			sb.WriteString(styled)
 			lines += n
 			lineNum++

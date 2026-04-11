@@ -4,7 +4,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/charmbracelet/lipgloss"
+
 	"github.com/fimmtiu/code-factory/internal/diff"
+	"github.com/fimmtiu/code-factory/internal/ui/theme"
 )
 
 // TestRenderDiff_NormalFile verifies a basic file with one hunk renders correctly:
@@ -610,4 +613,110 @@ func TestRenderDiff_AddedLineNoPrefix(t *testing.T) {
 	if !strings.Contains(result, "added content") {
 		t.Error("added line content should be present")
 	}
+}
+
+// ── Theme integration tests ──────────────────────────────────────────────────
+
+// withRendererTestTheme temporarily replaces CurrentTheme with a modified theme
+// that uses structurally distinctive styles (padding), restoring the original
+// when done. Padding differences are visible even in no-colour test environments.
+func withRendererTestTheme(t *testing.T) {
+	t.Helper()
+	original := theme.Current()
+	t.Cleanup(func() { theme.SetCurrent(original) })
+
+	custom := theme.Tan()
+	custom.DiffFileHeaderStyle = lipgloss.NewStyle().Padding(0, 3)
+	custom.DiffHunkHeaderStyle = lipgloss.NewStyle().Padding(0, 3)
+	custom.DiffAddedStyle = lipgloss.NewStyle().Padding(0, 3)
+	custom.DiffRemovedStyle = lipgloss.NewStyle().Padding(0, 3)
+	custom.DiffDeletedMsgStyle = lipgloss.NewStyle().Padding(0, 3)
+	custom.DiffRenamedMsgStyle = lipgloss.NewStyle().Padding(0, 3)
+	custom.EmptyStateStyle = lipgloss.NewStyle().Padding(0, 3)
+	theme.SetCurrent(custom)
+}
+
+// TestRenderDiff_UsesThemeFileHeaderStyle verifies that file headers use
+// theme.Current().DiffFileHeaderStyle.
+func TestRenderDiff_UsesThemeFileHeaderStyle(t *testing.T) {
+	files := []diff.File{
+		{Name: "test.go", Type: diff.Normal, Hunks: []diff.Hunk{
+			{NewStart: 1, NewCount: 1, Lines: []diff.Line{
+				{Type: diff.LineAdded, Content: "x"},
+			}},
+		}},
+	}
+
+	assertThemeChangesOutput(t, withRendererTestTheme, func() string {
+		return renderDiff(files, 60)
+	})
+}
+
+// TestRenderDiff_UsesThemeHunkHeaderStyle verifies that hunk headers use
+// theme.Current().DiffHunkHeaderStyle.
+func TestRenderDiff_UsesThemeHunkHeaderStyle(t *testing.T) {
+	files := []diff.File{
+		{Name: "test.go", Type: diff.Normal, Hunks: []diff.Hunk{
+			{Context: "func main()", NewStart: 1, NewCount: 1, Lines: []diff.Line{
+				{Type: diff.LineContext, Content: "x"},
+			}},
+		}},
+	}
+
+	assertThemeChangesOutput(t, withRendererTestTheme, func() string {
+		return renderDiff(files, 60)
+	})
+}
+
+// TestRenderDiff_UsesThemeAddedRemovedStyles verifies that added and removed
+// lines use theme.Current().DiffAddedStyle and DiffRemovedStyle.
+func TestRenderDiff_UsesThemeAddedRemovedStyles(t *testing.T) {
+	files := []diff.File{
+		{Name: "test.go", Type: diff.Normal, Hunks: []diff.Hunk{
+			{NewStart: 1, NewCount: 2, Lines: []diff.Line{
+				{Type: diff.LineRemoved, Content: "old"},
+				{Type: diff.LineAdded, Content: "new"},
+			}},
+		}},
+	}
+
+	assertThemeChangesOutput(t, withRendererTestTheme, func() string {
+		return renderDiff(files, 60)
+	})
+}
+
+// TestRenderDiff_UsesThemeDeletedMsgStyle verifies that deleted file messages
+// use theme.Current().DiffDeletedMsgStyle.
+func TestRenderDiff_UsesThemeDeletedMsgStyle(t *testing.T) {
+	files := []diff.File{
+		{Name: "old.go", Type: diff.Delete},
+	}
+
+	assertThemeChangesOutput(t, withRendererTestTheme, func() string {
+		return renderDiff(files, 60)
+	})
+}
+
+// TestRenderDiff_UsesThemeRenamedMsgStyle verifies that renamed file messages
+// use theme.Current().DiffRenamedMsgStyle.
+func TestRenderDiff_UsesThemeRenamedMsgStyle(t *testing.T) {
+	files := []diff.File{
+		{Name: "old.go", Type: diff.Rename, RenameTo: "new.go"},
+	}
+
+	assertThemeChangesOutput(t, withRendererTestTheme, func() string {
+		return renderDiff(files, 60)
+	})
+}
+
+// TestRenderDiff_UsesThemeEmptyStateStyle verifies that binary file placeholder
+// uses theme.Current().EmptyStateStyle.
+func TestRenderDiff_UsesThemeEmptyStateStyle(t *testing.T) {
+	files := []diff.File{
+		{Name: "image.png", Type: diff.Binary},
+	}
+
+	assertThemeChangesOutput(t, withRendererTestTheme, func() string {
+		return renderDiff(files, 60)
+	})
 }

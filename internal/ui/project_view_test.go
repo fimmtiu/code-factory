@@ -1,9 +1,12 @@
 package ui
 
 import (
+	"strings"
 	"testing"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/fimmtiu/code-factory/internal/models"
+	"github.com/fimmtiu/code-factory/internal/ui/theme"
 )
 
 // makeTree is a helper that builds a ProjectView with a hand-crafted treeNode
@@ -138,5 +141,121 @@ func TestFilteredTreeNodes_ProjectMatchDoesNotPullChildren(t *testing.T) {
 	}
 	if got[0] != want[0] {
 		t.Errorf("got %q, want %q", got[0], want[0])
+	}
+}
+
+// ── Theme migration tests ────────────────────────────────────────────────────
+
+// TestRenderProgressBar_UsesThemeStyles verifies that renderProgressBar produces
+// output using theme.Current() and doesn't panic when the theme is swapped.
+func TestRenderProgressBar_UsesThemeStyles(t *testing.T) {
+	saved := theme.Current()
+	t.Cleanup(func() { theme.SetCurrent(saved) })
+
+	theme.SetCurrent(theme.Tan())
+	result := renderProgressBar(50)
+	if result == "" {
+		t.Error("renderProgressBar returned empty string")
+	}
+	if !strings.Contains(result, "50%") {
+		t.Errorf("renderProgressBar(50) should contain '50%%', got %q", result)
+	}
+
+	// Verify a different theme also produces valid output without panic.
+	alt := theme.Tan()
+	alt.ProgressFilledStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
+	theme.SetCurrent(alt)
+	result2 := renderProgressBar(75)
+	if !strings.Contains(result2, "75%") {
+		t.Errorf("renderProgressBar(75) with alt theme should contain '75%%', got %q", result2)
+	}
+}
+
+// TestTreeNodeStyle_UsesThemeStyles verifies treeNodeStyle returns styles
+// from the current theme.
+func TestTreeNodeStyle_UsesThemeStyles(t *testing.T) {
+	saved := theme.Current()
+	t.Cleanup(func() { theme.SetCurrent(saved) })
+	theme.SetCurrent(theme.Tan())
+
+	v := ProjectView{treeSelected: 0}
+
+	selectedNode := treeNode{wu: &models.WorkUnit{Identifier: "t1"}, depth: 1}
+	style := v.treeNodeStyle(selectedNode, 0)
+	rendered := style.Render("test")
+	if rendered == "" {
+		t.Error("treeNodeStyle for selected node returned empty render")
+	}
+
+	blockedNode := treeNode{
+		wu:    &models.WorkUnit{Identifier: "t2", Phase: models.PhaseBlocked},
+		depth: 1,
+	}
+	style = v.treeNodeStyle(blockedNode, 1)
+	rendered = style.Render("test")
+	if rendered == "" {
+		t.Error("treeNodeStyle for blocked node returned empty render")
+	}
+
+	doneNode := treeNode{
+		wu:    &models.WorkUnit{Identifier: "t3", Phase: models.PhaseDone},
+		depth: 1,
+	}
+	style = v.treeNodeStyle(doneNode, 1)
+	rendered = style.Render("test")
+	if rendered == "" {
+		t.Error("treeNodeStyle for done node returned empty render")
+	}
+}
+
+// TestRenderTreeRow_UsesPhaseBadgeStyles verifies that phase badge styles
+// from the theme are used when rendering tree rows.
+func TestRenderTreeRow_UsesPhaseBadgeStyles(t *testing.T) {
+	saved := theme.Current()
+	t.Cleanup(func() { theme.SetCurrent(saved) })
+	theme.SetCurrent(theme.Tan())
+
+	v := ProjectView{treeSelected: 1} // not selected
+	node := treeNode{
+		wu: &models.WorkUnit{
+			Identifier: "proj/ticket",
+			Phase:      models.PhaseImplement,
+			IsProject:  false,
+		},
+		depth: 1,
+	}
+
+	row := v.renderTreeRow(node, 0, false, 60)
+	if row == "" {
+		t.Error("renderTreeRow returned empty string")
+	}
+	if !strings.Contains(row, "[implement]") {
+		t.Errorf("renderTreeRow should contain phase badge, got %q", row)
+	}
+}
+
+// TestProjectView_View_UsesThemeBorderStyles verifies the View method produces
+// output using theme border styles.
+func TestProjectView_View_UsesThemeBorderStyles(t *testing.T) {
+	saved := theme.Current()
+	t.Cleanup(func() { theme.SetCurrent(saved) })
+	theme.SetCurrent(theme.Tan())
+
+	v := ProjectView{
+		width:  80,
+		height: 24,
+		treeNodes: []treeNode{
+			{wu: &models.WorkUnit{Identifier: "proj", IsProject: true}, depth: 0},
+			{wu: &models.WorkUnit{Identifier: "proj/t1", Phase: models.PhaseImplement}, depth: 1},
+		},
+		repoName: "test-repo",
+	}
+
+	output := v.View()
+	if output == "" {
+		t.Error("View() returned empty string")
+	}
+	if !strings.Contains(output, "test-repo") {
+		t.Error("View output should contain repo name styled by theme.Current().RepoNameStyle")
 	}
 }

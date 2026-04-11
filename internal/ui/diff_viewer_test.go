@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/fimmtiu/code-factory/internal/diff"
+	"github.com/fimmtiu/code-factory/internal/ui/theme"
 )
 
 // ── Helper ───────────────────────────────────────────────────────────────────
@@ -668,4 +669,40 @@ func TestToggleCollapse_IndicatorPrefix(t *testing.T) {
 	if found != len(sampleFiles()) {
 		t.Errorf("expected %d ▽ indicators, found %d", len(sampleFiles()), found)
 	}
+}
+
+// ── Theme integration tests ──────────────────────────────────────────────────
+
+// withViewerTestTheme temporarily replaces CurrentTheme with a modified theme
+// that uses structurally distinctive styles (padding), restoring the original
+// when done. Padding differences are visible even in no-colour test environments.
+func withViewerTestTheme(t *testing.T) {
+	t.Helper()
+	original := theme.Current()
+	t.Cleanup(func() { theme.SetCurrent(original) })
+
+	custom := theme.Tan()
+	custom.ViewPaneStyle = lipgloss.NewStyle().Padding(1, 1)
+	custom.EmptyStateStyle = lipgloss.NewStyle().Padding(0, 3)
+	theme.SetCurrent(custom)
+}
+
+// TestViewerRenderPane_UsesThemeViewPaneStyle verifies that renderPane uses
+// theme.Current().ViewPaneStyle.
+func TestViewerRenderPane_UsesThemeViewPaneStyle(t *testing.T) {
+	files := sampleFiles()
+
+	assertThemeChangesOutput(t, withViewerTestTheme, func() string {
+		m := makeViewerModel(files, 80, 24)
+		return m.renderPane()
+	})
+}
+
+// TestViewerRenderPane_EmptyUsesThemeEmptyStateStyle verifies that the empty
+// diff placeholder uses theme.Current().EmptyStateStyle.
+func TestViewerRenderPane_EmptyUsesThemeEmptyStateStyle(t *testing.T) {
+	assertThemeChangesOutput(t, withViewerTestTheme, func() string {
+		m := makeViewerModel(nil, 80, 24)
+		return m.renderPane()
+	})
 }

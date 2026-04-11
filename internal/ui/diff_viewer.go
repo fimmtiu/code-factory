@@ -9,6 +9,7 @@ import (
 
 	"github.com/fimmtiu/code-factory/internal/diff"
 	"github.com/fimmtiu/code-factory/internal/git"
+	"github.com/fimmtiu/code-factory/internal/ui/theme"
 )
 
 // viewerStatusBarHeight is the number of lines consumed by the viewer's
@@ -284,7 +285,7 @@ func (m *DiffViewerModel) renderPane() string {
 	var content string
 	if m.text == "" {
 		content = lipgloss.Place(paneW, m.paneHeight, lipgloss.Center, lipgloss.Center,
-			emptyStateStyle.Render("No diff content"))
+			theme.Current().EmptyStateStyle.Render("No diff content"))
 	} else {
 		lines := strings.Split(m.text, "\n")
 		end := m.offset + m.paneHeight
@@ -299,7 +300,7 @@ func (m *DiffViewerModel) renderPane() string {
 		content = strings.Join(visible, "\n")
 	}
 
-	rendered := viewPaneStyle.Width(paneW).Height(m.paneHeight).Render(clipLines(content, m.paneHeight))
+	rendered := theme.Current().ViewPaneStyle.Width(paneW).Height(m.paneHeight).Render(clipLines(content, m.paneHeight))
 	return injectScrollbar(rendered, "│", "█", m.offset, m.totalLines(), m.paneHeight)
 }
 

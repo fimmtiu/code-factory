@@ -19,7 +19,6 @@ type Theme struct {
 
 	// ── App chrome ──────────────────────────────────────────────────────
 	HeaderStyle      lipgloss.Style
-	TabBaseStyle     lipgloss.Style
 	ActiveTabStyle   lipgloss.Style
 	InactiveTabStyle lipgloss.Style
 	HelpHintStyle    lipgloss.Style
@@ -27,7 +26,6 @@ type Theme struct {
 	// ── Dialog ──────────────────────────────────────────────────────────
 	DialogBoxStyle     lipgloss.Style
 	DialogTitleStyle   lipgloss.Style
-	ButtonBaseStyle    lipgloss.Style
 	ButtonNormalStyle  lipgloss.Style
 	ButtonFocusedStyle lipgloss.Style
 	EditorWaitingStyle lipgloss.Style
@@ -49,10 +47,11 @@ type Theme struct {
 	HintInactiveStyle lipgloss.Style
 
 	// ── Command view ────────────────────────────────────────────────────
-	CmdSelectedStyle       lipgloss.Style
-	CmdNeedsAttentionStyle lipgloss.Style
-	CmdUserReviewStyle     lipgloss.Style
-	CmdErrorStyle          lipgloss.Style
+	CmdSelectedStyle          lipgloss.Style
+	CmdSelectedUnfocusedStyle lipgloss.Style
+	CmdNeedsAttentionStyle    lipgloss.Style
+	CmdUserReviewStyle        lipgloss.Style
+	CmdErrorStyle             lipgloss.Style
 
 	// ── Project view ────────────────────────────────────────────────────
 	FocusedBorderStyle   lipgloss.Style
@@ -68,7 +67,6 @@ type Theme struct {
 	RepoNameStyle        lipgloss.Style
 
 	// ── Worker view ─────────────────────────────────────────────────────
-	WorkerStatusStyle   lipgloss.Style
 	WorkerIdleStyle     lipgloss.Style
 	WorkerAwaitingStyle lipgloss.Style
 	WorkerBusyStyle     lipgloss.Style
@@ -79,7 +77,6 @@ type Theme struct {
 
 	// ── Log view ────────────────────────────────────────────────────────
 	LogSelectedStyle lipgloss.Style
-	LogWorkerStyle   lipgloss.Style
 
 	// ── Diff view ───────────────────────────────────────────────────────
 	DiffSelectedStyle  lipgloss.Style
@@ -98,6 +95,14 @@ type Theme struct {
 	DiffDeletedMsgStyle lipgloss.Style
 	DiffRenamedMsgStyle lipgloss.Style
 
+	// ── Inline styles ───────────────────────────────────────────────────
+
+	// DialogShadowStyle renders the shadow block behind dialogs.
+	DialogShadowStyle lipgloss.Style
+
+	// SeparatorStyle renders horizontal separator lines (e.g. between workers).
+	SeparatorStyle lipgloss.Style
+
 	// ── Special fields ──────────────────────────────────────────────────
 
 	// AccentBorder is a custom DoubleBorder variant with a solid half-block
@@ -110,15 +115,7 @@ type Theme struct {
 	// LogTimestampStyle returns a style that fades based on log entry age.
 	LogTimestampStyle func(time.Duration) lipgloss.Style
 
-	// LogMessageColor returns a colour based on log message prefix content.
-	LogMessageColor func(string) lipgloss.Color
-
-	// DialogShadowColor is the colour used for dialog shadows.
-	DialogShadowColor lipgloss.Color
-
-	// MutedColor is the colour for muted/dimmed inline references.
-	MutedColor lipgloss.Color
-
-	// AccentColor is the colour for accent inline references.
-	AccentColor lipgloss.Color
+	// LogCategoryColors maps semantic log categories to their display colours.
+	// The log view classifies messages via logCategory() and looks up the colour here.
+	LogCategoryColors map[models.LogCategory]lipgloss.Color
 }

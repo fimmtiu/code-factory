@@ -73,7 +73,8 @@ Settings are read from `.code-factory/settings.json` at startup.
   "model_refactor": "opus",
   "model_review": "opus",
   "model_respond": "sonnet",
-  "effort": "high"
+  "effort": "high",
+  "terminal_theme": "tan"
 }
 ```
 
@@ -87,3 +88,4 @@ Settings are read from `.code-factory/settings.json` at startup.
 | `model_review` | `"opus"` | Claude model for the review phase |
 | `model_respond` | `"sonnet"` | Claude model for the response phase |
 | `effort` | `"high"` | Effort level for the agent (`"low"`, `"normal"`, `"high"`, or `"max"`) |
+| `terminal_theme` | `"tan"` | Terminal colour theme (`"tan"`, `"dark"`, or `"light"`) |

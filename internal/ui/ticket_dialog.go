@@ -14,6 +14,7 @@ import (
 	"github.com/fimmtiu/code-factory/internal/db"
 	"github.com/fimmtiu/code-factory/internal/models"
 	"github.com/fimmtiu/code-factory/internal/storage"
+	"github.com/fimmtiu/code-factory/internal/ui/theme"
 	"github.com/fimmtiu/code-factory/internal/util"
 	"github.com/fimmtiu/code-factory/internal/worker"
 )
@@ -512,14 +513,14 @@ func (d *TicketDialog) crContentLines(idx int) []string {
 	codeCtx := fetchCodeContext(d.worktree, cr.CommitHash, filename, lineNumber)
 
 	raw := strings.Join([]string{
-		detailLabelStyle.Render("File:") + " " + filename,
-		detailLabelStyle.Render("Line:") + " " + strconv.Itoa(lineNumber),
-		detailLabelStyle.Render("Status:") + " " + cr.Status,
+		theme.Current().DetailLabelStyle.Render("File:") + " " + filename,
+		theme.Current().DetailLabelStyle.Render("Line:") + " " + strconv.Itoa(lineNumber),
+		theme.Current().DetailLabelStyle.Render("Status:") + " " + cr.Status,
 		"",
-		detailLabelStyle.Render("Code:"),
+		theme.Current().DetailLabelStyle.Render("Code:"),
 		codeCtx,
 		"",
-		detailLabelStyle.Render("Description:"),
+		theme.Current().DetailLabelStyle.Render("Description:"),
 		"",
 		cr.Description,
 	}, "\n")
@@ -542,20 +543,20 @@ func (d *TicketDialog) logContentLines(idx int) []string {
 // ── View ──────────────────────────────────────────────────────────────────────
 
 func (d *TicketDialog) View() string {
-	title := dialogTitleStyle.Render(fmt.Sprintf("Ticket: `%s`", d.wu.Identifier))
+	title := theme.Current().DialogTitleStyle.Render(fmt.Sprintf("Ticket: `%s`", d.wu.Identifier))
 
 	if len(d.items) == 0 {
-		return dialogBoxStyle.Width(d.width - 2).Render(
+		return theme.Current().DialogBoxStyle.Width(d.width - 2).Render(
 			lipgloss.JoinVertical(lipgloss.Left, title, "(no change requests or logfiles)"),
 		)
 	}
 
-	listBorderStyle := unfocusedBorderStyle
-	contentBorderStyle := unfocusedBorderStyle
+	listBorderStyle := theme.Current().UnfocusedBorderStyle
+	contentBorderStyle := theme.Current().UnfocusedBorderStyle
 	if d.focus == tdListFocus {
-		listBorderStyle = focusedBorderStyle
+		listBorderStyle = theme.Current().FocusedBorderStyle
 	} else {
-		contentBorderStyle = focusedBorderStyle
+		contentBorderStyle = theme.Current().FocusedBorderStyle
 	}
 
 	hint := d.renderHint()
@@ -568,42 +569,36 @@ func (d *TicketDialog) View() string {
 		),
 		hint,
 	)
-	return dialogBoxStyle.Width(d.width - 2).Render(body)
+	return theme.Current().DialogBoxStyle.Width(d.width - 2).Render(body)
 }
 
 func (d *TicketDialog) renderHint() string {
 	item := d.currentItem()
-	sep := hintDescStyle.Render("  ")
-	base := sep + hintKeyStyle.Render("g") + hintDescStyle.Render(" diffs") +
-		sep + hintKeyStyle.Render("Tab") + hintDescStyle.Render(" switch") +
-		sep + hintKeyStyle.Render("Esc") + hintDescStyle.Render(" close")
+	baseHint := buildHint("g", "diffs", "Tab", "switch", "Esc", "close")
 	if item == nil {
-		return hintKeyStyle.Render("g") + hintDescStyle.Render(" diffs") +
-			sep + hintKeyStyle.Render("Tab") + hintDescStyle.Render(" switch") +
-			sep + hintKeyStyle.Render("Esc") + hintDescStyle.Render(" close")
+		return baseHint
 	}
+	sep := theme.Current().HintDescStyle.Render("  ")
 	switch item.kind {
 	case tdItemCR:
 		cr := d.changeRequests[item.dataIdx]
 		var xPart, oPart string
 		if cr.Status == models.ChangeRequestDismissed {
-			xPart = hintInactiveStyle.Render("X dismiss")
+			xPart = theme.Current().HintInactiveStyle.Render("X dismiss")
 		} else {
-			xPart = hintKeyStyle.Render("X") + hintDescStyle.Render(" dismiss")
+			xPart = buildHint("X", "dismiss")
 		}
 		if cr.Status == models.ChangeRequestOpen {
-			oPart = hintInactiveStyle.Render("O reopen")
+			oPart = theme.Current().HintInactiveStyle.Render("O reopen")
 		} else {
-			oPart = hintKeyStyle.Render("O") + hintDescStyle.Render(" reopen")
+			oPart = buildHint("O", "reopen")
 		}
-		ePart := hintKeyStyle.Render("E") + hintDescStyle.Render(" edit")
-		return xPart + sep + oPart + sep + ePart + base
+		ePart := buildHint("E", "edit")
+		return xPart + sep + oPart + sep + ePart + sep + baseHint
 	case tdItemLog:
-		return hintKeyStyle.Render("D") + hintDescStyle.Render(" debug prompt") + base
+		return buildHint("D", "debug prompt") + sep + baseHint
 	}
-	return hintKeyStyle.Render("g") + hintDescStyle.Render(" diffs") +
-		sep + hintKeyStyle.Render("Tab") + hintDescStyle.Render(" switch") +
-		sep + hintKeyStyle.Render("Esc") + hintDescStyle.Render(" close")
+	return baseHint
 }
 
 func (d *TicketDialog) renderListPane(borderStyle lipgloss.Style) string {
@@ -620,7 +615,7 @@ func (d *TicketDialog) renderListPane(borderStyle lipgloss.Style) string {
 			if len([]rune(label)) > d.listW {
 				label = string([]rune(label)[:d.listW])
 			}
-			sb.WriteString(tdSectionStyle.Render(label))
+			sb.WriteString(theme.Current().TdSectionStyle.Render(label))
 
 		case tdItemSeparator:
 			// blank row
@@ -631,14 +626,14 @@ func (d *TicketDialog) renderListPane(borderStyle lipgloss.Style) string {
 				label = string([]rune(label)[:d.listW-1]) + "…"
 			}
 			if i == d.selectedIdx {
-				sb.WriteString(tdSelectedStyle.Width(d.listW).Render(label))
+				sb.WriteString(theme.Current().TdSelectedStyle.Width(d.listW).Render(label))
 			} else {
 				cr := d.changeRequests[item.dataIdx]
 				switch cr.Status {
 				case models.ChangeRequestDismissed:
-					sb.WriteString(tdDismissedStyle.Render(label))
+					sb.WriteString(theme.Current().TdDismissedStyle.Render(label))
 				case models.ChangeRequestClosed:
-					sb.WriteString(tdClosedStyle.Render(label))
+					sb.WriteString(theme.Current().TdClosedStyle.Render(label))
 				default:
 					sb.WriteString(label)
 				}
@@ -647,7 +642,7 @@ func (d *TicketDialog) renderListPane(borderStyle lipgloss.Style) string {
 		case tdItemLog:
 			label := item.label
 			if i == d.selectedIdx {
-				sb.WriteString(tdSelectedStyle.Width(d.listW).Render(label))
+				sb.WriteString(theme.Current().TdSelectedStyle.Width(d.listW).Render(label))
 			} else {
 				sb.WriteString(label)
 			}
