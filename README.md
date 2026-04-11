@@ -83,7 +83,10 @@ $ code-factory
 ```
 Workers will immediately start claiming and working on idle tickets.
 
-**Step 5: Keep a watchful eye on it.** When a worker needs to ask you for permission to run a command, you'll get a macOS notification. On the Commands view, that ticket will be at the top of the list in the `needs-attention` state. Hit Enter on the ticket to see what command it's trying to run, then choose whether to approve or deny it.
+**Step 5: Keep a watchful eye on it.** When a worker needs to ask you for permission to run a command, you'll get a macOS notification.
+![Screenshot of notification](img/os_notification.png)
+
+On the Commands view, that ticket will be at the top of the list in the `needs-attention` state. Hit Enter on the ticket to see what command it's trying to run, then choose whether to approve or deny it.
 
 Whenever a worker completes a particular phase on a ticket, it will show up in the Commands view in the `user-review` state. Inspect the work:
 
@@ -106,7 +109,7 @@ The TUI has five views (switch with F1–F5 or Shift+Tab):
 - **F4: Log** — Timestamped history of all worker actions with access to raw agent logfiles.
 - **F4: Diffs** — Allows you to interactively look through a ticket's commit history and
 
-Here are some screenshots, though the terminal UI is in flux and these will be out of date quickly. (Note that the tickets and comments are all randomly generated placeholders from the `cf-testdata` program and are not expected to make sense.)
+Here are some screenshots, though the terminal UI is in flux and these will be out of date quickly.
 
 | Projects view | Agent logs | Change requests |
 |    :---:      |     :---:  |    :---:        |
@@ -115,6 +118,10 @@ Here are some screenshots, though the terminal UI is in flux and these will be o
 | Commands view | Workers view | Log view |
 |    :---:      |     :---:  |    :---:        |
 | ![Screenshot of commands view](img/commands_view.png) | ![Screenshot of workers view](img/workers_view.png)  | ![Screenshot of log view](img/log_view.png) |
+
+| Diffs view (commits) | Diffs view (diff) |   |
+|    :---:      |     :---:  |    :---:        |
+| ![Screenshot of commit list](img/diffs_view_commits.png) | ![Screenshot of code diff](img/diffs_view_diff.png)  |  |
 
 ---
 
