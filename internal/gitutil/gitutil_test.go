@@ -111,6 +111,42 @@ func TestCreateWorktreeCopiesClaudeSettings(t *testing.T) {
 	if string(got) != string(settings) {
 		t.Errorf("copied settings mismatch: got %q, want %q", got, settings)
 	}
+
+	// settings.local.json was not created, so it should not appear.
+	if _, err := os.Stat(filepath.Join(worktreePath, ".claude", "settings.local.json")); !os.IsNotExist(err) {
+		t.Fatal("settings.local.json should not exist when absent from repo root")
+	}
+}
+
+func TestCreateWorktreeCopiesLocalSettings(t *testing.T) {
+	dir := initTestRepo(t)
+	client := gitutil.NewRealGitClient()
+
+	claudeDir := filepath.Join(dir, ".claude")
+	if err := os.MkdirAll(claudeDir, 0755); err != nil {
+		t.Fatalf("failed to create .claude dir: %v", err)
+	}
+	settings := []byte(`{"permissions":{"allow":["Bash(go *)"]}}`)
+	if err := os.WriteFile(filepath.Join(claudeDir, "settings.json"), settings, 0644); err != nil {
+		t.Fatalf("failed to write settings.json: %v", err)
+	}
+	localSettings := []byte(`{"permissions":{"allow":["Bash(make *)"]}}`)
+	if err := os.WriteFile(filepath.Join(claudeDir, "settings.local.json"), localSettings, 0644); err != nil {
+		t.Fatalf("failed to write settings.local.json: %v", err)
+	}
+
+	worktreePath := filepath.Join(dir, ".code-factory", "test-local", "worktree")
+	if err := client.CreateWorktree(dir, worktreePath, "test-local"); err != nil {
+		t.Fatalf("CreateWorktree returned error: %v", err)
+	}
+
+	got, err := os.ReadFile(filepath.Join(worktreePath, ".claude", "settings.local.json"))
+	if err != nil {
+		t.Fatalf("settings.local.json not copied to worktree: %v", err)
+	}
+	if string(got) != string(localSettings) {
+		t.Errorf("copied local settings mismatch: got %q, want %q", got, localSettings)
+	}
 }
 
 func TestCreateWorktreeNoSettingsNoCopy(t *testing.T) {
