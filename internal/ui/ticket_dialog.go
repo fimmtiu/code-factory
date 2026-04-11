@@ -355,6 +355,18 @@ func (d *TicketDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				e := d.logEntries[item.dataIdx]
 				return d, debugPromptCmd(d.wu, e.phase, e.path)
 			}
+
+		case "g":
+			return d, tea.Batch(
+				dismissDialogCmd(),
+				func() tea.Msg {
+					return openDiffViewMsg{
+						identifier: d.wu.Identifier,
+						phase:      string(d.wu.Phase),
+						isProject:  d.wu.IsProject,
+					}
+				},
+			)
 		}
 	}
 	return d, nil
@@ -562,10 +574,12 @@ func (d *TicketDialog) View() string {
 func (d *TicketDialog) renderHint() string {
 	item := d.currentItem()
 	sep := hintDescStyle.Render("  ")
-	base := sep + hintKeyStyle.Render("Tab") + hintDescStyle.Render(" switch") +
+	base := sep + hintKeyStyle.Render("g") + hintDescStyle.Render(" diffs") +
+		sep + hintKeyStyle.Render("Tab") + hintDescStyle.Render(" switch") +
 		sep + hintKeyStyle.Render("Esc") + hintDescStyle.Render(" close")
 	if item == nil {
-		return hintKeyStyle.Render("Tab") + hintDescStyle.Render(" switch") +
+		return hintKeyStyle.Render("g") + hintDescStyle.Render(" diffs") +
+			sep + hintKeyStyle.Render("Tab") + hintDescStyle.Render(" switch") +
 			sep + hintKeyStyle.Render("Esc") + hintDescStyle.Render(" close")
 	}
 	switch item.kind {
@@ -587,7 +601,8 @@ func (d *TicketDialog) renderHint() string {
 	case tdItemLog:
 		return hintKeyStyle.Render("D") + hintDescStyle.Render(" debug prompt") + base
 	}
-	return hintKeyStyle.Render("Tab") + hintDescStyle.Render(" switch") +
+	return hintKeyStyle.Render("g") + hintDescStyle.Render(" diffs") +
+		sep + hintKeyStyle.Render("Tab") + hintDescStyle.Render(" switch") +
 		sep + hintKeyStyle.Render("Esc") + hintDescStyle.Render(" close")
 }
 
