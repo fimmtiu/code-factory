@@ -5,13 +5,11 @@ package config
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
-)
-
-const (
-	defaultEditor              = "cursor"
-	defaultOpenTerminalCommand = "open -a iTerm ."
+	"reflect"
+	"strconv"
 )
 
 // Current holds the active settings for the running process. It is set once
@@ -20,32 +18,34 @@ var Current *Settings
 
 const settingsFileName = "settings.json"
 
-// Settings holds configuration values for the tickets daemon.
+// Settings holds configuration values for the tickets daemon. Each field's
+// default value is declared in its `default` struct tag; Default() populates
+// all fields automatically via reflection.
 type Settings struct {
 	// StaleThresholdMinutes is how many minutes before assuming an in-progress
 	// ticket is abandoned. Defaults to 30.
-	StaleThresholdMinutes int `json:"stale_threshold_minutes"`
+	StaleThresholdMinutes int `json:"stale_threshold_minutes" default:"30"`
 
 	// Editor is the name of the editor to use. Supported values: "cursor",
 	// "vscode". Defaults to "cursor".
-	Editor string `json:"editor"`
+	Editor string `json:"editor" default:"cursor"`
 
 	// OpenTerminalCommand is the command used to open a terminal window in a
 	// given directory. It is run with the working directory set to the target
 	// path. Defaults to "open -a iTerm .".
-	OpenTerminalCommand string `json:"open_terminal_command"`
+	OpenTerminalCommand string `json:"open_terminal_command" default:"open -a iTerm ."`
 
 	// ModelImplement, ModelRefactor, ModelReview, and ModelRespond set the
 	// Claude model used for each ticket phase independently. Empty string uses
 	// Claude's default model for that phase.
-	ModelImplement string `json:"model_implement"`
-	ModelRefactor  string `json:"model_refactor"`
-	ModelReview    string `json:"model_review"`
-	ModelRespond   string `json:"model_respond"`
+	ModelImplement string `json:"model_implement" default:"sonnet"`
+	ModelRefactor  string `json:"model_refactor" default:"opus"`
+	ModelReview    string `json:"model_review" default:"opus"`
+	ModelRespond   string `json:"model_respond" default:"opus"`
 
 	// Effort is the effort level passed to Claude (e.g. "low", "normal",
 	// "high"). Empty string uses Claude's default.
-	Effort string `json:"effort"`
+	Effort string `json:"effort" default:"high"`
 }
 
 // ModelForPhase returns the configured model for the given ticket phase,
@@ -69,18 +69,38 @@ func Path(ticketsDir string) string {
 	return filepath.Join(ticketsDir, settingsFileName)
 }
 
-// Default returns a Settings struct populated with default values.
+// Default returns a Settings struct populated with default values read from
+// `default` struct tags. Adding a new field with a `default` tag is sufficient
+// to make it appear in the generated settings.json — no other code changes
+// are needed.
 func Default() *Settings {
-	return &Settings{
-		StaleThresholdMinutes: 30,
-		Editor:                defaultEditor,
-		OpenTerminalCommand:   defaultOpenTerminalCommand,
-		ModelImplement:        "sonnet",
-		ModelRefactor:         "opus",
-		ModelReview:           "opus",
-		ModelRespond:          "opus",
-		Effort:                "high",
+	s := &Settings{}
+	v := reflect.ValueOf(s).Elem()
+	t := v.Type()
+	for i := range t.NumField() {
+		tag := t.Field(i).Tag.Get("default")
+		if tag == "" {
+			continue
+		}
+		f := v.Field(i)
+		switch f.Kind() {
+		case reflect.String:
+			f.SetString(tag)
+		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+			n, err := strconv.ParseInt(tag, 10, 64)
+			if err != nil {
+				panic(fmt.Sprintf("config: bad default %q for int field %s: %v", tag, t.Field(i).Name, err))
+			}
+			f.SetInt(n)
+		case reflect.Bool:
+			b, err := strconv.ParseBool(tag)
+			if err != nil {
+				panic(fmt.Sprintf("config: bad default %q for bool field %s: %v", tag, t.Field(i).Name, err))
+			}
+			f.SetBool(b)
+		}
 	}
+	return s
 }
 
 // Init loads settings from ticketsDir and stores them in Current. It must be
