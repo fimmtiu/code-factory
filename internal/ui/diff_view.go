@@ -495,6 +495,14 @@ func (v DiffView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return v, nil
 
 	case tea.KeyMsg:
+		// T and E work on both screens.
+		switch msg.String() {
+		case "t", "T":
+			return v.openTerminal()
+		case "e", "E":
+			return v.openEditorNonblocking()
+		}
+
 		if v.viewer != nil {
 			if isViewerExitKey(msg) {
 				v.viewer = nil
@@ -528,10 +536,6 @@ func (v DiffView) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		v.extendRangeUp(1)
 	case "tab", "enter":
 		return v.switchToDiffViewer()
-	case "t", "T":
-		return v.openTerminal()
-	case "e", "E":
-		return v.openEditorNonblocking()
 	default:
 		return v, nil
 	}

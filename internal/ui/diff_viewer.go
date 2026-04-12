@@ -336,6 +336,8 @@ func (m *DiffViewerModel) KeyBindings() []KeyBinding {
 		{Key: "b/Space", Description: "Page up/down"},
 		{Key: "c", Description: "Collapse/expand file"},
 		{Key: "C", Description: "Collapse/expand all"},
+		{Key: "T", Description: "Open terminal in worktree"},
+		{Key: "E", Description: "Open worktree in Cursor"},
 		{Key: "Tab/Esc/Enter", Description: "Back to selector"},
 	}
 }
