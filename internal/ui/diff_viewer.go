@@ -149,6 +149,30 @@ func (m *DiffViewerModel) toggleCollapse() {
 	m.clampScroll()
 }
 
+// toggleCollapseAll collapses all files if any are expanded, or expands all
+// files if all are already collapsed.
+func (m *DiffViewerModel) toggleCollapseAll() {
+	if len(m.files) == 0 {
+		return
+	}
+	// Determine target state: collapse all unless every collapsible file is
+	// already collapsed.
+	allCollapsed := true
+	for i, f := range m.files {
+		if len(f.Hunks) > 0 && !m.collapsed[i] {
+			allCollapsed = false
+			break
+		}
+	}
+	target := !allCollapsed
+	for i, f := range m.files {
+		if len(f.Hunks) > 0 {
+			m.collapsed[i] = target
+		}
+	}
+	m.rerender()
+}
+
 // rerender re-renders the diff text from the stored files and collapse state.
 func (m *DiffViewerModel) rerender() {
 	w := m.paneWidth - viewBorderOverhead
@@ -204,8 +228,10 @@ func (m *DiffViewerModel) handleKey(msg tea.KeyMsg) tea.Cmd {
 		m.scrollUp(m.paneHeight)
 	case "pgdown", " ":
 		m.scrollDown(m.paneHeight)
-	case "c", "C":
+	case "c":
 		m.toggleCollapse()
+	case "C":
+		m.toggleCollapseAll()
 	}
 	return nil
 }
@@ -308,7 +334,8 @@ func (m *DiffViewerModel) KeyBindings() []KeyBinding {
 	return []KeyBinding{
 		{Key: "↑/↓", Description: "Scroll"},
 		{Key: "b/Space", Description: "Page up/down"},
-		{Key: "C", Description: "Collapse/expand file"},
+		{Key: "c", Description: "Collapse/expand file"},
+		{Key: "C", Description: "Collapse/expand all"},
 		{Key: "Tab/Esc/Enter", Description: "Back to selector"},
 	}
 }
