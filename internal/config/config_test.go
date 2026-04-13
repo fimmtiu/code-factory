@@ -13,6 +13,9 @@ func TestDefault(t *testing.T) {
 	if s.StaleThresholdMinutes != 30 {
 		t.Errorf("expected StaleThresholdMinutes=30, got %d", s.StaleThresholdMinutes)
 	}
+	if s.TerminalTheme != "tan" {
+		t.Errorf("expected TerminalTheme=tan, got %q", s.TerminalTheme)
+	}
 }
 
 func TestLoadFromEmptyDir(t *testing.T) {
@@ -93,6 +96,9 @@ func TestJSONTags(t *testing.T) {
 	}
 	if _, ok := raw["stale_threshold_minutes"]; !ok {
 		t.Error("expected key stale_threshold_minutes in JSON output")
+	}
+	if _, ok := raw["terminal_theme"]; !ok {
+		t.Error("expected key terminal_theme in JSON output")
 	}
 	if _, ok := raw["exit_after_minutes"]; ok {
 		t.Error("unexpected key exit_after_minutes in JSON output")

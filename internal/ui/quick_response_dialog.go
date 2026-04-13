@@ -10,6 +10,7 @@ import (
 	"github.com/fimmtiu/code-factory/internal/db"
 	"github.com/fimmtiu/code-factory/internal/models"
 	"github.com/fimmtiu/code-factory/internal/storage"
+	"github.com/fimmtiu/code-factory/internal/ui/theme"
 	"github.com/fimmtiu/code-factory/internal/util"
 	"github.com/fimmtiu/code-factory/internal/worker"
 )
@@ -183,11 +184,11 @@ func respondToAgentViaEditor(wu *models.WorkUnit, database *db.DB, pool *worker.
 func (d QuickResponseDialog) View() string {
 	var sb strings.Builder
 
-	sb.WriteString(dialogTitleStyle.Render("Agent Output — " + d.wu.Identifier))
+	sb.WriteString(theme.Current().DialogTitleStyle.Render("Agent Output — " + d.wu.Identifier))
 	sb.WriteString("\n")
 
 	for _, line := range d.lines {
-		sb.WriteString(quickResponseOutputStyle.Render(line))
+		sb.WriteString(theme.Current().QuickResponseOutputStyle.Render(line))
 		sb.WriteString("\n")
 	}
 
@@ -201,14 +202,14 @@ func (d QuickResponseDialog) View() string {
 	} else {
 		inputContent = d.input + "█"
 	}
-	inputWidth := d.width - dialogBoxStyle.GetHorizontalFrameSize() - quickResponseInputStyle.GetHorizontalFrameSize()
+	inputWidth := d.width - theme.Current().DialogBoxStyle.GetHorizontalFrameSize() - theme.Current().QuickResponseInputStyle.GetHorizontalFrameSize()
 	if inputWidth < 1 {
 		inputWidth = 1
 	}
-	sb.WriteString(quickResponseInputStyle.Width(inputWidth).Render(inputContent))
+	sb.WriteString(theme.Current().QuickResponseInputStyle.Width(inputWidth).Render(inputContent))
 	sb.WriteString("\n\n")
 
-	sb.WriteString(helpHintStyle.Render(buildHint("Enter", "send", "Ctrl+R", "edit in editor", "Esc", "cancel")))
+	sb.WriteString(theme.Current().HelpHintStyle.Render(buildHint("Enter", "send", "Ctrl+R", "edit in editor", "Esc", "cancel")))
 
-	return dialogBoxStyle.Render(sb.String())
+	return theme.Current().DialogBoxStyle.Render(sb.String())
 }

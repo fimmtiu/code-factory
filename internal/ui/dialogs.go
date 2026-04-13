@@ -5,6 +5,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+
+	"github.com/fimmtiu/code-factory/internal/ui/theme"
 )
 
 // dialog is an interface satisfied by all modal dialogs.
@@ -67,21 +69,21 @@ func (d QuitDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (d QuitDialog) View() string {
-	cancelBtn := buttonNormalStyle.Render("Cancel")
-	quitBtn := buttonNormalStyle.Render("Quit")
+	cancelBtn := theme.Current().ButtonNormalStyle.Render("Cancel")
+	quitBtn := theme.Current().ButtonNormalStyle.Render("Quit")
 	if d.focused == quitFocusCancel {
-		cancelBtn = buttonFocusedStyle.Render("Cancel")
+		cancelBtn = theme.Current().ButtonFocusedStyle.Render("Cancel")
 	} else {
-		quitBtn = buttonFocusedStyle.Render("Quit")
+		quitBtn = theme.Current().ButtonFocusedStyle.Render("Quit")
 	}
 
 	body := lipgloss.JoinVertical(lipgloss.Left,
-		dialogTitleStyle.Render("Really quit?"),
+		theme.Current().DialogTitleStyle.Render("Really quit?"),
 		"There are still active workers. Really quit?",
 		"",
 		lipgloss.JoinHorizontal(lipgloss.Top, cancelBtn, "  ", quitBtn),
 	)
-	return dialogBoxStyle.Render(body)
+	return theme.Current().DialogBoxStyle.Render(body)
 }
 
 // ── Help dialog ───────────────────────────────────────────────────────────────
@@ -125,19 +127,19 @@ func (d HelpDialog) View() string {
 			sb.WriteString("\n")
 			continue
 		}
-		sb.WriteString(detailLabelStyle.Render(kb.Key))
+		sb.WriteString(theme.Current().DetailLabelStyle.Render(kb.Key))
 		sb.WriteString("  ")
 		sb.WriteString(kb.Description)
 		sb.WriteString("\n")
 	}
 
 	body := lipgloss.JoinVertical(lipgloss.Left,
-		dialogTitleStyle.Render("Help"),
+		theme.Current().DialogTitleStyle.Render("Help"),
 		strings.TrimRight(sb.String(), "\n"),
 		"",
-		buttonFocusedStyle.Render("Okay"),
+		theme.Current().ButtonFocusedStyle.Render("Okay"),
 	)
-	return dialogBoxStyle.Render(body)
+	return theme.Current().DialogBoxStyle.Render(body)
 }
 
 // ── Merge conflict dialog ─────────────────────────────────────────────────────
@@ -186,24 +188,24 @@ func (d MergeConflictDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (d MergeConflictDialog) View() string {
-	fixBtn := buttonNormalStyle.Render("Fix")
-	ignoreBtn := buttonNormalStyle.Render("Ignore")
+	fixBtn := theme.Current().ButtonNormalStyle.Render("Fix")
+	ignoreBtn := theme.Current().ButtonNormalStyle.Render("Ignore")
 	if d.focused == mergeFocusFix {
-		fixBtn = buttonFocusedStyle.Render("Fix")
+		fixBtn = theme.Current().ButtonFocusedStyle.Render("Fix")
 	} else {
-		ignoreBtn = buttonFocusedStyle.Render("Ignore")
+		ignoreBtn = theme.Current().ButtonFocusedStyle.Render("Ignore")
 	}
 
 	body := lipgloss.JoinVertical(lipgloss.Left,
-		dialogTitleStyle.Render("Merge Conflict"),
-		"Merging "+detailLabelStyle.Render(d.branch)+" failed in:",
-		detailLabelStyle.Render(d.worktreePath),
+		theme.Current().DialogTitleStyle.Render("Merge Conflict"),
+		"Merging "+theme.Current().DetailLabelStyle.Render(d.branch)+" failed in:",
+		theme.Current().DetailLabelStyle.Render(d.worktreePath),
 		"",
 		"Resolve the conflict, then try approving again.",
 		"",
 		lipgloss.JoinHorizontal(lipgloss.Top, fixBtn, "  ", ignoreBtn),
 	)
-	return dialogBoxStyle.Render(body)
+	return theme.Current().DialogBoxStyle.Render(body)
 }
 
 // ── dismissDialogMsg ──────────────────────────────────────────────────────────

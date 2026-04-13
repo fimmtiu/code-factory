@@ -13,6 +13,7 @@ import (
 	"github.com/fimmtiu/code-factory/internal/db"
 	"github.com/fimmtiu/code-factory/internal/models"
 	"github.com/fimmtiu/code-factory/internal/storage"
+	"github.com/fimmtiu/code-factory/internal/ui/theme"
 	"github.com/fimmtiu/code-factory/internal/util"
 )
 
@@ -589,7 +590,7 @@ func (v ProjectView) View() string {
 	if statusInnerW < 1 {
 		statusInnerW = 1
 	}
-	statusPane := statusPaneStyle.
+	statusPane := theme.Current().StatusPaneStyle.
 		Width(statusInnerW).
 		Height(topH - 2).
 		Render(statusContent)
@@ -600,9 +601,9 @@ func (v ProjectView) View() string {
 	// ── Tree pane ──
 	treeContent := v.renderTreeContentFor(nodes)
 	treeInnerW := v.treeWidth()
-	treeBorderStyle := unfocusedBorderStyle
+	treeBorderStyle := theme.Current().UnfocusedBorderStyle
 	if v.focus == focusTree {
-		treeBorderStyle = focusedBorderStyle
+		treeBorderStyle = theme.Current().FocusedBorderStyle
 	}
 	treePane := treeBorderStyle.
 		Width(treeInnerW).
@@ -622,9 +623,9 @@ func (v ProjectView) View() string {
 	if detailInnerW < 1 {
 		detailInnerW = 1
 	}
-	detailBorderStyle := unfocusedBorderStyle
+	detailBorderStyle := theme.Current().UnfocusedBorderStyle
 	if v.focus == focusDetail {
-		detailBorderStyle = focusedBorderStyle
+		detailBorderStyle = theme.Current().FocusedBorderStyle
 	}
 	body := v.height - chromeHeight
 	if body < 4 {
@@ -651,8 +652,8 @@ func renderProgressBar(pct int) string {
 		filled = barWidth
 	}
 	empty := barWidth - filled
-	bar := progressFilledStyle.Render(strings.Repeat("█", filled)) +
-		progressEmptyStyle.Render(strings.Repeat("░", empty))
+	bar := theme.Current().ProgressFilledStyle.Render(strings.Repeat("█", filled)) +
+		theme.Current().ProgressEmptyStyle.Render(strings.Repeat("░", empty))
 	return fmt.Sprintf("%s %d%%", bar, pct)
 }
 
@@ -666,7 +667,7 @@ func (v ProjectView) renderStatusContent() string {
 		pct = done * 100 / total
 	}
 	stats := fmt.Sprintf("Tickets: %d\nOpen:    %d\n", total, open) + renderProgressBar(pct)
-	return repoNameStyle.Render(v.repoName) + "\n\n" + stats
+	return theme.Current().RepoNameStyle.Render(v.repoName) + "\n\n" + stats
 }
 
 // renderTreeContent returns the text content for the tree pane.
@@ -714,7 +715,7 @@ func (v ProjectView) renderTreeRow(node treeNode, idx int, isLast bool, w int) s
 	styledBadge := ""
 	if !node.wu.IsProject {
 		badge = "[" + string(node.wu.Phase) + "]"
-		if bs, ok := phaseBadgeStyles[node.wu.Phase]; ok {
+		if bs, ok := theme.Current().PhaseBadgeStyles[node.wu.Phase]; ok {
 			styledBadge = bs.Render(badge)
 		} else {
 			styledBadge = badge
@@ -755,7 +756,7 @@ func (v ProjectView) renderTreeRow(node treeNode, idx int, isLast bool, w int) s
 	}
 	pad := strings.Repeat(" ", padLen)
 	if idx == v.treeSelected {
-		pad = treeSelectedStyle.Render(pad)
+		pad = theme.Current().TreeSelectedStyle.Render(pad)
 	}
 	return styledLabel + pad + styledBadge
 }
@@ -766,13 +767,13 @@ func (v ProjectView) treeNodeStyle(node treeNode, idx int) lipgloss.Style {
 	var style lipgloss.Style
 	switch {
 	case idx == v.treeSelected:
-		style = treeSelectedStyle
+		style = theme.Current().TreeSelectedStyle
 	case node.wu.Phase == models.PhaseBlocked:
-		style = treeBlockedStyle
+		style = theme.Current().TreeBlockedStyle
 	case node.wu.Phase == models.PhaseDone || (node.wu.IsProject && node.wu.Phase == models.ProjectPhaseDone):
-		style = treeDoneStyle
+		style = theme.Current().TreeDoneStyle
 	default:
-		style = treeDefaultStyle
+		style = theme.Current().TreeDefaultStyle
 	}
 	if node.wu.IsProject {
 		style = style.Bold(true)
@@ -800,7 +801,7 @@ func buildDetailLines(wu *models.WorkUnit, width int) []string {
 	var lines []string
 
 	addLabel := func(label, value string) {
-		lines = append(lines, detailLabelStyle.Render(label+":")+" "+value)
+		lines = append(lines, theme.Current().DetailLabelStyle.Render(label+":")+" "+value)
 	}
 
 	if wu.IsProject {
@@ -818,13 +819,13 @@ func buildDetailLines(wu *models.WorkUnit, width int) []string {
 	}
 
 	lines = append(lines, "")
-	lines = append(lines, detailLabelStyle.Render("Description:"))
+	lines = append(lines, theme.Current().DetailLabelStyle.Render("Description:"))
 	descLines := wordWrap(wu.Description, width-2)
 	lines = append(lines, descLines...)
 
 	if !wu.IsProject && len(wu.ChangeRequests) > 0 {
 		lines = append(lines, "")
-		lines = append(lines, detailLabelStyle.Render("Change Requests:"))
+		lines = append(lines, theme.Current().DetailLabelStyle.Render("Change Requests:"))
 		for _, cr := range wu.ChangeRequests {
 			lines = append(lines, fmt.Sprintf("  [%s] %s — %s (%s)", cr.Status, cr.CodeLocation, cr.Author, cr.Date.Format("2006-01-02")))
 			wrapped := wordWrap("  "+cr.Description, width-4)

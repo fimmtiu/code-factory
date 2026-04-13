@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/fimmtiu/code-factory/internal/db"
+	"github.com/fimmtiu/code-factory/internal/ui/theme"
 	"github.com/fimmtiu/code-factory/internal/worker"
 )
 
@@ -270,9 +271,9 @@ func (m Model) View() string {
 	content := m.views[m.activeView].View()
 	var leftHint string
 	if m.dialog != nil {
-		leftHint = helpHintStyle.Render(buildHint("?", "help"))
+		leftHint = theme.Current().HelpHintStyle.Render(buildHint("?", "help"))
 	} else {
-		leftHint = helpHintStyle.Render(buildHint("?", "help", "Q", "quit"))
+		leftHint = theme.Current().HelpHintStyle.Render(buildHint("?", "help", "Q", "quit"))
 	}
 	hint := leftHint
 	if m.dialog == nil {
@@ -306,7 +307,7 @@ func (m Model) View() string {
 			}
 		}
 		if len(rightPairs) > 0 {
-			right := helpHintStyle.Render(buildHint(rightPairs...))
+			right := theme.Current().HelpHintStyle.Render(buildHint(rightPairs...))
 			spacer := m.width - lipgloss.Width(leftHint) - lipgloss.Width(right)
 			if spacer < 2 {
 				spacer = 2
@@ -346,7 +347,7 @@ func (m Model) View() string {
 		if y < 0 {
 			y = 0
 		}
-		shadowLine := lipgloss.NewStyle().Background(colourTimestamp1).Render(strings.Repeat(" ", dialogW))
+		shadowLine := theme.Current().DialogShadowStyle.Render(strings.Repeat(" ", dialogW))
 		shadowLines := make([]string, dialogH)
 		for i := range shadowLines {
 			shadowLines[i] = shadowLine
@@ -359,7 +360,7 @@ func (m Model) View() string {
 	}
 
 	if m.editorWaiting {
-		waitStr := editorWaitingStyle.Render("Waiting for editor…")
+		waitStr := theme.Current().EditorWaitingStyle.Render("Waiting for editor…")
 		waitW := lipgloss.Width(waitStr)
 		waitH := strings.Count(waitStr, "\n") + 1
 		x := (m.width - waitW) / 2
@@ -376,7 +377,7 @@ func (m Model) View() string {
 	}
 
 	if m.notifText != "" {
-		notifStr := notifStyle.Render(m.notifText)
+		notifStr := theme.Current().NotifStyle.Render(m.notifText)
 		notifW := lipgloss.Width(notifStr)
 		notifH := strings.Count(notifStr, "\n") + 1
 		x := m.width - notifW
@@ -400,12 +401,12 @@ func (m Model) renderHeader() string {
 	tabs := make([]string, len(m.views))
 	for i, v := range m.views {
 		if ViewID(i) == m.activeView {
-			tabs[i] = activeTabStyle.Render(v.Label())
+			tabs[i] = theme.Current().ActiveTabStyle.Render(v.Label())
 		} else {
-			tabs[i] = inactiveTabStyle.Render(v.Label())
+			tabs[i] = theme.Current().InactiveTabStyle.Render(v.Label())
 		}
 	}
-	return headerStyle.Render(strings.Join(tabs, "  "))
+	return theme.Current().HeaderStyle.Render(strings.Join(tabs, "  "))
 }
 
 // activateViewCmd returns a command that sends an activation message for the

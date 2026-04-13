@@ -5,8 +5,10 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/fimmtiu/code-factory/internal/git"
+	"github.com/fimmtiu/code-factory/internal/ui/theme"
 )
 
 // makeCommit creates a test git.CommitEntry with the given hash and message.
@@ -922,4 +924,127 @@ func TestHintPairs_ViewerMode(t *testing.T) {
 	if !found {
 		t.Error("expected 'scroll' in viewer hint pairs")
 	}
+}
+
+// ── Theme integration tests ──────────────────────────────────────────────────
+
+// withTestTheme temporarily replaces CurrentTheme with a modified theme that
+// uses structurally distinctive styles (padding, not just colour), restoring
+// the original when the test completes. Padding differences are visible even
+// in no-colour test environments.
+func withTestTheme(t *testing.T) {
+	t.Helper()
+	original := theme.Current()
+	t.Cleanup(func() { theme.SetCurrent(original) })
+
+	custom := theme.Tan()
+	custom.DiffSelectedStyle = lipgloss.NewStyle().Padding(0, 3)
+	custom.CommitHashStyle = lipgloss.NewStyle().Padding(0, 3)
+	custom.DiffSeparatorStyle = lipgloss.NewStyle().Padding(0, 3)
+	custom.DiffRangeStyle = lipgloss.NewStyle().Padding(0, 3)
+	custom.EmptyStateStyle = lipgloss.NewStyle().Padding(0, 3)
+	custom.DiffErrorStyle = lipgloss.NewStyle().Padding(0, 3)
+	custom.DiffLabelBold = lipgloss.NewStyle().Padding(0, 3)
+	custom.ViewPaneStyle = lipgloss.NewStyle().Padding(1, 1)
+	custom.DiffStatusBarStyle = lipgloss.NewStyle().Padding(0, 3)
+	theme.SetCurrent(custom)
+}
+
+// TestRenderCommitRow_UsesThemeSelectedStyle verifies that the cursor row uses
+// theme.Current().DiffSelectedStyle.
+func TestRenderCommitRow_UsesThemeSelectedStyle(t *testing.T) {
+	rows := buildCommitRows([]git.CommitEntry{
+		makeCommit("aaaa1111", "first commit"),
+		makeCommit("bbbb2222", "second commit"),
+	}, -1, false)
+	v := makeDiffViewWithRows(rows)
+	v.cursor = 0
+
+	assertThemeChangesOutput(t, withTestTheme, func() string {
+		return v.renderCommitRow(0, 40, 0, 0)
+	})
+}
+
+// TestRenderCommitRow_UsesThemeRangeStyle verifies that range-selected rows
+// use theme.Current().DiffRangeStyle.
+func TestRenderCommitRow_UsesThemeRangeStyle(t *testing.T) {
+	rows := buildCommitRows([]git.CommitEntry{
+		makeCommit("aaaa1111", "first"),
+		makeCommit("bbbb2222", "second"),
+		makeCommit("cccc3333", "third"),
+	}, -1, false)
+	v := makeDiffViewWithRows(rows)
+	v.cursor = 2
+
+	assertThemeChangesOutput(t, withTestTheme, func() string {
+		return v.renderCommitRow(1, 40, 0, 2)
+	})
+}
+
+// TestRenderCommitRow_UsesThemeCommitHashStyle verifies that unselected rows
+// style the hash prefix using theme.Current().CommitHashStyle.
+func TestRenderCommitRow_UsesThemeCommitHashStyle(t *testing.T) {
+	rows := buildCommitRows([]git.CommitEntry{
+		makeCommit("aaaa1111", "first"),
+		makeCommit("bbbb2222", "second"),
+	}, -1, false)
+	v := makeDiffViewWithRows(rows)
+	v.cursor = 0
+
+	assertThemeChangesOutput(t, withTestTheme, func() string {
+		// Row 1 is unselected (cursor is at 0, range is 0..0)
+		return v.renderCommitRow(1, 40, 0, 0)
+	})
+}
+
+// TestRenderCommitRow_UsesThemeSeparatorStyle verifies that separator rows
+// use theme.Current().DiffSeparatorStyle.
+func TestRenderCommitRow_UsesThemeSeparatorStyle(t *testing.T) {
+	rows := buildCommitRows([]git.CommitEntry{
+		makeCommit("aaaa", "on branch"),
+		makeCommit("bbbb", "fork-point"),
+	}, 1, false)
+	// rows: aaaa(0), separator(1), bbbb(2)
+	v := makeDiffViewWithRows(rows)
+
+	assertThemeChangesOutput(t, withTestTheme, func() string {
+		return v.renderCommitRow(1, 40, 0, 0)
+	})
+}
+
+// TestRenderDiffLabel_UsesThemeLabelBold verifies that renderDiffLabel uses
+// theme.Current().DiffLabelBold.
+func TestRenderDiffLabel_UsesThemeLabelBold(t *testing.T) {
+	assertThemeChangesOutput(t, withTestTheme, func() string {
+		return renderDiffLabel("proj/ticket", "implement", false)
+	})
+}
+
+// TestRenderStatusBar_UsesThemeErrorStyle verifies that the error message in
+// the status bar uses theme.Current().DiffErrorStyle.
+func TestRenderStatusBar_UsesThemeErrorStyle(t *testing.T) {
+	v := DiffView{
+		identifier: "proj/ticket",
+		phase:      "implement",
+		width:      80,
+		height:     24,
+		errorMsg:   "test error",
+	}
+
+	assertThemeChangesOutput(t, withTestTheme, func() string {
+		return v.renderStatusBar(80)
+	})
+}
+
+// TestDiffView_EmptyStateUsesTheme verifies that the "No ticket selected"
+// empty state uses theme.Current().EmptyStateStyle and ViewPaneStyle.
+func TestDiffView_EmptyStateUsesTheme(t *testing.T) {
+	v := DiffView{
+		width:  80,
+		height: 24,
+	}
+
+	assertThemeChangesOutput(t, withTestTheme, func() string {
+		return v.View()
+	})
 }

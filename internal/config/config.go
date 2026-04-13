@@ -46,6 +46,10 @@ type Settings struct {
 	// Effort is the effort level passed to Claude (e.g. "low", "normal",
 	// "high"). Empty string uses Claude's default.
 	Effort string `json:"effort" default:"high"`
+
+	// TerminalTheme selects the colour scheme. See theme.Init for valid
+	// values. Defaults to "tan".
+	TerminalTheme string `json:"terminal_theme" default:"tan"`
 }
 
 // ModelForPhase returns the configured model for the given ticket phase,

@@ -4,6 +4,8 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/fimmtiu/code-factory/internal/ui/theme"
 )
 
 // buildHint renders alternating key/description pairs with each key bolded.
@@ -12,10 +14,10 @@ func buildHint(pairs ...string) string {
 	var sb strings.Builder
 	for i := 0; i+1 < len(pairs); i += 2 {
 		if i > 0 {
-			sb.WriteString(hintDescStyle.Render("  "))
+			sb.WriteString(theme.Current().HintDescStyle.Render("  "))
 		}
-		sb.WriteString(hintKeyStyle.Render(pairs[i]))
-		sb.WriteString(hintDescStyle.Render(" " + pairs[i+1]))
+		sb.WriteString(theme.Current().HintKeyStyle.Render(pairs[i]))
+		sb.WriteString(theme.Current().HintDescStyle.Render(" " + pairs[i+1]))
 	}
 	return sb.String()
 }

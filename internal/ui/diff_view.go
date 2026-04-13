@@ -11,6 +11,7 @@ import (
 	"github.com/fimmtiu/code-factory/internal/git"
 	"github.com/fimmtiu/code-factory/internal/models"
 	"github.com/fimmtiu/code-factory/internal/storage"
+	"github.com/fimmtiu/code-factory/internal/ui/theme"
 	"github.com/fimmtiu/code-factory/internal/util"
 )
 
@@ -609,7 +610,7 @@ func (v DiffView) View() string {
 	if v.viewer != nil {
 		innerW := v.width - viewBorderOverhead
 		statusBar := renderViewerStatusBar(innerW, v.identifier, v.phase, v.isProject, v.viewerStartHash, v.viewerEndHash, v.viewer)
-		styledBar := diffStatusBarStyle.Width(innerW).Render(statusBar)
+		styledBar := theme.Current().DiffStatusBarStyle.Width(innerW).Render(statusBar)
 		pane := connectPaneTop(v.viewer.renderPane(), true, true)
 		return lipgloss.JoinVertical(lipgloss.Left, styledBar, pane)
 	}
@@ -620,14 +621,14 @@ func (v DiffView) View() string {
 		if h < 1 {
 			h = 1
 		}
-		return viewPaneStyle.Width(paneW).Height(h).
+		return theme.Current().ViewPaneStyle.Width(paneW).Height(h).
 			Render(lipgloss.Place(paneW, h, lipgloss.Center, lipgloss.Center,
-				emptyStateStyle.Render("No ticket selected")))
+				theme.Current().EmptyStateStyle.Render("No ticket selected")))
 	}
 
 	innerW := v.width - viewBorderOverhead
 	statusBar := v.renderStatusBar(innerW)
-	styledBar := diffStatusBarStyle.Width(innerW).Render(statusBar)
+	styledBar := theme.Current().DiffStatusBarStyle.Width(innerW).Render(statusBar)
 	leftPane := connectPaneTop(v.renderLeftPane(), true, false)
 	rightPane := connectPaneTop(v.renderRightPane(), false, true)
 	panes := lipgloss.JoinHorizontal(lipgloss.Top, leftPane, rightPane)
@@ -661,7 +662,7 @@ func renderDiffLabel(identifier, phase string, isProject bool) string {
 	if isProject {
 		kind = "Project"
 	}
-	boldPart := diffLabelBold.Render(fmt.Sprintf("%s: %s", kind, identifier))
+	boldPart := theme.Current().DiffLabelBold.Render(fmt.Sprintf("%s: %s", kind, identifier))
 	return fmt.Sprintf("%s (%s)", boldPart, phase)
 }
 
@@ -671,7 +672,7 @@ func (v DiffView) renderStatusBar(width int) string {
 	left := renderDiffLabel(v.identifier, v.phase, v.isProject)
 
 	if v.errorMsg != "" {
-		errText := diffErrorStyle.Render(v.errorMsg)
+		errText := theme.Current().DiffErrorStyle.Render(v.errorMsg)
 		spacer := width - lipgloss.Width(left) - lipgloss.Width(errText)
 		if spacer < 2 {
 			spacer = 2
@@ -702,9 +703,9 @@ func (v DiffView) renderLeftPane() string {
 	h := v.commitListHeight()
 
 	if len(v.rows) == 0 {
-		return viewPaneStyle.Width(w).Height(h).
+		return theme.Current().ViewPaneStyle.Width(w).Height(h).
 			Render(lipgloss.Place(w, h, lipgloss.Center, lipgloss.Center,
-				emptyStateStyle.Render("No commits")))
+				theme.Current().EmptyStateStyle.Render("No commits")))
 	}
 
 	lo, hi := v.selectionRange()
@@ -721,28 +722,28 @@ func (v DiffView) renderLeftPane() string {
 		}
 	}
 
-	return viewPaneStyle.Width(w).Height(h).Render(clipLines(sb.String(), h))
+	return theme.Current().ViewPaneStyle.Width(w).Height(h).Render(clipLines(sb.String(), h))
 }
 
 // renderCommitRow renders a single row in the commit list with appropriate styling.
 func (v DiffView) renderCommitRow(i, w, lo, hi int) string {
 	row := v.rows[i]
 	if row.separator {
-		return diffSeparatorStyle.Render(strings.Repeat("─", w))
+		return theme.Current().DiffSeparatorStyle.Render(strings.Repeat("─", w))
 	}
 	label := truncateLine(renderCommitLabel(row.commit), w)
 	if i == v.cursor {
-		return diffSelectedStyle.Width(w).Render(label)
+		return theme.Current().DiffSelectedStyle.Width(w).Render(label)
 	}
 	if i >= lo && i <= hi {
-		return diffRangeStyle.Width(w).Render(label)
+		return theme.Current().DiffRangeStyle.Width(w).Render(label)
 	}
 	// Style the hash prefix for unselected rows.
 	h := row.commit.Hash
 	if h != git.UncommittedHash && len(h) > 4 {
 		h = h[:4]
 	}
-	return commitHashStyle.Render(h) + label[len(h):]
+	return theme.Current().CommitHashStyle.Render(h) + label[len(h):]
 }
 
 // renderRightPane renders the git show --stat preview pane.
@@ -755,7 +756,7 @@ func (v DiffView) renderRightPane() string {
 
 	content := v.statOutput
 	if content == "" {
-		content = emptyStateStyle.Render("(no preview)")
+		content = theme.Current().EmptyStateStyle.Render("(no preview)")
 	}
 
 	// Strip leading spaces (git --stat indents each line) and truncate
@@ -767,7 +768,7 @@ func (v DiffView) renderRightPane() string {
 	}
 	content = strings.Join(lines, "\n")
 
-	return viewPaneStyle.Width(w).Height(h).Render(clipLines(content, h))
+	return theme.Current().ViewPaneStyle.Width(w).Height(h).Render(clipLines(content, h))
 }
 
 // ── KeyBindings ──────────────────────────────────────────────────────────────

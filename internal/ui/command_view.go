@@ -16,6 +16,7 @@ import (
 	"github.com/fimmtiu/code-factory/internal/db"
 	"github.com/fimmtiu/code-factory/internal/models"
 	"github.com/fimmtiu/code-factory/internal/storage"
+	"github.com/fimmtiu/code-factory/internal/ui/theme"
 	"github.com/fimmtiu/code-factory/internal/util"
 	"github.com/fimmtiu/code-factory/internal/worker"
 	"github.com/fimmtiu/code-factory/internal/workflow"
@@ -487,13 +488,13 @@ func (v CommandView) View() string {
 	var sb strings.Builder
 
 	if v.errorMsg != "" {
-		sb.WriteString(cmdErrorStyle.Render(v.errorMsg))
+		sb.WriteString(theme.Current().CmdErrorStyle.Render(v.errorMsg))
 		sb.WriteString("\n")
 	}
 
 	if len(v.rows) == 0 {
-		return viewPaneStyle.Width(v.width - viewBorderOverhead).Height(v.listHeight()).
-			Render(lipgloss.Place(v.width-viewBorderOverhead, v.listHeight(), lipgloss.Center, lipgloss.Center, emptyStateStyle.Render("No actionable tickets")))
+		return theme.Current().ViewPaneStyle.Width(v.width - viewBorderOverhead).Height(v.listHeight()).
+			Render(lipgloss.Place(v.width-viewBorderOverhead, v.listHeight(), lipgloss.Center, lipgloss.Center, theme.Current().EmptyStateStyle.Render("No actionable tickets")))
 	}
 
 	h := v.listHeight()
@@ -515,7 +516,7 @@ func (v CommandView) View() string {
 			sb.WriteString("\n")
 		}
 	}
-	return viewPaneStyle.Width(v.width - viewBorderOverhead).Height(v.listHeight()).Render(clipLines(sb.String(), v.listHeight()))
+	return theme.Current().ViewPaneStyle.Width(v.width - viewBorderOverhead).Height(v.listHeight()).Render(clipLines(sb.String(), v.listHeight()))
 }
 
 // renderRow formats one ticket row in tabular style:
@@ -576,13 +577,13 @@ func (v CommandView) renderRow(wu *models.WorkUnit, selected bool) string {
 	line := id + right
 
 	if selected {
-		return cmdSelectedStyle.Width(v.width - viewBorderOverhead).Render(line)
+		return theme.Current().CmdSelectedStyle.Width(v.width - viewBorderOverhead).Render(line)
 	}
 	switch wu.Status {
 	case models.StatusNeedsAttention:
-		return cmdNeedsAttentionStyle.Render(line)
+		return theme.Current().CmdNeedsAttentionStyle.Render(line)
 	case models.StatusUserReview:
-		return cmdUserReviewStyle.Render(line)
+		return theme.Current().CmdUserReviewStyle.Render(line)
 	}
 	return line
 }

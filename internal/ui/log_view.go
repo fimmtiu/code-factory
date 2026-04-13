@@ -10,28 +10,9 @@ import (
 
 	"github.com/fimmtiu/code-factory/internal/db"
 	"github.com/fimmtiu/code-factory/internal/models"
+	"github.com/fimmtiu/code-factory/internal/ui/theme"
 	"github.com/fimmtiu/code-factory/internal/util"
 )
-
-// logTimestampStyle returns a style that fades the timestamp colour based on
-// how long ago the entry was created:
-//
-//	< 1 min  → bright white ("255")
-//	1–5 min  → normal grey  ("252")
-//	5–30 min → dimmer grey  ("245")
-//	> 30 min → very dim grey ("238")
-func logTimestampStyle(age time.Duration) lipgloss.Style {
-	switch {
-	case age < time.Minute:
-		return lipgloss.NewStyle().Foreground(colourTimestamp1)
-	case age < 5*time.Minute:
-		return lipgloss.NewStyle().Foreground(colourTimestamp3)
-	case age < 30*time.Minute:
-		return lipgloss.NewStyle().Foreground(colourSubtleGrey)
-	default:
-		return lipgloss.NewStyle().Foreground(colourDimGrey)
-	}
-}
 
 // Column widths for the three-column layout.
 const (
@@ -384,8 +365,8 @@ func (v LogView) View() string {
 		if v.filterText != "" {
 			emptyMsg = "No matching entries"
 		}
-		return viewPaneStyle.Width(paneW).Height(v.listHeight()).
-			Render(lipgloss.Place(paneW, v.listHeight(), lipgloss.Center, lipgloss.Center, emptyStateStyle.Render(emptyMsg)))
+		return theme.Current().ViewPaneStyle.Width(paneW).Height(v.listHeight()).
+			Render(lipgloss.Place(paneW, v.listHeight(), lipgloss.Center, lipgloss.Center, theme.Current().EmptyStateStyle.Render(emptyMsg)))
 	}
 
 	h := v.listHeight()
@@ -402,7 +383,7 @@ func (v LogView) View() string {
 			sb.WriteString("\n")
 		}
 	}
-	return viewPaneStyle.Width(paneW).Height(h).Render(clipLines(sb.String(), h))
+	return theme.Current().ViewPaneStyle.Width(paneW).Height(h).Render(clipLines(sb.String(), h))
 }
 
 // renderRow formats one log entry as a three-column row.
@@ -440,47 +421,58 @@ func (v LogView) renderRow(e *models.LogEntry, selected bool) string {
 	)
 
 	if selected {
-		return logSelectedStyle.Width(v.width - viewBorderOverhead).Render(line)
+		return theme.Current().LogSelectedStyle.Width(v.width - viewBorderOverhead).Render(line)
 	}
 
 	// For non-selected rows, colour the timestamp by age and the message
 	// segment by message type for quick visual scanning.
 	age := now.Sub(e.Timestamp)
-	tsStyled := logTimestampStyle(age).Render(fmt.Sprintf("%-*s", logTimestampWidth, ts))
+	tsStyled := theme.Current().LogTimestampStyle(age).Render(fmt.Sprintf("%-*s", logTimestampWidth, ts))
 	rest := fmt.Sprintf(" %s%s%s", workerStr, gap, msg)
 	msgStyle := lipgloss.NewStyle().Foreground(logMessageColor(e.Message))
 	return tsStyled + msgStyle.Render(rest)
 }
 
-// logMessageColor returns the foreground colour for a log message based on its
-// content, allowing quick visual scanning of the log by message type.
-func logMessageColor(msg string) lipgloss.Color {
+// logMessageCategory classifies a log message into a semantic category based
+// on its prefix. This is domain logic owned by the log view; themes only
+// map categories to colours.
+func logMessageCategory(msg string) models.LogCategory {
 	switch {
-	// [mock] variants first so they don't fall through to the general cases.
 	case strings.HasPrefix(msg, "[mock] error"):
-		return colourLogError
+		return models.LogCategoryError
 	case strings.HasPrefix(msg, "[mock] asking user"):
-		return colourLogPermReq
+		return models.LogCategoryPermReq
 	case strings.HasPrefix(msg, "[mock] received response"):
-		return colourLogPermResp
+		return models.LogCategoryPermResp
 	case strings.HasPrefix(msg, "[mock] committed"):
-		return colourLogCommit
+		return models.LogCategoryCommit
 	case strings.HasPrefix(msg, "claimed"):
-		return colourLogClaim
+		return models.LogCategoryClaim
 	case strings.HasPrefix(msg, "released"),
 		strings.HasPrefix(msg, "housekeeping: released"):
-		return colourLogRelease
+		return models.LogCategoryRelease
 	case strings.HasPrefix(msg, "error"),
 		strings.HasPrefix(msg, "ACP error"),
 		strings.HasPrefix(msg, "housekeeping: error"):
-		return colourLogError
+		return models.LogCategoryError
 	case strings.HasPrefix(msg, "permission request"):
-		return colourLogPermReq
+		return models.LogCategoryPermReq
 	case strings.HasPrefix(msg, "permission response"):
-		return colourLogPermResp
+		return models.LogCategoryPermResp
 	default:
-		return colourMidGrey
+		return models.LogCategoryDefault
 	}
+}
+
+// logMessageColor returns the foreground colour for a log message by
+// classifying it into a category and looking up the colour from the theme.
+// buildTheme guarantees every LogCategory has an entry, so a missing key
+// indicates a programming error and the zero-value colour surfaces it.
+func logMessageColor(msg string) lipgloss.Color {
+	if theme.Current() == nil {
+		return lipgloss.Color("246") // mid-grey fallback
+	}
+	return theme.Current().LogCategoryColors[logMessageCategory(msg)]
 }
 
 // formatLogTimestamp formats a timestamp compactly: "15:04:05" for today,

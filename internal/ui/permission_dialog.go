@@ -11,6 +11,7 @@ import (
 
 	"github.com/fimmtiu/code-factory/internal/db"
 	"github.com/fimmtiu/code-factory/internal/models"
+	"github.com/fimmtiu/code-factory/internal/ui/theme"
 	"github.com/fimmtiu/code-factory/internal/worker"
 )
 
@@ -111,7 +112,7 @@ func (d PermissionDialog) sendResponseCmd(kind string) tea.Cmd {
 }
 
 func (d PermissionDialog) View() string {
-	// dialogBoxStyle has Border (2) + Padding (4) = 6 horizontal frame chars.
+	// DialogBoxStyle has Border (2) + Padding (4) = 6 horizontal frame chars.
 	// Leave 4 chars of margin (2 per side) between dialog and screen edge.
 	contentWidth := d.width - 10
 	if contentWidth < 20 {
@@ -120,7 +121,7 @@ func (d PermissionDialog) View() string {
 
 	var sb strings.Builder
 
-	sb.WriteString(dialogTitleStyle.Render("Permission Request"))
+	sb.WriteString(theme.Current().DialogTitleStyle.Render("Permission Request"))
 	sb.WriteString("\n")
 
 	if d.title != "" {
@@ -133,15 +134,15 @@ func (d PermissionDialog) View() string {
 		number := strconv.Itoa(i + 1)
 		label := fmt.Sprintf("%s  %s", number, opt.Name)
 		if i == d.selected {
-			sb.WriteString(permOptionSelectedStyle.Render(label))
+			sb.WriteString(theme.Current().PermOptionSelectedStyle.Render(label))
 		} else {
-			sb.WriteString(permOptionNormalStyle.Render(label))
+			sb.WriteString(theme.Current().PermOptionNormalStyle.Render(label))
 		}
 		sb.WriteString("\n")
 	}
 
 	sb.WriteString("\n")
-	sb.WriteString(helpHintStyle.Render(buildHint("1-9", "pick", "↑↓", "navigate", "Enter", "confirm", "Esc", "cancel")))
+	sb.WriteString(theme.Current().HelpHintStyle.Render(buildHint("1-9", "pick", "↑↓", "navigate", "Enter", "confirm", "Esc", "cancel")))
 
-	return dialogBoxStyle.Width(contentWidth).Render(sb.String())
+	return theme.Current().DialogBoxStyle.Width(contentWidth).Render(sb.String())
 }
