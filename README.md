@@ -17,7 +17,7 @@ Each ticket moves through four phases of work:
 | `review` | Reviews the refactored changes and makes change requests |
 | `respond` | Applies any open change requests which it deems worth doing |
 
-You approve each phase transition. When all phases are done, the ticket's branch is merged into its parent project's worktree (or the repo's `main` or `master` branch) and the worktree is removed.
+You approve each phase transition. When all phases are done, the ticket's branch is merged into its parent project's worktree (or a top-level project branch) and the worktree is removed.
 
 ---
 
@@ -107,9 +107,9 @@ The TUI has five views (switch with F1–F5 or Shift+Tab):
 
 - **F1: Projects** — Hierarchical tree of all work units, with a status pane and detail view. Press Enter on a ticket to see its change requests and logfiles.
 - **F2: Commands** — Actionable tickets waiting for your input (`needs-attention`) or review (`user-review`). Press A to approve, R to respond to an agent question, D to open a debug prompt.
-- **F3: Workers** — Live view of each agent worker: status, current output, and activity.
+- **F3: Workers** — Live view of each agent worker: what it's doing, and a log of its work.
 - **F4: Log** — Timestamped history of all worker actions with access to raw agent logfiles.
-- **F4: Diffs** — Allows you to interactively look through a ticket's commit history and
+- **F5: Diffs** — Allows you to interactively look through a ticket's commit history and examine the code that's being generated.
 
 Here are some screenshots, though the terminal UI is in flux and these will be out of date quickly.
 
@@ -150,6 +150,8 @@ The `skills/` directory contains Claude Code skills that are installed to `~/.cl
 | `cf-refactor` | `/cf-refactor` | Scan and refactor recent changes for code smells |
 | `cf-review` | `/cf-review` | Thorough multi-perspective code review |
 | `cf-respond` | `/cf-respond` | Apply change requests to a ticket's worktree |
+
+Even if you don't end up using this tool, there are a lot of good bits in the skills that I suggest you steal.
 
 ---
 
@@ -201,3 +203,5 @@ skills/           Claude Code skills for working with code-factory projects
 * Fix the hard-coded file path for the terminal notifications' app icon image.
 
 * Automatically attempt to use Claude to do merge conflict resolution before foisting it off on the user to fix.
+
+* Create a tool for examining permissions requests and auto-approving them if they're safe.
