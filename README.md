@@ -192,10 +192,10 @@ skills/           Claude Code skills for working with code-factory projects
 
 # TO DO
 
-* Terminal themes, especially new themes for dark mode and all-white terminals. (This was developed on terminals with a light tan background.)
-
 * Support for more editors. (Currently we only support VS Code and Cursor.)
 
 * Auto-detect whether the user is using iTerm or macOS Terminal, then set the "open terminal window" command automatically.
 
 * Fix the hard-coded file path for the terminal notifications' app icon image.
+
+* Automatically attempt to use Claude to do merge conflict resolution before foisting it off on the user to fix.
