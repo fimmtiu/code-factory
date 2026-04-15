@@ -54,6 +54,8 @@ func runCommand(subcommand string, args []string) error {
 		return runRelease(d, args)
 	case "create-cr":
 		return runAddChangeRequest(d, args, os.Stdin)
+	case "batch-create-crs":
+		return runBatchAddChangeRequests(d, args, os.Stdin)
 	case "close-cr":
 		return runCloseChangeRequest(d, args)
 	case "dismiss-cr":
@@ -186,6 +188,25 @@ func runAddChangeRequest(d *db.DB, args []string, stdin io.Reader) error {
 		return fmt.Errorf("create-cr: read stdin: %w", err)
 	}
 	return d.AddChangeRequest(args[0], args[1], args[2], string(text))
+}
+
+func runBatchAddChangeRequests(d *db.DB, args []string, stdin io.Reader) error {
+	if len(args) < 2 {
+		return fmt.Errorf("usage: cf-tickets batch-create-crs <identifier> <author> < findings.json")
+	}
+	data, err := io.ReadAll(stdin)
+	if err != nil {
+		return fmt.Errorf("batch-create-crs: read stdin: %w", err)
+	}
+	var crs []db.ChangeRequestInput
+	if err := json.Unmarshal(data, &crs); err != nil {
+		return fmt.Errorf("batch-create-crs: parse JSON: %w", err)
+	}
+	if err := d.BatchAddChangeRequests(args[0], args[1], crs); err != nil {
+		return err
+	}
+	fmt.Printf("Created %d change request(s)\n", len(crs))
+	return nil
 }
 
 func runCloseChangeRequest(d *db.DB, args []string) error {

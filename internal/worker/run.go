@@ -139,7 +139,7 @@ func (w *Worker) handleAbort(poolCtx context.Context, identifier string, phase m
 
 // waitForNextPoll waits for the poll interval to elapse, processing any
 // incoming messages during the wait. It returns when the interval expires, a
-// shutdown is signaled, or the context is cancelled.
+// shutdown is signaled, the context is cancelled, or new work becomes available.
 func (w *Worker) waitForNextPoll(ctx context.Context, interval time.Duration) {
 	timer := time.NewTimer(interval)
 	defer timer.Stop()
@@ -149,6 +149,8 @@ func (w *Worker) waitForNextPoll(ctx context.Context, interval time.Duration) {
 		case <-ctx.Done():
 			return
 		case <-timer.C:
+			return
+		case <-w.workAvailable:
 			return
 		case msg := <-w.ToWorker:
 			w.handleMessage(msg)

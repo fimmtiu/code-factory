@@ -39,6 +39,11 @@ type Pool struct {
 	// Defaults to runACP; set to MockWorkFn for UI testing.
 	WorkFn WorkFn
 
+	// WorkAvailable is signaled when new tickets become claimable (e.g. after
+	// dependency resolution). Workers select on this channel to wake early
+	// instead of waiting for the full poll interval.
+	WorkAvailable chan struct{}
+
 	ctx    context.Context
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
@@ -53,14 +58,15 @@ func NewPool(size int, pollInterval int) *Pool {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Pool{
-		Workers:      workers,
-		LogChannel:   make(chan LogMessage, logChannelBuffer),
-		NotifChannel: make(chan string, 20),
-		PoolSize:     size,
-		PollInterval: pollInterval,
-		WorkFn:       runACP,
-		ctx:          ctx,
-		cancel:       cancel,
+		Workers:       workers,
+		LogChannel:    make(chan LogMessage, logChannelBuffer),
+		NotifChannel:  make(chan string, 20),
+		WorkAvailable: make(chan struct{}, size),
+		PoolSize:      size,
+		PollInterval:  pollInterval,
+		WorkFn:        runACP,
+		ctx:           ctx,
+		cancel:        cancel,
 	}
 }
 
@@ -76,12 +82,22 @@ func (p *Pool) GetWorker(number int) *Worker {
 // Start launches one goroutine per worker. Each goroutine runs the worker's
 // main loop. The pool's shared context is used for shutdown signaling.
 func (p *Pool) Start(database *db.DB, ticketsDir string) {
+	// Register a callback so the DB can wake workers immediately when
+	// blocked tickets become claimable (e.g. after dependency resolution).
+	database.SetOnWorkAvailable(func() {
+		select {
+		case p.WorkAvailable <- struct{}{}:
+		default:
+		}
+	})
+
 	for _, w := range p.Workers {
 		w.database = database
 		w.logCh = p.LogChannel
 		w.notifCh = p.NotifChannel
 		w.ticketsDir = ticketsDir
 		w.workFn = p.WorkFn
+		w.workAvailable = p.WorkAvailable
 		p.wg.Add(1)
 		go func(w *Worker) {
 			defer p.wg.Done()

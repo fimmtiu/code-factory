@@ -40,6 +40,7 @@ Subcommands:
   claim <pid>                       Claim the next available ticket for the given process ID
   release <id>                      Release the claim on a ticket
   create-cr <id> <loc> <author>     Add a change request to a ticket (description read from stdin)
+  batch-create-crs <id> <author>   Add multiple change requests from JSON on stdin
   close-cr <id> [explanation]       Close a change request
   dismiss-cr <id> [reason]          Dismiss a change request
   reset <id>                        Reset a ticket to implement/idle`)

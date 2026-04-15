@@ -31,14 +31,14 @@ Before starting, run through ALL of the following steps in order. **If a "Pre-de
    git diff --stat BRANCHPOINT
    ```
    If there's no output, tell the user "No changes found on this branch" and stop.
-6. **Capture the full diff**: Run `git diff BRANCHPOINT` and store the complete output as `DIFF`. This will be passed directly to each review subagent so they don't need to fetch it themselves.
+6. **Capture the full diff to a temp file**: Run `git diff BRANCHPOINT > /tmp/cf-review-diff-$$.txt` (using the shell PID to make the filename unique). Store the path as `DIFF_FILE`. This avoids embedding the full diff text in every subagent prompt — subagents will read the file instead.
 7. **What does it do?**: Examine the commit messages between HEAD and BRANCHPOINT and generate a summary of what you think the branch does. Store the result as `PURPOSE`.
 
 ## Running the Phases
 
 Launch **all five phases in parallel** as separate Task subagents. They are independent — they all take the same `BRANCHPOINT` and `PURPOSE` inputs and produce the same JSON output format.
 
-In every subagent prompt below, replace `BRANCHPOINT` with the value from prerequisite step 4, `DIFF` with the value from prerequisite step 6, and `PURPOSE` with the value from prerequisite step 7. These are literal text substitutions — the subagent receives the actual values, not the placeholder names.
+In every subagent prompt below, replace `BRANCHPOINT` with the value from prerequisite step 4, `DIFF_FILE` with the path from prerequisite step 6, and `PURPOSE` with the value from prerequisite step 7. These are literal text substitutions — the subagent receives the actual values, not the placeholder names.
 
 ### Phase 1: Fitness for purpose
 
@@ -50,11 +50,7 @@ Spawn a **Task subagent** with:
 ---BEGIN PROMPT---
 You are an experienced senior software developer, and you're reviewing changes on a branch which you've never seen before. The author describes the purpose of this branch as: "PURPOSE"
 
-Here is the full diff for the branch:
-
-```diff
-DIFF
-```
+Read the full diff from the file at `DIFF_FILE`.
 
 Decide whether the code changes actually fulfill the stated purpose. (Whitespace changes are an exception -- we can include whitespace changes in any unrelated PR.)
 
@@ -70,11 +66,7 @@ Each object must have exactly these three keys:
 Example: [{"filename": "cmd/main.go", "line_number": "42", "description": "**Fitness for purpose:** This change adds logging unrelated to the stated goal of fixing auth"}]
 ---END PROMPT---
 
-**Post-processing (parent agent does this, not the subagent):** Parse the JSON array returned by the subagent. For each object in the array, pipe the `description` value into standard input of:
-
-    cf-tickets create-cr TICKET_ID FILENAME:LINE_NUMBER cf-review
-
-Replace `TICKET_ID` with the value from prerequisite step 1. Replace `FILENAME` and `LINE_NUMBER` with values from the JSON object.
+**Post-processing (parent agent does this, not the subagent):** Parse the JSON array returned by the subagent. Collect the results — they will be filed in the Completion step.
 
 ### Phase 2: Security review
 
@@ -86,11 +78,7 @@ Spawn a **Task subagent** with:
 ---BEGIN PROMPT---
 You are an experienced, insightful security researcher, and you're hunting for security holes in the recent changelog of this codebase.
 
-Here is the full diff for the branch:
-
-```diff
-DIFF
-```
+Read the full diff from the file at `DIFF_FILE`.
 
 Determine whether the changes potentially introduce any security holes that an attacker could use to leak data, impersonate users, escalate privileges, run untrusted commands, or cause any other unwanted security violation.
 
@@ -126,11 +114,7 @@ Spawn a **Task subagent** with:
 ---BEGIN PROMPT---
 You are an experienced, insightful senior developer, and you're examining the changes on this branch to determine if they could introduce performance issues.
 
-Here is the full diff for the branch:
-
-```diff
-DIFF
-```
+Read the full diff from the file at `DIFF_FILE`.
 
 Determine whether the changes potentially introduce any performance issues that would be significant enough for a human to notice.
 
@@ -173,11 +157,7 @@ Spawn a **Task subagent** with:
 ---BEGIN PROMPT---
 You are an experienced, insightful senior developer, and you're inspecting the changes on this branch to find code quality issues. You want to use this as a teaching opportunity for the code author.
 
-Here is the full diff for the branch:
-
-```diff
-DIFF
-```
+Read the full diff from the file at `DIFF_FILE`.
 
 Determine whether the code quality is up to our high standards. Particular areas to consider include, but are not limited to:
 
@@ -218,11 +198,7 @@ Spawn a **Task subagent** with:
 ---BEGIN PROMPT---
 You are an experienced, insightful senior developer, and you're inspecting the changes on this branch to decide whether the abstractions it uses make sense. You want to use this as a teaching opportunity for the code author.
 
-Here is the full diff for the branch:
-
-```diff
-DIFF
-```
+Read the full diff from the file at `DIFF_FILE`.
 
 For each change, consider:
 
@@ -246,14 +222,21 @@ Each object must have exactly these three keys:
 Example: [{"filename": "internal/handler.go", "line_number": "30", "description": "**Abstraction:** This formatting logic doesn't belong in the HTTP handler; extract it to the model layer so it can be reused"}]
 ---END PROMPT---
 
-**Post-processing (parent agent does this, not the subagent):** Abstraction findings are structural suggestions, so they are filed as **change requests**. Parse the JSON array returned by the subagent. For each object, pipe `description` into standard input of:
-
-    cf-tickets create-cr TICKET_ID FILENAME:LINE_NUMBER cf-review
+**Post-processing (parent agent does this, not the subagent):** Parse the JSON array returned by the subagent. Collect the results — they will be filed in the Completion step.
 
 ## Completion
 
-After all five phases have finished and their results have been posted to the ticket:
+After all five phases have finished:
 
-1. Count the total number of findings across all phases.
-2. Report a summary to the user: how many findings per category (fitness for purpose, security, performance, code quality, abstraction), and the total.
-3. If the total is zero, tell the user: "No issues found — the branch looks good."
+1. **File all findings in one batch**: Merge all JSON arrays from the five phases into a single array. Transform each object so its keys are `code_location` (built from `filename` and `line_number` as `FILENAME:LINE_NUMBER`) and `description`. Then pipe the full JSON array into:
+
+       cf-tickets batch-create-crs TICKET_ID cf-review
+
+   Replace `TICKET_ID` with the value from prerequisite step 1. This creates all change requests in a single command instead of one per finding.
+
+   If the merged array is empty (`[]`), skip this step — there is nothing to file.
+
+2. Clean up the temp diff file: `rm -f DIFF_FILE` (substitute the actual path).
+3. Count the total number of findings across all phases.
+4. Report a summary to the user: how many findings per category (fitness for purpose, security, performance, code quality, abstraction), and the total.
+5. If the total is zero, tell the user: "No issues found — the branch looks good."

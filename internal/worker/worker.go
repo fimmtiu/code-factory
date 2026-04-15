@@ -76,13 +76,15 @@ type Worker struct {
 	// worker goroutine (writer) and the UI goroutine (reader).
 	mu sync.RWMutex
 
-	// database, logCh, notifCh, ticketsDir, and workFn are set by Pool.Start
-	// before the goroutine is launched and remain constant for the worker's lifetime.
-	database   *db.DB
-	logCh      chan<- LogMessage
-	notifCh    chan<- string // sends notification text to the TUI
-	ticketsDir string
-	workFn     WorkFn
+	// database, logCh, notifCh, ticketsDir, workFn, and workAvailable are set
+	// by Pool.Start before the goroutine is launched and remain constant for
+	// the worker's lifetime.
+	database      *db.DB
+	logCh         chan<- LogMessage
+	notifCh       chan<- string // sends notification text to the TUI
+	ticketsDir    string
+	workFn        WorkFn
+	workAvailable <-chan struct{} // signaled when new tickets become claimable
 }
 
 // NewWorker creates a new Worker with the given 1-based number. The worker

@@ -401,6 +401,82 @@ func TestRunAddChangeRequest_MissingArgs(t *testing.T) {
 	}
 }
 
+// ===== runBatchAddChangeRequests =====
+
+func TestRunBatchAddChangeRequests(t *testing.T) {
+	d := openTestDB(t)
+	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj/ticket", "A ticket", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	input := `[
+		{"code_location": "main.go:10", "description": "first finding"},
+		{"code_location": "util.go:20", "description": "second finding"}
+	]`
+	out := captureOutput(func() {
+		if err := runBatchAddChangeRequests(d, []string{"proj/ticket", "cf-review"}, strings.NewReader(input)); err != nil {
+			t.Fatalf("runBatchAddChangeRequests returned error: %v", err)
+		}
+	})
+
+	if !strings.Contains(out, "2 change request") {
+		t.Errorf("expected output to mention 2 change requests, got: %q", out)
+	}
+
+	units, err := d.Status()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, u := range units {
+		if u.Identifier == "proj/ticket" {
+			if len(u.ChangeRequests) != 2 {
+				t.Errorf("expected 2 change requests, got %d", len(u.ChangeRequests))
+			}
+			return
+		}
+	}
+	t.Error("ticket not found after batch-create-crs")
+}
+
+func TestRunBatchAddChangeRequests_EmptyArray(t *testing.T) {
+	d := openTestDB(t)
+	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj/ticket", "A ticket", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	out := captureOutput(func() {
+		if err := runBatchAddChangeRequests(d, []string{"proj/ticket", "cf-review"}, strings.NewReader("[]")); err != nil {
+			t.Fatalf("runBatchAddChangeRequests returned error: %v", err)
+		}
+	})
+
+	if !strings.Contains(out, "0 change request") {
+		t.Errorf("expected output to mention 0 change requests, got: %q", out)
+	}
+}
+
+func TestRunBatchAddChangeRequests_MissingArgs(t *testing.T) {
+	d := openTestDB(t)
+	err := runBatchAddChangeRequests(d, []string{"only-one"}, strings.NewReader("[]"))
+	if err == nil {
+		t.Error("expected error when args are missing, got nil")
+	}
+}
+
+func TestRunBatchAddChangeRequests_InvalidJSON(t *testing.T) {
+	d := openTestDB(t)
+	err := runBatchAddChangeRequests(d, []string{"proj/ticket", "author"}, strings.NewReader("not json"))
+	if err == nil {
+		t.Error("expected error for invalid JSON, got nil")
+	}
+}
+
 // ===== runCloseChangeRequest =====
 
 func TestRunCloseChangeRequest(t *testing.T) {

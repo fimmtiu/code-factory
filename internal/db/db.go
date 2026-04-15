@@ -49,6 +49,8 @@ type DB struct {
 
 	mergeMu    sync.Mutex             // protects mergeLocks
 	mergeLocks map[string]*sync.Mutex // per-target lock serializing merges
+
+	onWorkAvailable func() // called when a ticket transitions to a claimable state
 }
 
 // Open opens (or creates) the tickets database at ticketsDir/data.sqlite and
@@ -79,6 +81,20 @@ func Open(ticketsDir, repoRoot string) (*DB, error) {
 // Intended for testing.
 func (d *DB) SetGitClient(gc gitutil.GitClient) {
 	d.git = gc
+}
+
+// SetOnWorkAvailable registers a callback that is invoked whenever a ticket
+// transitions to a claimable state (e.g. when blocked tickets are unblocked).
+// This allows a worker pool to wake idle workers immediately instead of
+// waiting for the next poll interval.
+func (d *DB) SetOnWorkAvailable(fn func()) {
+	d.onWorkAvailable = fn
+}
+
+func (d *DB) notifyWorkAvailable() {
+	if d.onWorkAvailable != nil {
+		d.onWorkAvailable()
+	}
 }
 
 // Close closes the database connection.
@@ -751,6 +767,7 @@ func (d *DB) unblockDependents(completedType int, completedID int64) error {
 			); err != nil {
 				return fmt.Errorf("unblockDependents: unblock ticket %d: %w", ticketID, err)
 			}
+			d.notifyWorkAvailable()
 		}
 	}
 	return nil
@@ -983,6 +1000,60 @@ func (d *DB) AddChangeRequest(identifier, codeLocation, author, description stri
 			time.Now().Unix(), author, description,
 		)
 		return err
+	})
+}
+
+// ChangeRequestInput holds the fields for a single change request in a batch.
+type ChangeRequestInput struct {
+	CodeLocation string `json:"code_location"`
+	Description  string `json:"description"`
+}
+
+// BatchAddChangeRequests inserts multiple change requests for a ticket in a
+// single transaction. This is more efficient than calling AddChangeRequest
+// in a loop because it resolves the ticket ID and commit hash once.
+func (d *DB) BatchAddChangeRequests(identifier, author string, crs []ChangeRequestInput) error {
+	if len(crs) == 0 {
+		return nil
+	}
+
+	// Parse all code locations up front so we fail fast on bad input.
+	type parsed struct {
+		filename    string
+		lineNumber  int
+		description string
+	}
+	items := make([]parsed, len(crs))
+	for i, cr := range crs {
+		f, ln, err := parseCodeLocation(cr.CodeLocation)
+		if err != nil {
+			return fmt.Errorf("change request %d: %w", i, err)
+		}
+		items[i] = parsed{filename: f, lineNumber: ln, description: cr.Description}
+	}
+
+	return d.withTx(func(tx *sql.Tx) error {
+		var ticketID int64
+		if err := tx.QueryRow(`SELECT id FROM tickets WHERE identifier = ?`, identifier).Scan(&ticketID); err == sql.ErrNoRows {
+			return fmt.Errorf("ticket %q not found", identifier)
+		} else if err != nil {
+			return err
+		}
+
+		commitHash, _ := d.git.GetHeadCommit(d.worktreePath(identifier))
+		now := time.Now().Unix()
+
+		for _, item := range items {
+			if _, err := tx.Exec(
+				`INSERT INTO change_requests (ticket_id, filename, line_number, commit_hash, status, date, author, description)
+				 VALUES (?, ?, ?, ?, 'open', ?, ?, ?)`,
+				ticketID, item.filename, item.lineNumber, commitHash,
+				now, author, item.description,
+			); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 }
 

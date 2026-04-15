@@ -654,3 +654,33 @@ func TestWorker_AcpError_DoesNotAdvanceToUserReview(t *testing.T) {
 	}
 	t.Fatal("ticket proj/fail-ticket not found in status output")
 }
+
+// --- WorkAvailable notification ---
+
+func TestPool_WorkAvailable_WakesIdleWorker(t *testing.T) {
+	d, ticketsDir := openTestDB(t)
+	createProject(t, d, "proj")
+	// No tickets yet — workers will idle.
+
+	pool := worker.NewPool(1, 60) // 60-second poll interval
+	pool.WorkFn = worker.NoopWorkFn
+	pool.Start(d, ticketsDir)
+
+	// Give the worker time to enter waitForNextPoll.
+	time.Sleep(100 * time.Millisecond)
+
+	// Create a ticket and signal that work is available.
+	createTicket(t, d, "proj/wake-test")
+	select {
+	case pool.WorkAvailable <- struct{}{}:
+	default:
+	}
+
+	// The worker should claim the ticket well within the 60s poll interval.
+	if !waitForLog(pool.LogChannel, "claimed ticket proj/wake-test", 3*time.Second) {
+		pool.Stop()
+		t.Fatal("worker did not claim ticket within 3s after WorkAvailable signal (poll interval is 60s)")
+	}
+
+	pool.Stop()
+}
