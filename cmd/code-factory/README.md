@@ -6,6 +6,7 @@ A terminal UI application that manages a pool of Claude Code agents to automatic
 
 - Run `cf-tickets init` in the repository first to create `.code-factory/`.
 - Set `editor` in `.code-factory/settings.json` to `"cursor"` or `"vscode"` (default: `"cursor"`).
+- Set `terminal` in `.code-factory/settings.json` to `"iterm2"` or `"terminal"` (default: `"iterm2"`).
 
 ## Usage
 
@@ -68,11 +69,11 @@ Settings are read from `.code-factory/settings.json` at startup.
 {
   "stale_threshold_minutes": 30,
   "editor": "cursor",
-  "open_terminal_command": "open -a iTerm .",
+  "terminal": "iterm2",
   "model_implement": "sonnet",
   "model_refactor": "opus",
   "model_review": "opus",
-  "model_respond": "sonnet",
+  "model_respond": "opus",
   "effort": "high",
   "terminal_theme": "tan"
 }
@@ -82,10 +83,10 @@ Settings are read from `.code-factory/settings.json` at startup.
 |---------|---------|-------------|
 | `stale_threshold_minutes` | `30` | Minutes before an in-progress ticket is considered abandoned |
 | `editor` | `"cursor"` | Editor to open worktrees in (`"cursor"` or `"vscode"`) |
-| `open_terminal_command` | `"open -a iTerm ."` | Shell command to open a terminal in the worktree directory |
+| `terminal` | `"iterm2"` | Terminal emulator for opening worktrees and notifications (`"iterm2"` or `"terminal"`) |
 | `model_implement` | `"sonnet"` | Claude model for the implementation phase |
 | `model_refactor` | `"opus"` | Claude model for the refactoring phase |
 | `model_review` | `"opus"` | Claude model for the review phase |
-| `model_respond` | `"sonnet"` | Claude model for the response phase |
+| `model_respond` | `"opus"` | Claude model for the response phase |
 | `effort` | `"high"` | Effort level for the agent (`"low"`, `"normal"`, `"high"`, or `"max"`) |
 | `terminal_theme` | `"tan"` | Terminal colour theme (`"tan"`, `"dark"`, or `"light"`) |

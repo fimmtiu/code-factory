@@ -30,10 +30,9 @@ type Settings struct {
 	// "vscode". Defaults to "cursor".
 	Editor string `json:"editor" default:"cursor"`
 
-	// OpenTerminalCommand is the command used to open a terminal window in a
-	// given directory. It is run with the working directory set to the target
-	// path. Defaults to "open -a iTerm .".
-	OpenTerminalCommand string `json:"open_terminal_command" default:"open -a iTerm ."`
+	// Terminal is the name of the terminal to use. Supported values: "iterm2",
+	// "terminal". Defaults to "iterm2".
+	Terminal string `json:"terminal" default:"iterm2"`
 
 	// ModelImplement, ModelRefactor, ModelReview, and ModelRespond set the
 	// Claude model used for each ticket phase independently. Empty string uses

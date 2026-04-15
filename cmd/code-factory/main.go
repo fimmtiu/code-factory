@@ -82,6 +82,10 @@ Options:
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}
+	if err := util.ValidateTerminal(config.Current.Terminal); err != nil {
+		fmt.Fprintln(os.Stderr, "error:", err)
+		os.Exit(1)
+	}
 	if err := theme.Init(config.Current.TerminalTheme); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)

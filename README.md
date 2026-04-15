@@ -49,17 +49,18 @@ $ cd your-project
 $ cf-tickets init
 ```
 
-This creates `.code-factory/` with a default `settings.json`. Edit `settings.json` to configure your editor:
+This creates `.code-factory/` with a default `settings.json`. Edit `settings.json` to configure your editor and terminal:
 
 ```jsonc
 {
   "editor": "cursor",
+  "terminal": "iterm2",
   "terminal_theme": "tan",
   // ...
 }
 ```
 
-Currently supported editors are `cursor` and `vscode`, but PRs to add more are welcome! You can also set `terminal_theme` to `"dark"`, `"light"`, or `"tan"` to match your terminal background. (For more settings, see [the `code-factory` README](cmd/code-factory/README.md).)
+Currently supported editors are `cursor` and `vscode`, and supported terminals are `iterm2` and `terminal` (macOS Terminal.app). PRs to add more are welcome! You can also set `terminal_theme` to `"dark"`, `"light"`, or `"tan"` to match your terminal background. (For more settings, see [the `code-factory` README](cmd/code-factory/README.md).)
 
 ## Using code-factory
 
@@ -197,8 +198,6 @@ skills/           Claude Code skills for working with code-factory projects
 # TO DO
 
 * Support for more editors. (Currently we only support VS Code and Cursor.)
-
-* Auto-detect whether the user is using iTerm or macOS Terminal, then set the "open terminal window" command automatically.
 
 * Fix the hard-coded file path for the terminal notifications' app icon image.
 

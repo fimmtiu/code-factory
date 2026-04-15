@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/fimmtiu/code-factory/internal/util"
 )
 
 // notifIconPath is the absolute path to the notification icon.
@@ -64,11 +66,15 @@ func fireOSNotification(text string) tea.Cmd {
 		return nil
 	}
 	return func() tea.Msg {
-		_ = exec.Command("terminal-notifier",
+		args := []string{
 			"-title", "Code Factory",
 			"-message", text,
 			"-contentImage", notifIconPath,
-		).Run()
+		}
+		if bundleID := util.TerminalBundleID(); bundleID != "" {
+			args = append(args, "-activate", bundleID)
+		}
+		_ = exec.Command("terminal-notifier", args...).Run()
 		return nil
 	}
 }

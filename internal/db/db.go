@@ -1186,7 +1186,7 @@ func (d *DB) AppendChangeRequestDescription(id int64, text string) error {
 		if err != nil {
 			return err
 		}
-		updated := current + "\n---\n" + text
+		updated := current + "\n\n---\n" + text
 		_, err = tx.Exec(`UPDATE change_requests SET description = ? WHERE id = ?`, updated, id)
 		return err
 	})
