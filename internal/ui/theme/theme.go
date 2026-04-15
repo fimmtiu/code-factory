@@ -80,13 +80,14 @@ type Theme struct {
 	LogWorkerStyle   lipgloss.Style
 
 	// ── Diff view ───────────────────────────────────────────────────────
-	DiffSelectedStyle  lipgloss.Style
-	DiffRangeStyle     lipgloss.Style
-	DiffSeparatorStyle lipgloss.Style
-	DiffStatusBarStyle lipgloss.Style
-	CommitHashStyle    lipgloss.Style
-	DiffLabelBold      lipgloss.Style
-	DiffErrorStyle     lipgloss.Style
+	DiffSelectedStyle   lipgloss.Style
+	DiffRangeStyle      lipgloss.Style
+	DiffLineSelectStyle lipgloss.Style
+	DiffSeparatorStyle  lipgloss.Style
+	DiffStatusBarStyle  lipgloss.Style
+	CommitHashStyle     lipgloss.Style
+	DiffLabelBold       lipgloss.Style
+	DiffErrorStyle      lipgloss.Style
 
 	// ── Diff renderer ───────────────────────────────────────────────────
 	DiffHunkHeaderStyle lipgloss.Style

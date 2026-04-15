@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -11,6 +12,14 @@ import (
 	"github.com/fimmtiu/code-factory/internal/git"
 	"github.com/fimmtiu/code-factory/internal/ui/theme"
 )
+
+// ansiEscapeRe matches ANSI escape sequences (CSI and OSC).
+var ansiEscapeRe = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]|\x1b\].*?\x1b\\|\x1b\][^\x07]*\x07`)
+
+// stripAnsi removes ANSI escape sequences from a string.
+func stripAnsi(s string) string {
+	return ansiEscapeRe.ReplaceAllString(s, "")
+}
 
 // viewerStatusBarHeight is the number of lines consumed by the viewer's
 // two-line status bar (ticket info + filename).
@@ -34,7 +43,8 @@ type DiffViewerModel struct {
 	text       string // pre-rendered diff content
 	fileStarts []int  // line offset where each file begins
 	fileNames  []string
-	offset     int // first visible line in the viewer pane
+	lineMeta   []diffLineMeta // per-line selectability and file ownership
+	offset     int            // first visible line in the viewer pane
 
 	// Collapse state: stored so we can re-render when the user toggles a file.
 	files     []diff.File
@@ -44,6 +54,11 @@ type DiffViewerModel struct {
 	// Set by DiffView on creation and resize via setSize.
 	paneWidth  int
 	paneHeight int
+
+	// Line select mode state.
+	lineSelectMode bool // true when the user is selecting individual lines
+	selectedLine   int  // index of the currently selected line in the rendered text
+	frozenFileIdx  int  // file index frozen on exit from line select; -1 when not frozen
 }
 
 // newDiffViewerModel creates a DiffViewerModel from parsed diff files.
@@ -51,10 +66,11 @@ type DiffViewerModel struct {
 // (DiffView accounts for the status bar, separator, and chrome).
 func newDiffViewerModel(files []diff.File, paneWidth, paneHeight int) *DiffViewerModel {
 	m := &DiffViewerModel{
-		paneWidth:  paneWidth,
-		paneHeight: paneHeight,
-		files:      files,
-		collapsed:  make([]bool, len(files)),
+		paneWidth:     paneWidth,
+		paneHeight:    paneHeight,
+		files:         files,
+		collapsed:     make([]bool, len(files)),
+		frozenFileIdx: -1,
 	}
 
 	if len(files) == 0 {
@@ -113,8 +129,16 @@ func (m *DiffViewerModel) clampScroll() {
 // ── File tracking ────────────────────────────────────────────────────────────
 
 // currentFileIndex returns the 0-based index of the file whose diff is
-// currently at the top of the visible viewer area.
+// currently displayed. In line-select mode, this is the file owning the
+// selected line. After exiting line-select mode, the file index is frozen
+// until the user scrolls. Otherwise it is the file at the top of the pane.
 func (m *DiffViewerModel) currentFileIndex() int {
+	if m.lineSelectMode && m.selectedLine >= 0 && m.selectedLine < len(m.lineMeta) {
+		return m.lineMeta[m.selectedLine].fileIndex
+	}
+	if m.frozenFileIdx >= 0 {
+		return m.frozenFileIdx
+	}
 	if len(m.fileStarts) == 0 {
 		return 0
 	}
@@ -142,12 +166,17 @@ func (m *DiffViewerModel) toggleCollapse() {
 		return
 	}
 	m.collapsed[idx] = !m.collapsed[idx]
+	wasLineSelect := m.lineSelectMode
+	m.lineSelectMode = false
 	m.rerender()
 	// Scroll to the toggled file's header so the user sees the change.
 	if idx < len(m.fileStarts) {
 		m.offset = m.fileStarts[idx]
 	}
 	m.clampScroll()
+	if wasLineSelect {
+		m.enterLineSelect()
+	}
 }
 
 // toggleCollapseAll collapses all files if any are expanded, or expands all
@@ -171,7 +200,12 @@ func (m *DiffViewerModel) toggleCollapseAll() {
 			m.collapsed[i] = target
 		}
 	}
+	wasLineSelect := m.lineSelectMode
+	m.lineSelectMode = false
 	m.rerender()
+	if wasLineSelect {
+		m.enterLineSelect()
+	}
 }
 
 // rerender re-renders the diff text from the stored files and collapse state.
@@ -183,6 +217,98 @@ func (m *DiffViewerModel) rerender() {
 	rd := renderDiffResult(m.files, w, m.collapsed)
 	m.text = rd.text
 	m.fileStarts = rd.fileStarts
+	m.lineMeta = rd.lineMeta
+	m.clampScroll()
+}
+
+// ── Line select mode ────────────────────────────────────────────────────────
+
+// isSelectable returns true if line at index i is a hunk content line.
+func (m *DiffViewerModel) isSelectable(i int) bool {
+	return i >= 0 && i < len(m.lineMeta) && m.lineMeta[i].kind == diffLineHunkContent
+}
+
+// nearestSelectable searches outward from start in both directions and returns
+// the nearest selectable line, or -1 if none exists within [lo, hi).
+func (m *DiffViewerModel) nearestSelectable(start, lo, hi int) int {
+	if hi > len(m.lineMeta) {
+		hi = len(m.lineMeta)
+	}
+	if lo < 0 {
+		lo = 0
+	}
+	for d := 0; d < hi-lo; d++ {
+		up := start - d
+		down := start + d
+		if up >= lo && up < hi && m.isSelectable(up) {
+			return up
+		}
+		if down >= lo && down < hi && m.isSelectable(down) {
+			return down
+		}
+	}
+	return -1
+}
+
+// enterLineSelect enters line-select mode. The selection is placed on the
+// selectable line nearest to the vertical midpoint of the visible pane.
+// If no selectable line is visible, the mode is not entered.
+func (m *DiffViewerModel) enterLineSelect() {
+	mid := m.offset + m.paneHeight/2
+	sel := m.nearestSelectable(mid, m.offset, m.offset+m.paneHeight)
+	if sel == -1 {
+		return
+	}
+	m.lineSelectMode = true
+	m.selectedLine = sel
+	m.frozenFileIdx = -1
+}
+
+// exitLineSelect leaves line-select mode and freezes the current file index
+// so it persists until the user scrolls.
+func (m *DiffViewerModel) exitLineSelect() {
+	if !m.lineSelectMode {
+		return
+	}
+	m.frozenFileIdx = m.currentFileIndex()
+	m.lineSelectMode = false
+}
+
+// nextSelectableLine returns the next selectable line from the current
+// selectedLine in the given direction (+1 for down, -1 for up), or -1
+// if there is no selectable line in that direction.
+func (m *DiffViewerModel) nextSelectableLine(direction int) int {
+	i := m.selectedLine + direction
+	for i >= 0 && i < len(m.lineMeta) {
+		if m.isSelectable(i) {
+			return i
+		}
+		i += direction
+	}
+	return -1
+}
+
+// moveSelection moves the selected line by n steps in the given direction,
+// skipping non-selectable lines and scrolling to keep the selection visible.
+func (m *DiffViewerModel) moveSelection(n, direction int) {
+	for i := 0; i < n; i++ {
+		next := m.nextSelectableLine(direction)
+		if next == -1 {
+			break
+		}
+		m.selectedLine = next
+	}
+	m.scrollToSelection()
+}
+
+// scrollToSelection adjusts the scroll offset so the selected line is visible.
+func (m *DiffViewerModel) scrollToSelection() {
+	if m.selectedLine < m.offset {
+		m.offset = m.selectedLine
+	}
+	if m.selectedLine >= m.offset+m.paneHeight {
+		m.offset = m.selectedLine - m.paneHeight + 1
+	}
 	m.clampScroll()
 }
 
@@ -220,15 +346,25 @@ func (m *DiffViewerModel) Update(msg tea.Msg) tea.Cmd {
 // handleKey processes key events. Returns nil for all keys; the caller
 // checks isViewerExitKey() to detect exit keys.
 func (m *DiffViewerModel) handleKey(msg tea.KeyMsg) tea.Cmd {
+	if m.lineSelectMode {
+		return m.handleLineSelectKey(msg)
+	}
+
 	switch msg.String() {
 	case "up":
+		m.clearFrozenFileIdx()
 		m.scrollUp(1)
 	case "down":
+		m.clearFrozenFileIdx()
 		m.scrollDown(1)
 	case "pgup", "b":
+		m.clearFrozenFileIdx()
 		m.scrollUp(m.paneHeight)
 	case "pgdown", " ":
+		m.clearFrozenFileIdx()
 		m.scrollDown(m.paneHeight)
+	case "enter":
+		m.enterLineSelect()
 	case "c":
 		m.toggleCollapse()
 	case "C":
@@ -237,10 +373,42 @@ func (m *DiffViewerModel) handleKey(msg tea.KeyMsg) tea.Cmd {
 	return nil
 }
 
-// isViewerExitKey returns true if the key should close the viewer.
-func isViewerExitKey(msg tea.KeyMsg) bool {
+// handleLineSelectKey processes key events while in line-select mode.
+func (m *DiffViewerModel) handleLineSelectKey(msg tea.KeyMsg) tea.Cmd {
 	switch msg.String() {
-	case "tab", "esc", "enter":
+	case "up":
+		m.moveSelection(1, -1)
+	case "down":
+		m.moveSelection(1, 1)
+	case "pgup", "b":
+		m.moveSelection(m.paneHeight, -1)
+	case "pgdown", " ":
+		m.moveSelection(m.paneHeight, 1)
+	case "esc":
+		m.exitLineSelect()
+	case "c":
+		m.toggleCollapse()
+	case "C":
+		m.toggleCollapseAll()
+	}
+	return nil
+}
+
+// clearFrozenFileIdx removes the frozen file index so that scrolling
+// resumes normal file tracking.
+func (m *DiffViewerModel) clearFrozenFileIdx() {
+	m.frozenFileIdx = -1
+}
+
+// isViewerExitKey returns true if the key should close the viewer.
+// In line-select mode, only Tab exits the viewer; Escape exits line-select
+// and Enter is consumed by line-select entry, so neither closes the viewer.
+func isViewerExitKey(viewer *DiffViewerModel, msg tea.KeyMsg) bool {
+	if viewer.lineSelectMode {
+		return msg.String() == "tab"
+	}
+	switch msg.String() {
+	case "tab", "esc":
 		return true
 	}
 	return false
@@ -323,6 +491,14 @@ func (m *DiffViewerModel) renderPane() string {
 			start = len(lines)
 		}
 		visible := lines[start:end]
+
+		// Highlight the selected line in line-select mode.
+		if m.lineSelectMode && m.selectedLine >= start && m.selectedLine < end {
+			idx := m.selectedLine - start
+			visible[idx] = theme.Current().DiffLineSelectStyle.Width(paneW).Render(
+				truncateLine(stripAnsi(visible[idx]), paneW))
+		}
+
 		content = strings.Join(visible, "\n")
 	}
 
@@ -332,14 +508,27 @@ func (m *DiffViewerModel) renderPane() string {
 
 // KeyBindings returns key bindings shown when the viewer is active.
 func (m *DiffViewerModel) KeyBindings() []KeyBinding {
+	if m.lineSelectMode {
+		return []KeyBinding{
+			{Key: "↑/↓", Description: "Move selection"},
+			{Key: "b/Space", Description: "Page up/down"},
+			{Key: "c", Description: "Collapse/expand file"},
+			{Key: "C", Description: "Collapse/expand all"},
+			{Key: "T", Description: "Open terminal in worktree"},
+			{Key: "E", Description: "Open worktree in Cursor"},
+			{Key: "Esc", Description: "Exit line select"},
+			{Key: "Tab", Description: "Back to selector"},
+		}
+	}
 	return []KeyBinding{
 		{Key: "↑/↓", Description: "Scroll"},
 		{Key: "b/Space", Description: "Page up/down"},
+		{Key: "Enter", Description: "Select lines"},
 		{Key: "c", Description: "Collapse/expand file"},
 		{Key: "C", Description: "Collapse/expand all"},
 		{Key: "T", Description: "Open terminal in worktree"},
 		{Key: "E", Description: "Open worktree in Cursor"},
-		{Key: "Tab/Esc/Enter", Description: "Back to selector"},
+		{Key: "Tab/Esc", Description: "Back to selector"},
 	}
 }
 

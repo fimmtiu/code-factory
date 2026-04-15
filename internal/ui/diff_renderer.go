@@ -10,12 +10,28 @@ import (
 	"github.com/fimmtiu/code-factory/internal/ui/theme"
 )
 
+// diffLineKind classifies each rendered line for the line-select feature.
+type diffLineKind int
+
+const (
+	diffLineNonSelectable diffLineKind = iota // blank, filename, "Deleted", hunk header, etc.
+	diffLineHunkContent                       // context, added, or removed line inside a hunk
+)
+
+// diffLineMeta records per-line metadata produced during rendering. The viewer
+// uses this to determine which lines are selectable and which file they belong to.
+type diffLineMeta struct {
+	kind      diffLineKind
+	fileIndex int // index into the files slice (-1 for non-selectable)
+}
+
 // renderedDiff holds the formatted diff output together with the line offsets
 // where each file section starts. Computing offsets during rendering avoids
 // fragile re-parsing of the output string.
 type renderedDiff struct {
-	text       string // the formatted diff output
-	fileStarts []int  // line offset where each file's blank-separator line begins
+	text       string         // the formatted diff output
+	fileStarts []int          // line offset where each file's blank-separator line begins
+	lineMeta   []diffLineMeta // per-line metadata for the entire rendered output
 }
 
 // renderDiff produces a formatted diff string from parsed diff files.
@@ -37,11 +53,20 @@ func renderDiffResult(files []diff.File, paneWidth int, collapsed []bool) render
 	var sb strings.Builder
 	lineCount := 0 // tracks the current line number in the output
 	fileStarts := make([]int, 0, len(files))
+	var meta []diffLineMeta
+
+	// appendNonSelectable records n non-selectable lines for file index fi.
+	appendNonSelectable := func(n, fi int) {
+		for range n {
+			meta = append(meta, diffLineMeta{kind: diffLineNonSelectable, fileIndex: fi})
+		}
+	}
 
 	for i, f := range files {
 		isCollapsed := len(collapsed) > i && collapsed[i]
 		fileStarts = append(fileStarts, lineCount)
 		sb.WriteString("\n") // blank line before each file (including the first)
+		appendNonSelectable(1, i)
 		lineCount++
 
 		indicator := "▽ "
@@ -50,6 +75,7 @@ func renderDiffResult(files []diff.File, paneWidth int, collapsed []bool) render
 		}
 		sb.WriteString(theme.Current().DiffFileHeaderStyle.Render(indicator + f.Name + ":"))
 		sb.WriteString("\n")
+		appendNonSelectable(1, i)
 		lineCount++
 
 		if isCollapsed {
@@ -61,25 +87,28 @@ func renderDiffResult(files []diff.File, paneWidth int, collapsed []bool) render
 			sb.WriteString("  ")
 			sb.WriteString(theme.Current().EmptyStateStyle.Render("(binary stuff)"))
 			sb.WriteString("\n")
+			appendNonSelectable(1, i)
 			lineCount++
 		case diff.Delete:
 			sb.WriteString("  ")
 			sb.WriteString(theme.Current().DiffDeletedMsgStyle.Render("Deleted"))
 			sb.WriteString("\n")
+			appendNonSelectable(1, i)
 			lineCount++
 		case diff.Rename:
 			sb.WriteString("  ")
 			sb.WriteString(theme.Current().DiffRenamedMsgStyle.Render("Renamed to "))
 			sb.WriteString(f.RenameTo)
 			sb.WriteString("\n")
+			appendNonSelectable(1, i)
 			lineCount++
 			for _, h := range f.Hunks {
-				lineCount += renderHunk(&sb, h, paneWidth)
+				lineCount += renderHunk(&sb, h, paneWidth, i, &meta)
 			}
 		default:
 			// Normal and New files: render hunks.
 			for _, h := range f.Hunks {
-				lineCount += renderHunk(&sb, h, paneWidth)
+				lineCount += renderHunk(&sb, h, paneWidth, i, &meta)
 			}
 		}
 	}
@@ -88,12 +117,13 @@ func renderDiffResult(files []diff.File, paneWidth int, collapsed []bool) render
 	return renderedDiff{
 		text:       strings.TrimRight(sb.String(), "\n"),
 		fileStarts: fileStarts,
+		lineMeta:   meta,
 	}
 }
 
 // renderHunk renders a single hunk: the @@ header followed by content lines.
-// It returns the number of lines written.
-func renderHunk(sb *strings.Builder, h diff.Hunk, paneWidth int) int {
+// It returns the number of lines written and appends per-line metadata to meta.
+func renderHunk(sb *strings.Builder, h diff.Hunk, paneWidth, fileIndex int, meta *[]diffLineMeta) int {
 	lines := 0
 
 	// Hunk header.
@@ -104,6 +134,9 @@ func renderHunk(sb *strings.Builder, h diff.Hunk, paneWidth int) int {
 	styled, n := padToWidth(theme.Current().DiffHunkHeaderStyle, header, paneWidth)
 	sb.WriteString(styled)
 	sb.WriteString("\n")
+	for range n {
+		*meta = append(*meta, diffLineMeta{kind: diffLineNonSelectable, fileIndex: fileIndex})
+	}
 	lines += n
 
 	// Determine the line-number column width from the max line number in this hunk.
@@ -120,6 +153,9 @@ func renderHunk(sb *strings.Builder, h diff.Hunk, paneWidth int) int {
 			content := prefix + text
 			styled, n := padToWidth(theme.Current().DiffRemovedStyle, content, paneWidth)
 			sb.WriteString(styled)
+			for range n {
+				*meta = append(*meta, diffLineMeta{kind: diffLineHunkContent, fileIndex: fileIndex})
+			}
 			lines += n
 		case diff.LineAdded:
 			// Line number on the left, then content with green background.
@@ -127,12 +163,16 @@ func renderHunk(sb *strings.Builder, h diff.Hunk, paneWidth int) int {
 			content := prefix + text
 			styled, n := padToWidth(theme.Current().DiffAddedStyle, content, paneWidth)
 			sb.WriteString(styled)
+			for range n {
+				*meta = append(*meta, diffLineMeta{kind: diffLineHunkContent, fileIndex: fileIndex})
+			}
 			lines += n
 			lineNum++
 		case diff.LineContext:
 			// Line number on the left, plain text (no background).
 			prefix := fmt.Sprintf("%*d ", numWidth, lineNum)
 			sb.WriteString(prefix + text)
+			*meta = append(*meta, diffLineMeta{kind: diffLineHunkContent, fileIndex: fileIndex})
 			lines++
 			lineNum++
 		}

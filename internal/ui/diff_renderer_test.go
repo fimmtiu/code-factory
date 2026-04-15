@@ -720,3 +720,151 @@ func TestRenderDiff_UsesThemeEmptyStateStyle(t *testing.T) {
 		return renderDiff(files, 60)
 	})
 }
+
+// ── Line metadata tests ─────────────────────────────────────────────────────
+
+// TestLineMeta_MatchesLineCount verifies that lineMeta has one entry per
+// rendered line (after trimming trailing newline).
+func TestLineMeta_MatchesLineCount(t *testing.T) {
+	files := []diff.File{
+		{
+			Name: "a.go",
+			Type: diff.Normal,
+			Hunks: []diff.Hunk{
+				{
+					NewStart: 1, NewCount: 2,
+					Lines: []diff.Line{
+						{Type: diff.LineContext, Content: "ctx"},
+						{Type: diff.LineAdded, Content: "add"},
+					},
+				},
+			},
+		},
+		{
+			Name: "b.go",
+			Type: diff.Delete,
+		},
+	}
+
+	rd := renderDiffResult(files, 60, nil)
+	renderedLineCount := len(strings.Split(rd.text, "\n"))
+	if len(rd.lineMeta) != renderedLineCount {
+		t.Errorf("lineMeta length %d != rendered line count %d", len(rd.lineMeta), renderedLineCount)
+	}
+}
+
+// TestLineMeta_HunkContentIsSelectable verifies that hunk content lines are
+// marked as selectable and non-content lines are not.
+func TestLineMeta_HunkContentIsSelectable(t *testing.T) {
+	files := []diff.File{
+		{
+			Name: "a.go",
+			Type: diff.Normal,
+			Hunks: []diff.Hunk{
+				{
+					NewStart: 1, NewCount: 2,
+					Lines: []diff.Line{
+						{Type: diff.LineContext, Content: "ctx"},
+						{Type: diff.LineRemoved, Content: "old"},
+						{Type: diff.LineAdded, Content: "new"},
+					},
+				},
+			},
+		},
+	}
+
+	rd := renderDiffResult(files, 60, nil)
+	selectableCount := 0
+	nonSelectableCount := 0
+	for _, lm := range rd.lineMeta {
+		if lm.kind == diffLineHunkContent {
+			selectableCount++
+		} else {
+			nonSelectableCount++
+		}
+	}
+	// 3 hunk content lines (ctx, old, new)
+	if selectableCount != 3 {
+		t.Errorf("expected 3 selectable lines, got %d", selectableCount)
+	}
+	// blank + filename + hunk header = 3 non-selectable
+	if nonSelectableCount != 3 {
+		t.Errorf("expected 3 non-selectable lines, got %d", nonSelectableCount)
+	}
+}
+
+// TestLineMeta_FileIndex verifies that each line's fileIndex is correct.
+func TestLineMeta_FileIndex(t *testing.T) {
+	files := []diff.File{
+		{
+			Name: "first.go",
+			Type: diff.Normal,
+			Hunks: []diff.Hunk{
+				{NewStart: 1, NewCount: 1, Lines: []diff.Line{
+					{Type: diff.LineAdded, Content: "a"},
+				}},
+			},
+		},
+		{
+			Name: "second.go",
+			Type: diff.Normal,
+			Hunks: []diff.Hunk{
+				{NewStart: 1, NewCount: 1, Lines: []diff.Line{
+					{Type: diff.LineAdded, Content: "b"},
+				}},
+			},
+		},
+	}
+
+	rd := renderDiffResult(files, 60, nil)
+	// All lines before the second file's blank separator should have fileIndex 0.
+	secondFileStart := rd.fileStarts[1]
+	for i, lm := range rd.lineMeta {
+		if i < secondFileStart && lm.fileIndex != 0 {
+			t.Errorf("line %d: expected fileIndex 0, got %d", i, lm.fileIndex)
+		}
+		if i >= secondFileStart && lm.fileIndex != 1 {
+			t.Errorf("line %d: expected fileIndex 1, got %d", i, lm.fileIndex)
+		}
+	}
+}
+
+// TestLineMeta_DeletedAndBinaryNotSelectable verifies that deleted and binary
+// file content lines (like "Deleted" and "(binary stuff)") are non-selectable.
+func TestLineMeta_DeletedAndBinaryNotSelectable(t *testing.T) {
+	files := []diff.File{
+		{Name: "gone.go", Type: diff.Delete},
+		{Name: "pic.png", Type: diff.Binary},
+	}
+
+	rd := renderDiffResult(files, 60, nil)
+	for i, lm := range rd.lineMeta {
+		if lm.kind != diffLineNonSelectable {
+			t.Errorf("line %d: expected non-selectable for delete/binary files, got selectable", i)
+		}
+	}
+}
+
+// TestLineMeta_CollapsedFilesHaveNoSelectableLines verifies that collapsing a
+// file removes its selectable lines from the metadata.
+func TestLineMeta_CollapsedFilesHaveNoSelectableLines(t *testing.T) {
+	files := []diff.File{
+		{
+			Name: "a.go",
+			Type: diff.Normal,
+			Hunks: []diff.Hunk{
+				{NewStart: 1, NewCount: 1, Lines: []diff.Line{
+					{Type: diff.LineAdded, Content: "x"},
+				}},
+			},
+		},
+	}
+
+	collapsed := []bool{true}
+	rd := renderDiffResult(files, 60, collapsed)
+	for i, lm := range rd.lineMeta {
+		if lm.kind == diffLineHunkContent {
+			t.Errorf("line %d: expected no selectable lines in collapsed file", i)
+		}
+	}
+}

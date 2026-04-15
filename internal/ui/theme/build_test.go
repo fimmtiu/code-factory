@@ -31,7 +31,7 @@ func TestBuildThemeReturnsNonNil(t *testing.T) {
 // TestBuildThemeStyleFieldCount verifies that every theme populates the
 // expected number of lipgloss.Style fields and all special fields.
 func TestBuildThemeStyleFieldCount(t *testing.T) {
-	const expectedStyleFields = 63
+	const expectedStyleFields = 64
 
 	for name, ctor := range themeConstructors {
 		t.Run(name, func(t *testing.T) {

@@ -430,15 +430,18 @@ func TestViewerKeyTab(t *testing.T) {
 	}
 }
 
-// TestViewerKeyEnter returns to commit selector.
+// TestViewerKeyEnter enters line-select mode.
 func TestViewerKeyEnter(t *testing.T) {
 	files := largeSampleFiles()
 	v := makeDiffViewInViewerMode(files, 80, 24)
 
 	updated, _ := v.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	dv := updated.(DiffView)
-	if dv.viewer != nil {
-		t.Error("expected viewer to be nil after Enter")
+	if dv.viewer == nil {
+		t.Fatal("expected viewer to still be active after Enter")
+	}
+	if !dv.viewer.lineSelectMode {
+		t.Error("expected line-select mode to be active after Enter")
 	}
 }
 
@@ -705,4 +708,206 @@ func TestViewerRenderPane_EmptyUsesThemeEmptyStateStyle(t *testing.T) {
 		m := makeViewerModel(nil, 80, 24)
 		return m.renderPane()
 	})
+}
+
+// ── Line select mode tests ──────────────────────────────────────────────────
+
+// TestLineSelect_EnterPlacesSelectionOnSelectableLine verifies that entering
+// line-select mode places the selection on a hunk content line.
+func TestLineSelect_EnterPlacesSelectionOnSelectableLine(t *testing.T) {
+	m := makeViewerModel(largeSampleFiles(), 80, 24)
+	m.enterLineSelect()
+	if !m.lineSelectMode {
+		t.Fatal("expected line-select mode to be active")
+	}
+	if !m.isSelectable(m.selectedLine) {
+		t.Errorf("selected line %d should be selectable", m.selectedLine)
+	}
+}
+
+// TestLineSelect_EnterNoOp_EmptyDiff verifies that entering line-select mode
+// with no diff content does nothing.
+func TestLineSelect_EnterNoOp_EmptyDiff(t *testing.T) {
+	m := makeViewerModel(nil, 80, 24)
+	m.enterLineSelect()
+	if m.lineSelectMode {
+		t.Error("should not enter line-select mode on empty diff")
+	}
+}
+
+// TestLineSelect_EnterNoOp_NoSelectableVisible verifies that entering line-
+// select mode when no selectable lines are visible is a no-op.
+func TestLineSelect_EnterNoOp_NoSelectableVisible(t *testing.T) {
+	// A diff with only deleted and binary files has no hunk content.
+	files := []diff.File{
+		{Name: "deleted.go", Type: diff.Delete},
+		{Name: "image.png", Type: diff.Binary},
+	}
+	m := makeViewerModel(files, 80, 24)
+	m.enterLineSelect()
+	if m.lineSelectMode {
+		t.Error("should not enter line-select mode when no selectable lines visible")
+	}
+}
+
+// TestLineSelect_MoveDown moves the selection down, skipping non-selectable lines.
+func TestLineSelect_MoveDown(t *testing.T) {
+	m := makeViewerModel(largeSampleFiles(), 80, 24)
+	m.enterLineSelect()
+	if !m.lineSelectMode {
+		t.Fatal("line-select mode not active")
+	}
+	prev := m.selectedLine
+	m.moveSelection(1, 1)
+	if m.selectedLine <= prev {
+		t.Errorf("selection should move down: was %d, now %d", prev, m.selectedLine)
+	}
+	if !m.isSelectable(m.selectedLine) {
+		t.Errorf("selected line %d should be selectable", m.selectedLine)
+	}
+}
+
+// TestLineSelect_MoveUp moves the selection up.
+func TestLineSelect_MoveUp(t *testing.T) {
+	m := makeViewerModel(largeSampleFiles(), 80, 24)
+	m.enterLineSelect()
+	if !m.lineSelectMode {
+		t.Fatal("line-select mode not active")
+	}
+	// Move down a few times first so we have room to move up.
+	m.moveSelection(5, 1)
+	prev := m.selectedLine
+	m.moveSelection(1, -1)
+	if m.selectedLine >= prev {
+		t.Errorf("selection should move up: was %d, now %d", prev, m.selectedLine)
+	}
+	if !m.isSelectable(m.selectedLine) {
+		t.Errorf("selected line %d should be selectable", m.selectedLine)
+	}
+}
+
+// TestLineSelect_MoveDownClampsAtEnd verifies the selection doesn't move
+// past the last selectable line.
+func TestLineSelect_MoveDownClampsAtEnd(t *testing.T) {
+	m := makeViewerModel(largeSampleFiles(), 80, 24)
+	m.enterLineSelect()
+	m.moveSelection(10000, 1) // way past the end
+	line := m.selectedLine
+	m.moveSelection(1, 1)
+	if m.selectedLine != line {
+		t.Errorf("should not move past last selectable line: was %d, now %d", line, m.selectedLine)
+	}
+}
+
+// TestLineSelect_MoveUpClampsAtStart verifies the selection doesn't move
+// before the first selectable line.
+func TestLineSelect_MoveUpClampsAtStart(t *testing.T) {
+	m := makeViewerModel(largeSampleFiles(), 80, 24)
+	m.enterLineSelect()
+	m.moveSelection(10000, -1) // way past the start
+	line := m.selectedLine
+	m.moveSelection(1, -1)
+	if m.selectedLine != line {
+		t.Errorf("should not move past first selectable line: was %d, now %d", line, m.selectedLine)
+	}
+}
+
+// TestLineSelect_ScrollsToKeepSelectionVisible verifies that moving the
+// selection past the visible area scrolls to follow it.
+func TestLineSelect_ScrollsToKeepSelectionVisible(t *testing.T) {
+	m := makeViewerModel(largeSampleFiles(), 80, 10)
+	m.enterLineSelect()
+	m.moveSelection(m.paneHeight+5, 1)
+	if m.selectedLine < m.offset || m.selectedLine >= m.offset+m.paneHeight {
+		t.Errorf("selected line %d should be visible (offset=%d, paneH=%d)",
+			m.selectedLine, m.offset, m.paneHeight)
+	}
+}
+
+// TestLineSelect_UpdatesCurrentFileIndex verifies that the current file
+// index follows the selected line as it crosses file boundaries.
+func TestLineSelect_UpdatesCurrentFileIndex(t *testing.T) {
+	m := makeViewerModel(largeSampleFiles(), 80, 24)
+	m.enterLineSelect()
+	// Move to the end — should be in the second file.
+	m.moveSelection(10000, 1)
+	idx := m.currentFileIndex()
+	if idx != 1 {
+		t.Errorf("expected file index 1 at end, got %d", idx)
+	}
+}
+
+// TestLineSelect_ExitFreezesThenScrollClears verifies that exiting line-select
+// freezes the file index, and scrolling via key press clears it.
+func TestLineSelect_ExitFreezesThenScrollClears(t *testing.T) {
+	m := makeViewerModel(largeSampleFiles(), 80, 24)
+	m.enterLineSelect()
+	m.moveSelection(10000, 1) // go to second file
+	frozenIdx := m.currentFileIndex()
+	m.exitLineSelect()
+
+	// File index should stay frozen after exit.
+	if m.currentFileIndex() != frozenIdx {
+		t.Errorf("expected frozen file index %d, got %d", frozenIdx, m.currentFileIndex())
+	}
+
+	// Scrolling via key press should clear the frozen index.
+	m.handleKey(tea.KeyMsg{Type: tea.KeyUp})
+	if m.frozenFileIdx != -1 {
+		t.Errorf("expected frozenFileIdx to be cleared after scroll, got %d", m.frozenFileIdx)
+	}
+}
+
+// TestLineSelect_EscExitsLineSelectNotViewer verifies that Esc in line-select
+// mode exits line-select, not the viewer.
+func TestLineSelect_EscExitsLineSelectNotViewer(t *testing.T) {
+	files := largeSampleFiles()
+	v := makeDiffViewInViewerMode(files, 80, 24)
+	v.viewer.enterLineSelect()
+	if !v.viewer.lineSelectMode {
+		t.Fatal("line-select mode not active")
+	}
+
+	updated, _ := v.Update(tea.KeyMsg{Type: tea.KeyEscape})
+	dv := updated.(DiffView)
+	if dv.viewer == nil {
+		t.Fatal("Esc should not close viewer while in line-select mode")
+	}
+	if dv.viewer.lineSelectMode {
+		t.Error("Esc should exit line-select mode")
+	}
+}
+
+// TestLineSelect_TabExitsViewerFromLineSelect verifies that Tab exits the
+// entire viewer even when in line-select mode.
+func TestLineSelect_TabExitsViewerFromLineSelect(t *testing.T) {
+	files := largeSampleFiles()
+	v := makeDiffViewInViewerMode(files, 80, 24)
+	v.viewer.enterLineSelect()
+
+	updated, _ := v.Update(tea.KeyMsg{Type: tea.KeyTab})
+	dv := updated.(DiffView)
+	if dv.viewer != nil {
+		t.Error("Tab should close viewer even in line-select mode")
+	}
+}
+
+// TestLineSelect_KeysViaUpdate verifies that arrow keys in line-select mode
+// move the selection instead of scrolling.
+func TestLineSelect_KeysViaUpdate(t *testing.T) {
+	files := largeSampleFiles()
+	v := makeDiffViewInViewerMode(files, 80, 24)
+	v.viewer.enterLineSelect()
+	prev := v.viewer.selectedLine
+	prevOffset := v.viewer.offset
+
+	updated, _ := v.Update(tea.KeyMsg{Type: tea.KeyDown})
+	dv := updated.(DiffView)
+	if dv.viewer.selectedLine == prev {
+		t.Error("down arrow should move selection in line-select mode")
+	}
+	// Offset should not change for a small move.
+	if dv.viewer.offset != prevOffset {
+		t.Errorf("offset should not change for small move: was %d, now %d", prevOffset, dv.viewer.offset)
+	}
 }

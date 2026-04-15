@@ -505,7 +505,7 @@ func (v DiffView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		if v.viewer != nil {
-			if isViewerExitKey(msg) {
+			if isViewerExitKey(v.viewer, msg) {
 				v.viewer = nil
 				return v, nil
 			}
@@ -791,7 +791,10 @@ func (v DiffView) KeyBindings() []KeyBinding {
 // The root model calls this instead of inspecting DiffView internals.
 func (v DiffView) HintPairs() []string {
 	if v.viewer != nil {
-		return []string{"↑/↓", "scroll", "PgUp/Dn", "page", "C", "collapse/expand", "Tab/Esc/Enter", "back"}
+		if v.viewer.lineSelectMode {
+			return []string{"↑/↓", "move selection", "PgUp/Dn", "page", "Esc", "exit select", "Tab", "back"}
+		}
+		return []string{"↑/↓", "scroll", "PgUp/Dn", "page", "Enter", "select lines", "C", "collapse/expand", "Tab/Esc", "back"}
 	}
 	return []string{"↑/↓", "navigate", "PgUp/Dn", "page", "Shift+↑/↓", "extend range", "T", "open terminal", "E", "open editor", "Tab", "view diff"}
 }

@@ -178,6 +178,9 @@ func buildTheme(p Palette) *Theme {
 		DiffRangeStyle: lipgloss.NewStyle().
 			Background(p.Accent).
 			Foreground(p.OnPrimary),
+		DiffLineSelectStyle: lipgloss.NewStyle().
+			Background(p.Accent).
+			Foreground(p.OnPrimary),
 		DiffSeparatorStyle: lipgloss.NewStyle().
 			Foreground(p.DimGrey),
 		DiffStatusBarStyle: lipgloss.NewStyle().
