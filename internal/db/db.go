@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -45,6 +46,9 @@ type DB struct {
 	ticketsDir string
 	repoRoot   string
 	git        gitutil.GitClient
+
+	mergeMu    sync.Mutex             // protects mergeLocks
+	mergeLocks map[string]*sync.Mutex // per-target lock serializing merges
 }
 
 // Open opens (or creates) the tickets database at ticketsDir/data.sqlite and
@@ -639,11 +643,39 @@ func (d *DB) RebaseTicketOnParent(identifier, parentIdentifier, parentBranch str
 	return d.git.RebaseOnto(worktreePath, ontoBranch)
 }
 
+// mergeLock returns the mutex that serializes merges into the given target
+// directory. Two tickets merging into the same parent will block on the same
+// lock, preventing interleaved git operations.
+func (d *DB) mergeLock(target string) *sync.Mutex {
+	d.mergeMu.Lock()
+	defer d.mergeMu.Unlock()
+	if d.mergeLocks == nil {
+		d.mergeLocks = make(map[string]*sync.Mutex)
+	}
+	mu, ok := d.mergeLocks[target]
+	if !ok {
+		mu = &sync.Mutex{}
+		d.mergeLocks[target] = mu
+	}
+	return mu
+}
+
 // markTicketDone merges the ticket's branch into the parent project's worktree
 // (or repoRoot if there is no parent), updates the DB, and removes the worktree.
 // If parentBranch is non-empty, it overrides the default merge target.
 func (d *DB) markTicketDone(ticketID int64, identifier string, projectID sql.NullInt64, parentBranch string) error {
 	mergeTarget := d.mergeTargetDir(parentBranch, projectID)
+
+	mu := d.mergeLock(mergeTarget)
+	mu.Lock()
+	defer mu.Unlock()
+
+	// Best-effort rebase onto the target branch before merging. This brings
+	// the ticket up to date with sibling changes that already landed,
+	// reducing the chance of a merge conflict.
+	if targetBranch, err := d.git.GetCurrentBranch(mergeTarget); err == nil {
+		_ = d.git.RebaseOnto(d.worktreePath(identifier), targetBranch)
+	}
 
 	if err := d.git.MergeBranch(mergeTarget, identifier); err != nil {
 		return &MergeConflictError{WorktreePath: mergeTarget, Branch: identifier, Err: err}
@@ -1385,6 +1417,15 @@ func (d *DB) SetProjectPhase(identifier, phase string) error {
 
 	if phase == string(models.ProjectPhaseDone) {
 		mergeTarget := d.mergeTargetDir(parentBranch, parentProjectID)
+
+		mu := d.mergeLock(mergeTarget)
+		mu.Lock()
+		defer mu.Unlock()
+
+		if targetBranch, err := d.git.GetCurrentBranch(mergeTarget); err == nil {
+			_ = d.git.RebaseOnto(d.worktreePath(identifier), targetBranch)
+		}
+
 		if err := d.git.MergeBranch(mergeTarget, identifier); err != nil {
 			return &MergeConflictError{WorktreePath: mergeTarget, Branch: identifier, Err: err}
 		}
