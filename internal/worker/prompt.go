@@ -42,13 +42,19 @@ func BuildPrompt(ticket *models.WorkUnit, database *db.DB, ticketsDir string) (s
 		}
 
 	case models.PhaseRefactor:
-		prompt = fmt.Sprintf("/cf-refactor on worktree `%s` for ticket `%s`", worktreePath, identifier)
+		env := DetectWorktreeEnv(worktreePath)
+		prompt = env.FormatEnvBlock() +
+			fmt.Sprintf("/cf-refactor on worktree `%s` for ticket `%s`", worktreePath, identifier)
 
 	case models.PhaseReview:
-		prompt = fmt.Sprintf("/cf-review on worktree `%s` for ticket `%s`", worktreePath, identifier)
+		env := DetectWorktreeEnv(worktreePath)
+		prompt = env.FormatEnvBlock() +
+			fmt.Sprintf("/cf-review on worktree `%s` for ticket `%s`", worktreePath, identifier)
 
 	case models.PhaseRespond:
-		prompt = fmt.Sprintf("/cf-respond on worktree `%s` for ticket `%s`", worktreePath, identifier)
+		env := DetectWorktreeEnv(worktreePath)
+		prompt = env.FormatEnvBlock() +
+			fmt.Sprintf("/cf-respond on worktree `%s` for ticket `%s`", worktreePath, identifier)
 
 	default:
 		return "", fmt.Errorf("BuildPrompt: unsupported ticket phase %q", ticket.Phase)

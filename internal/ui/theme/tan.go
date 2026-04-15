@@ -44,6 +44,7 @@ func TanPalette() Palette {
 		LogCommit:   lipgloss.Color("74"),
 		LogClaim:    lipgloss.Color("34"),
 		LogRelease:  lipgloss.Color("21"),
+		LogWorker:   lipgloss.Color("33"),
 
 		// Phase badges.
 		PhaseImplement: lipgloss.Color("37"),

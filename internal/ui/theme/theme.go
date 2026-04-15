@@ -77,6 +77,7 @@ type Theme struct {
 
 	// ── Log view ────────────────────────────────────────────────────────
 	LogSelectedStyle lipgloss.Style
+	LogWorkerStyle   lipgloss.Style
 
 	// ── Diff view ───────────────────────────────────────────────────────
 	DiffSelectedStyle  lipgloss.Style

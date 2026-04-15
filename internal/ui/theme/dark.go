@@ -46,6 +46,7 @@ func DarkPalette() Palette {
 		LogCommit:   lipgloss.Color("116"), // bright teal
 		LogClaim:    lipgloss.Color("114"), // bright green
 		LogRelease:  lipgloss.Color("69"),  // bright blue
+		LogWorker:   lipgloss.Color("75"),  // bright blue
 
 		// Phase badges — bright enough for dark bg.
 		PhaseImplement: lipgloss.Color("80"),  // bright cyan

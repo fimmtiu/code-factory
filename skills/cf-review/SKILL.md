@@ -12,16 +12,16 @@ Trigger on `/review` or `/cf-review`.
 
 ## Prerequisites
 
-Before starting, run through ALL of the following steps in order:
+Before starting, run through ALL of the following steps in order. **If a "Pre-detected environment" block was provided in the prompt**, use its values for `DEFAULT_BRANCH` and `BRANCHPOINT` directly and skip the corresponding detection steps below.
 
 1. **Find the ticket identifier**: It should have been specified as part of the skill invocation (e.g., `/review TICKET-123`). If not provided, ask the user for it before proceeding. Store this as `TICKET_ID`.
 2. **You must be on a branch**: Run `git branch --show-current`. If the result is `master` or `main`, tell the user "You must be on a feature branch to run a review" and stop.
-3. **Identify default branch**: Detect the repo's default branch (main or master):
+3. **Identify default branch** *(skip if pre-detected)*: Detect the repo's default branch (main or master):
    ```bash
    git branch -l main master --format='%(refname:short)' | head -1
    ```
    Store the output as `DEFAULT_BRANCH`.
-4. **Identify branchpoint**: Locate the commit where this branch diverged from the default branch. Replace `DEFAULT_BRANCH` with the value from step 3 — you MUST prepend `origin/` as shown:
+4. **Identify branchpoint** *(skip if pre-detected)*: Locate the commit where this branch diverged from the default branch. Replace `DEFAULT_BRANCH` with the value from step 3 — you MUST prepend `origin/` as shown:
    ```bash
    git merge-base origin/DEFAULT_BRANCH HEAD
    ```

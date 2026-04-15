@@ -12,6 +12,8 @@ Trigger on `/respond` or `/cf-respond`.
 
 ## Prerequisites
 
+**If a "Pre-detected environment" block was provided in the prompt**, use its `BUILD_CMD`, `TEST_CMD`, and `LINT_CMD` values for lint and test commands instead of re-detecting them.
+
 1. **Identify the ticket**: The ticket identifier (e.g. `my-project/my-ticket`) must be provided as an argument after the trigger command (e.g. `/cf-respond my-project/my-ticket`). If no identifier was provided, ask the user for it and stop.
 2. **Verify you are on a feature branch**: If the current branch is `master` or `main`, tell the user and stop.
 
@@ -26,7 +28,7 @@ For each open change request, in order:
 1. Read the `code_location` and `description` fields to understand what needs to change.
 2. Examine the code and decide if the described change request is an actual problem. If the proposed change is unnecessary or an overreaction, compose a detailed description of the reason why you think it's not required, run `cf-tickets dismiss-cr <id> <reason>`, then stop processing this change request. Otherwise, if making the proposed change would fix a real problem or make the code cleaner, continue.
 3. Write or update tests first to cover the requested change, then modify the implementation code.
-4. Run the project's lint and test commands. Check `CLAUDE.md` or the project's Makefile for the correct commands. If you don't find them there, consult project conventions or infer the correct commands from the language.
+4. Run the project's lint and test commands. Use `LINT_CMD` and `TEST_CMD` if they were pre-detected; otherwise check `CLAUDE.md` or the project's Makefile for the correct commands. If you don't find them there, consult project conventions or infer the correct commands from the language.
 5. Commit the changes in a single commit. The commit message must:
    - Start with the prefix "cf-respond:" (e.g. "cf-respond: fix null check in parser").
    - Include a summary of what was changed and why.

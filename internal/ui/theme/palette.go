@@ -45,6 +45,7 @@ type Palette struct {
 	LogCommit   lipgloss.Color
 	LogClaim    lipgloss.Color
 	LogRelease  lipgloss.Color
+	LogWorker   lipgloss.Color
 
 	// Phase badges.
 	PhaseImplement lipgloss.Color

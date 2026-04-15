@@ -11,17 +11,17 @@ Trigger with `/cf-refactor` or `/refactorizer`.
 
 ## Prerequisites
 
-Run ALL of these steps before starting the refactoring loop:
+Run ALL of these steps before starting the refactoring loop. **If a "Pre-detected environment" block was provided in the prompt**, use its values for `DEFAULT_BRANCH`, `BRANCHPOINT`, `BUILD_CMD`, `TEST_CMD`, and `LINT_CMD` directly and skip the corresponding detection steps below. Only run a detection step if the value you need was not pre-detected.
 
 1. **Branch check**: If the current branch is `main` or `master`, tell the user "You must be on a feature branch to refactor. Check out a branch and try again." and stop.
 
-2. **Default branch detection**:
+2. **Default branch detection** *(skip if pre-detected)*:
    ```bash
    git branch -l main master --format='%(refname:short)' | head -1
    ```
    Store the output as `DEFAULT_BRANCH`. If the output is empty (neither `main` nor `master` exists locally), ask the user: "What is the default branch name?" and use their answer.
 
-3. **Branchpoint identification**:
+3. **Branchpoint identification** *(skip if pre-detected)*:
    ```bash
    git merge-base origin/<DEFAULT_BRANCH> HEAD
    ```
@@ -37,7 +37,7 @@ Run ALL of these steps before starting the refactoring loop:
    ```
    Generate a one-sentence summary of what this branch does. Store as `BRANCH_PURPOSE`. Print it so the user can see it.
 
-5. **Detect project tooling**: Determine `BUILD_CMD`, `TEST_CMD`, and `LINT_CMD` by checking these sources in priority order:
+5. **Detect project tooling** *(skip if pre-detected)*: Determine `BUILD_CMD`, `TEST_CMD`, and `LINT_CMD` by checking these sources in priority order:
 
    a. **Workspace rules** (CLAUDE.md, .cursorrules, AGENTS.md, etc.) — these take highest priority.
    b. **Makefile** — look for `build`, `test`, and `lint` targets. If found, use `make build` / `make test` / `make lint`.
@@ -92,7 +92,9 @@ For smell N of 23:
 
 1. **Announce**: Print `[N/23] Scanning for <SMELL_NAME>...`
 
-2. **Re-diff**: Get the current diff for changed files:
+2. **Re-diff (conditional)**: Only re-diff if the *previous* phase actually made changes (i.e. it reported refactored instances). If the previous phase reported `Clean`, skip this step entirely — your existing knowledge of the file contents is still accurate.
+
+   When re-diffing is needed:
    ```bash
    git diff <BRANCHPOINT> -- <space-separated CHANGED_FILES>
    ```

@@ -59,8 +59,9 @@ func TestLightDistinctFromTan(t *testing.T) {
 // TestLightRegistryIntegration verifies that Init("light") uses the real
 // Light() constructor (not the Tan placeholder).
 func TestLightRegistryIntegration(t *testing.T) {
+	saved := currentTheme.Load()
+	t.Cleanup(func() { currentTheme.Store(saved) })
 	currentTheme.Store(nil)
-	t.Cleanup(func() { currentTheme.Store(nil) })
 	if err := Init("light"); err != nil {
 		t.Fatalf("Init(\"light\") returned error: %v", err)
 	}

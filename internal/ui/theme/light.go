@@ -47,6 +47,7 @@ func LightPalette() Palette {
 		LogCommit:   lipgloss.Color("30"),  // teal
 		LogClaim:    lipgloss.Color("28"),  // dark green
 		LogRelease:  lipgloss.Color("19"),  // dark blue
+		LogWorker:   lipgloss.Color("25"),  // dark blue
 
 		// Phase badges — dark enough for white backgrounds.
 		PhaseImplement: lipgloss.Color("30"),  // teal
@@ -54,6 +55,12 @@ func LightPalette() Palette {
 		PhaseReview:    lipgloss.Color("62"),  // medium purple
 		PhaseRespond:   lipgloss.Color("91"),  // dark magenta
 		PhaseBlocked:   lipgloss.Color("124"), // dark red
+
+		// Timestamp tiers (recent = dark, old = light — visible on light bg).
+		TimestampTier1: lipgloss.Color("236"), // < 1 min  (darkest, most prominent on light bg)
+		TimestampTier2: lipgloss.Color("240"), // 1–5 min
+		TimestampTier3: lipgloss.Color("244"), // 5–30 min
+		TimestampTier4: lipgloss.Color("248"), // > 30 min (lightest, least prominent)
 
 		// Diff view — subtle pastel backgrounds that show on white.
 		DiffHunkHeader: lipgloss.Color("189"), // light lavender

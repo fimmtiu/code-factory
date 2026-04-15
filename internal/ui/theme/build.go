@@ -168,6 +168,8 @@ func buildTheme(p Palette) *Theme {
 		LogSelectedStyle: lipgloss.NewStyle().
 			Background(p.Primary).
 			Foreground(p.OnPrimary),
+		LogWorkerStyle: lipgloss.NewStyle().
+			Foreground(p.LogWorker),
 
 		// ── Diff view ───────────────────────────────────────────────
 		DiffSelectedStyle: lipgloss.NewStyle().
