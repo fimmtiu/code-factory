@@ -61,16 +61,16 @@ type DiffViewerModel struct {
 	selectedLine   int  // index of the currently selected line in the rendered text
 	frozenFileIdx  int  // file index frozen on exit from line select; -1 when not frozen
 
-	// CR indicator state: full change request data keyed by "file:line".
-	crMap map[string]models.ChangeRequest
+	// CR indicator state: keyed by "file:line". Multiple CRs may share a location.
+	crMap map[string][]models.ChangeRequest
 }
 
 // newDiffViewerModel creates a DiffViewerModel from parsed diff files.
 // paneWidth and paneHeight are the dimensions of the content area only
 // (DiffView accounts for the status bar, separator, and chrome).
-// crMap contains the full change request data keyed by "file:line";
-// nil means no CR indicators.
-func newDiffViewerModel(files []diff.File, paneWidth, paneHeight int, crMap map[string]models.ChangeRequest) *DiffViewerModel {
+// crMap contains change request data keyed by "file:line"; multiple CRs
+// may share a location. nil means no CR indicators.
+func newDiffViewerModel(files []diff.File, paneWidth, paneHeight int, crMap map[string][]models.ChangeRequest) *DiffViewerModel {
 	m := &DiffViewerModel{
 		paneWidth:     paneWidth,
 		paneHeight:    paneHeight,

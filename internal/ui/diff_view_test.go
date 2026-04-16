@@ -955,8 +955,8 @@ func TestDiffView_CRMapPassedToViewer(t *testing.T) {
 		height:     24,
 		identifier: "proj/ticket",
 		phase:      "implement",
-		crMap: map[string]models.ChangeRequest{
-			"internal/ui/app.go:10": {CodeLocation: "internal/ui/app.go:10"},
+		crMap: map[string][]models.ChangeRequest{
+			"internal/ui/app.go:10": {{CodeLocation: "internal/ui/app.go:10"}},
 		},
 	}
 
@@ -969,7 +969,7 @@ func TestDiffView_CRMapPassedToViewer(t *testing.T) {
 	if dv.viewer.crMap == nil {
 		t.Fatal("expected crMap to be set on viewer")
 	}
-	if _, ok := dv.viewer.crMap["internal/ui/app.go:10"]; !ok {
+	if crs, ok := dv.viewer.crMap["internal/ui/app.go:10"]; !ok || len(crs) == 0 {
 		t.Error("expected crMap to contain 'internal/ui/app.go:10'")
 	}
 }
@@ -983,7 +983,7 @@ func TestDiffView_EmptyCRMapPassedToViewer(t *testing.T) {
 		height:     24,
 		identifier: "proj/ticket",
 		phase:      "implement",
-		crMap:      map[string]models.ChangeRequest{},
+		crMap:      map[string][]models.ChangeRequest{},
 	}
 
 	updated, _ := v.Update(diffContentMsg{files: files})
@@ -1045,8 +1045,8 @@ func TestFetchCRMapCmd_NilDB(t *testing.T) {
 // stores the map on DiffView.
 func TestCRMapLoadedMsg_SetsCRMap(t *testing.T) {
 	v := DiffView{width: 80, height: 24}
-	crMap := map[string]models.ChangeRequest{
-		"file.go:1": {CodeLocation: "file.go:1", Description: "test"},
+	crMap := map[string][]models.ChangeRequest{
+		"file.go:1": {{CodeLocation: "file.go:1", Description: "test"}},
 	}
 	updated, cmd := v.Update(crMapLoadedMsg{crMap: crMap})
 	dv := updated.(DiffView)
@@ -1056,8 +1056,56 @@ func TestCRMapLoadedMsg_SetsCRMap(t *testing.T) {
 	if dv.crMap == nil {
 		t.Fatal("expected crMap to be set")
 	}
-	if _, ok := dv.crMap["file.go:1"]; !ok {
+	if crs, ok := dv.crMap["file.go:1"]; !ok || len(crs) == 0 {
 		t.Error("expected crMap to contain 'file.go:1'")
+	}
+}
+
+// TestFetchCRMapCmd_PreservesMultipleCRsAtSameLocation verifies that when
+// multiple CRs share the same CodeLocation, they are all preserved in the
+// slice rather than silently dropping earlier ones.
+func TestFetchCRMapCmd_PreservesMultipleCRsAtSameLocation(t *testing.T) {
+	// We can't easily test with a real DB, but we can verify the map-building
+	// logic by checking that openViewChangeRequestDialog picks the first CR
+	// from a multi-entry slice.
+	files := sampleFiles()
+	v := makeDiffViewInViewerMode(files, 80, 24)
+	v.identifier = "proj/ticket"
+	v.worktreePath = "/tmp/fake-worktree"
+	v.crMap = map[string][]models.ChangeRequest{
+		"internal/ui/app.go:10": {
+			{CodeLocation: "internal/ui/app.go:10", Description: "first CR", Author: "alice"},
+			{CodeLocation: "internal/ui/app.go:10", Description: "second CR", Author: "bob"},
+		},
+	}
+
+	v.viewer.enterLineSelect()
+	// Position on the CR line.
+	for i, meta := range v.viewer.lineMeta {
+		if v.viewer.isSelectable(i) && meta.lineNum == 10 && meta.fileIndex == 0 {
+			v.viewer.selectedLine = i
+			break
+		}
+	}
+
+	cmd := v.openViewChangeRequestDialog()
+	if cmd == nil {
+		t.Fatal("expected non-nil cmd for line with multiple CRs")
+	}
+	msg := cmd()
+	openMsg := msg.(openViewChangeRequestDialogMsg)
+	// Should pick the first (earliest) CR.
+	if openMsg.cr.Description != "first CR" {
+		t.Errorf("expected first CR, got %q", openMsg.cr.Description)
+	}
+
+	// Verify both CRs are preserved in the map.
+	crs := v.crMap["internal/ui/app.go:10"]
+	if len(crs) != 2 {
+		t.Fatalf("expected 2 CRs at same location, got %d", len(crs))
+	}
+	if crs[1].Description != "second CR" {
+		t.Errorf("expected second CR preserved, got %q", crs[1].Description)
 	}
 }
 
@@ -1068,8 +1116,8 @@ func TestDiffView_ResetForTicketClearsCRMap(t *testing.T) {
 		width:      80,
 		height:     24,
 		identifier: "old/ticket",
-		crMap: map[string]models.ChangeRequest{
-			"file.go:1": {CodeLocation: "file.go:1"},
+		crMap: map[string][]models.ChangeRequest{
+			"file.go:1": {{CodeLocation: "file.go:1"}},
 		},
 	}
 
@@ -1090,12 +1138,12 @@ func TestOpenViewChangeRequestDialog_ReturnsCmdForCRLine(t *testing.T) {
 	v := makeDiffViewInViewerMode(files, 80, 24)
 	v.identifier = "proj/ticket"
 	v.worktreePath = "/tmp/fake-worktree"
-	v.crMap = map[string]models.ChangeRequest{
-		"internal/ui/app.go:10": {
+	v.crMap = map[string][]models.ChangeRequest{
+		"internal/ui/app.go:10": {{
 			CodeLocation: "internal/ui/app.go:10",
 			Description:  "fix this",
 			Author:       "alice",
-		},
+		}},
 	}
 
 	// Enter line-select mode and position on a line in the first file.
@@ -1152,7 +1200,7 @@ func TestOpenViewChangeRequestDialog_ReturnsNilForNonCRLine(t *testing.T) {
 	v := makeDiffViewInViewerMode(files, 80, 24)
 	v.identifier = "proj/ticket"
 	v.worktreePath = "/tmp/fake-worktree"
-	v.crMap = map[string]models.ChangeRequest{} // empty crMap
+	v.crMap = map[string][]models.ChangeRequest{} // empty crMap
 
 	v.viewer.enterLineSelect()
 	if !v.viewer.lineSelectMode {
@@ -1171,7 +1219,7 @@ func TestOpenViewChangeRequestDialog_ReturnsNilWhenNoViewer(t *testing.T) {
 	v := DiffView{
 		identifier:   "proj/ticket",
 		worktreePath: "/tmp/fake-worktree",
-		crMap:        map[string]models.ChangeRequest{},
+		crMap:        map[string][]models.ChangeRequest{},
 	}
 	cmd := v.openViewChangeRequestDialog()
 	if cmd != nil {
@@ -1185,8 +1233,8 @@ func TestOpenViewChangeRequestDialog_ReturnsNilWhenNoWorktreePath(t *testing.T) 
 	files := sampleFiles()
 	v := makeDiffViewInViewerMode(files, 80, 24)
 	v.worktreePath = "" // empty
-	v.crMap = map[string]models.ChangeRequest{
-		"internal/ui/app.go:10": {CodeLocation: "internal/ui/app.go:10"},
+	v.crMap = map[string][]models.ChangeRequest{
+		"internal/ui/app.go:10": {{CodeLocation: "internal/ui/app.go:10"}},
 	}
 	v.viewer.enterLineSelect()
 
@@ -1203,8 +1251,8 @@ func TestEnterKeyInLineSelectMode_OpensCRDialog(t *testing.T) {
 	v := makeDiffViewInViewerMode(files, 80, 24)
 	v.identifier = "proj/ticket"
 	v.worktreePath = "/tmp/fake-worktree"
-	v.crMap = map[string]models.ChangeRequest{
-		"internal/ui/app.go:10": {CodeLocation: "internal/ui/app.go:10"},
+	v.crMap = map[string][]models.ChangeRequest{
+		"internal/ui/app.go:10": {{CodeLocation: "internal/ui/app.go:10"}},
 	}
 
 	v.viewer.enterLineSelect()
@@ -1233,7 +1281,7 @@ func TestEnterKeyInLineSelectMode_NoOpForNonCRLine(t *testing.T) {
 	v := makeDiffViewInViewerMode(files, 80, 24)
 	v.identifier = "proj/ticket"
 	v.worktreePath = "/tmp/fake-worktree"
-	v.crMap = map[string]models.ChangeRequest{} // no CRs
+	v.crMap = map[string][]models.ChangeRequest{} // no CRs
 
 	v.viewer.enterLineSelect()
 

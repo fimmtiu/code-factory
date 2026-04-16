@@ -885,20 +885,20 @@ func TestLineSelect_EscExitsLineSelectNotViewer(t *testing.T) {
 // on the model and CR indicators are rendered.
 func TestNewDiffViewerModel_WithCRMap(t *testing.T) {
 	files := sampleFiles()
-	crMap := map[string]models.ChangeRequest{
-		"internal/ui/app.go:10": {CodeLocation: "internal/ui/app.go:10", Description: "test CR"},
+	crMap := map[string][]models.ChangeRequest{
+		"internal/ui/app.go:10": {{CodeLocation: "internal/ui/app.go:10", Description: "test CR"}},
 	}
 	m := newDiffViewerModel(files, 80, 24, crMap)
 
 	if m.crMap == nil {
 		t.Fatal("expected crMap to be stored on model")
 	}
-	cr, ok := m.crMap["internal/ui/app.go:10"]
-	if !ok {
+	crs, ok := m.crMap["internal/ui/app.go:10"]
+	if !ok || len(crs) == 0 {
 		t.Error("expected crMap to contain 'internal/ui/app.go:10'")
 	}
-	if cr.Description != "test CR" {
-		t.Errorf("expected full ChangeRequest data, got description %q", cr.Description)
+	if crs[0].Description != "test CR" {
+		t.Errorf("expected full ChangeRequest data, got description %q", crs[0].Description)
 	}
 	// The rendered text should contain the emoji for the CR line.
 	if !strings.Contains(m.text, "\U0001F4AC") {
@@ -923,8 +923,8 @@ func TestNewDiffViewerModel_NilCRMap(t *testing.T) {
 // passes crMap through to the renderer.
 func TestDiffViewerModel_Rerender_PreservesCRMap(t *testing.T) {
 	files := sampleFiles()
-	crMap := map[string]models.ChangeRequest{
-		"internal/ui/app.go:11": {CodeLocation: "internal/ui/app.go:11"},
+	crMap := map[string][]models.ChangeRequest{
+		"internal/ui/app.go:11": {{CodeLocation: "internal/ui/app.go:11"}},
 	}
 	m := newDiffViewerModel(files, 80, 24, crMap)
 

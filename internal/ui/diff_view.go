@@ -54,7 +54,7 @@ type diffShowStatMsg struct {
 
 // crMapLoadedMsg carries the result of the async CR-map fetch.
 type crMapLoadedMsg struct {
-	crMap map[string]models.ChangeRequest
+	crMap map[string][]models.ChangeRequest
 }
 
 // switchToDiffViewerMsg is sent when the user presses Tab/Enter to view the diff.
@@ -85,7 +85,8 @@ type DiffView struct {
 	worktreePath string // resolved once from identifier; empty until set
 
 	// Change request map: keyed by CodeLocation ("file:line") for the current ticket.
-	crMap map[string]models.ChangeRequest
+	// Multiple CRs may share the same location; the slice preserves all of them.
+	crMap map[string][]models.ChangeRequest
 
 	// Commit data
 	rows []commitRow
@@ -605,15 +606,15 @@ func (v DiffView) openTerminal() (tea.Model, tea.Cmd) {
 func fetchCRMapCmd(database *db.DB, identifier string) tea.Cmd {
 	return func() tea.Msg {
 		if database == nil {
-			return crMapLoadedMsg{crMap: make(map[string]models.ChangeRequest)}
+			return crMapLoadedMsg{crMap: make(map[string][]models.ChangeRequest)}
 		}
 		crs, err := database.OpenChangeRequests(identifier)
 		if err != nil {
-			return crMapLoadedMsg{crMap: make(map[string]models.ChangeRequest)}
+			return crMapLoadedMsg{crMap: make(map[string][]models.ChangeRequest)}
 		}
-		crMap := make(map[string]models.ChangeRequest, len(crs))
+		crMap := make(map[string][]models.ChangeRequest, len(crs))
 		for _, cr := range crs {
-			crMap[cr.CodeLocation] = cr
+			crMap[cr.CodeLocation] = append(crMap[cr.CodeLocation], cr)
 		}
 		return crMapLoadedMsg{crMap: crMap}
 	}
@@ -649,15 +650,15 @@ func (v DiffView) openViewChangeRequestDialog() tea.Cmd {
 		return nil
 	}
 	key := fmt.Sprintf("%s:%d", fileName, lineNum)
-	cr, ok := v.crMap[key]
-	if !ok {
+	crs := v.crMap[key]
+	if len(crs) == 0 {
 		return nil
 	}
 	identifier := v.identifier
 	worktreePath := v.worktreePath
 	return func() tea.Msg {
 		return openViewChangeRequestDialogMsg{
-			cr:           cr,
+			cr:           crs[0],
 			identifier:   identifier,
 			worktreePath: worktreePath,
 		}
