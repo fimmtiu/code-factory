@@ -408,3 +408,72 @@ func TestModel_Update_OpenEditChangeRequestDialogMsg_WithExistingCR(t *testing.T
 		t.Errorf("dialog.existingCR.ID = %q, want %q", d.existingCR.ID, "99")
 	}
 }
+
+// ── crSavedMsg notification tests ───────────────────────────────────────────
+
+func TestModel_Update_CrSavedMsg_Created_ShowsCreatedNotification(t *testing.T) {
+	ensureTheme(t)
+	m := NewModel(nil, nil, 5)
+	m.width = 120
+	m.height = 40
+
+	updated, cmd := m.Update(crSavedMsg{})
+	model := updated.(Model)
+	if cmd == nil {
+		t.Fatal("expected a notification command")
+	}
+	// Execute the command to get the notification message.
+	msg := cmd()
+	notif, ok := msg.(notifMsg)
+	if !ok {
+		t.Fatalf("expected notifMsg, got %T", msg)
+	}
+	if notif.text != "Change request created" {
+		t.Errorf("expected notification %q, got %q", "Change request created", notif.text)
+	}
+	_ = model
+}
+
+func TestModel_Update_CrSavedMsg_Edited_ShowsUpdatedNotification(t *testing.T) {
+	ensureTheme(t)
+	m := NewModel(nil, nil, 5)
+	m.width = 120
+	m.height = 40
+
+	updated, cmd := m.Update(crSavedMsg{edited: true})
+	model := updated.(Model)
+	if cmd == nil {
+		t.Fatal("expected a notification command")
+	}
+	msg := cmd()
+	notif, ok := msg.(notifMsg)
+	if !ok {
+		t.Fatalf("expected notifMsg, got %T", msg)
+	}
+	if notif.text != "Change request updated" {
+		t.Errorf("expected notification %q, got %q", "Change request updated", notif.text)
+	}
+	_ = model
+}
+
+func TestModel_Update_CrSavedMsg_Error_ShowsErrorNotification(t *testing.T) {
+	ensureTheme(t)
+	m := NewModel(nil, nil, 5)
+	m.width = 120
+	m.height = 40
+
+	updated, cmd := m.Update(crSavedMsg{errMsg: "db error"})
+	model := updated.(Model)
+	if cmd == nil {
+		t.Fatal("expected a notification command")
+	}
+	msg := cmd()
+	notif, ok := msg.(notifMsg)
+	if !ok {
+		t.Fatalf("expected notifMsg, got %T", msg)
+	}
+	if notif.text != "CR failed: db error" {
+		t.Errorf("expected notification %q, got %q", "CR failed: db error", notif.text)
+	}
+	_ = model
+}

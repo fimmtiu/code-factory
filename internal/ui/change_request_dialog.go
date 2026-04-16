@@ -2,7 +2,6 @@ package ui
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -31,9 +30,10 @@ type openEditChangeRequestDialogMsg struct {
 	existingCR *models.ChangeRequest
 }
 
-// crCreatedMsg is the result of running cf-tickets create-cr.
-type crCreatedMsg struct {
+// crSavedMsg is sent after a change request is created or updated.
+type crSavedMsg struct {
 	errMsg string
+	edited bool // true when an existing CR was updated, false when a new CR was created
 }
 
 // ── Focus ───────────────────────────────────────────────────────────────────
@@ -126,11 +126,8 @@ func (d EditChangeRequestDialog) submit() (tea.Model, tea.Cmd) {
 	}
 
 	if d.existingCR != nil {
-		id, err := strconv.ParseInt(d.existingCR.ID, 10, 64)
-		if err != nil {
-			return d, nil
-		}
 		database := d.database
+		id := d.existingCR.ID
 		return d, tea.Batch(
 			dismissDialogCmd(),
 			updateCRDescriptionCmd(database, id, description),
@@ -148,12 +145,12 @@ func (d EditChangeRequestDialog) submit() (tea.Model, tea.Cmd) {
 }
 
 // updateCRDescriptionCmd returns a command that updates an existing CR's description.
-func updateCRDescriptionCmd(database *db.DB, id int64, description string) tea.Cmd {
+func updateCRDescriptionCmd(database *db.DB, id string, description string) tea.Cmd {
 	return func() tea.Msg {
 		if err := database.UpdateChangeRequestDescription(id, description); err != nil {
-			return crCreatedMsg{errMsg: fmt.Sprintf("update-cr: %s", err)}
+			return crSavedMsg{errMsg: fmt.Sprintf("update-cr: %s", err)}
 		}
-		return crCreatedMsg{}
+		return crSavedMsg{edited: true}
 	}
 }
 
@@ -166,9 +163,9 @@ func createCRCmd(database *db.DB, identifier, codeLocation, description, worktre
 		}
 
 		if err := database.AddChangeRequest(identifier, codeLocation, author, description); err != nil {
-			return crCreatedMsg{errMsg: fmt.Sprintf("create-cr: %s", err)}
+			return crSavedMsg{errMsg: fmt.Sprintf("create-cr: %s", err)}
 		}
-		return crCreatedMsg{}
+		return crSavedMsg{}
 	}
 }
 
