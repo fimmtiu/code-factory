@@ -58,11 +58,7 @@ func NewViewChangeRequestDialog(database *db.DB, cr models.ChangeRequest, identi
 	fileName, lineNum := parseCodeLocationForDisplay(cr.CodeLocation)
 	codeContext := fetchCodeContext(worktreePath, cr.CommitHash, fileName, lineNum)
 
-	dialogPad := theme.Current().DialogBoxStyle.GetHorizontalFrameSize()
-	contentWidth := width - dialogPad
-	if contentWidth < 20 {
-		contentWidth = 20
-	}
+	contentWidth := dialogContentWidth(width)
 
 	var descLines []string
 	for _, line := range strings.Split(cr.Description, "\n") {
@@ -149,25 +145,35 @@ func (d *ViewChangeRequestDialog) toggleStatus() tea.Cmd {
 	if err != nil {
 		return nil
 	}
-	database := d.database
+
+	var dbAction func(*db.DB, int64) error
+	var newStatus string
 	if d.cr.Status == models.ChangeRequestOpen {
-		return func() tea.Msg {
-			if database != nil {
-				if err := database.DismissChangeRequest(id); err != nil {
-					return nil
-				}
-			}
-			return viewCRStatusToggledMsg{status: models.ChangeRequestDismissed}
-		}
+		dbAction = func(database *db.DB, crID int64) error { return database.DismissChangeRequest(crID) }
+		newStatus = models.ChangeRequestDismissed
+	} else {
+		dbAction = func(database *db.DB, crID int64) error { return database.ReopenChangeRequest(crID) }
+		newStatus = models.ChangeRequestOpen
 	}
+
+	database := d.database
 	return func() tea.Msg {
 		if database != nil {
-			if err := database.ReopenChangeRequest(id); err != nil {
+			if err := dbAction(database, id); err != nil {
 				return nil
 			}
 		}
-		return viewCRStatusToggledMsg{status: models.ChangeRequestOpen}
+		return viewCRStatusToggledMsg{status: newStatus}
 	}
+}
+
+func dialogContentWidth(totalWidth int) int {
+	dialogPad := theme.Current().DialogBoxStyle.GetHorizontalFrameSize()
+	w := totalWidth - dialogPad
+	if w < 20 {
+		w = 20
+	}
+	return w
 }
 
 func (d *ViewChangeRequestDialog) clampDescScroll() {
@@ -198,11 +204,7 @@ func (d *ViewChangeRequestDialog) View() string {
 	sb.WriteString("\n\n")
 
 	// Code context.
-	dialogPad := theme.Current().DialogBoxStyle.GetHorizontalFrameSize()
-	contentWidth := d.width - dialogPad
-	if contentWidth < 20 {
-		contentWidth = 20
-	}
+	contentWidth := dialogContentWidth(d.width)
 	for _, line := range strings.Split(d.codeContext, "\n") {
 		sb.WriteString(theme.Current().QuickResponseOutputStyle.Render(truncateLine(strings.TrimRight(line, " \t"), contentWidth)))
 		sb.WriteString("\n")
