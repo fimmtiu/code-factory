@@ -1021,16 +1021,43 @@ func TestDiffView_NilCRMapPassedToViewer(t *testing.T) {
 	}
 }
 
-// TestDiffView_LoadCRMapNilDB verifies that loadCRMap with a nil database
-// sets crMap to a non-nil empty map (matching the doc comment contract).
-func TestDiffView_LoadCRMapNilDB(t *testing.T) {
-	v := NewDiffView(nil)
-	v.loadCRMap("proj/ticket")
-	if v.crMap == nil {
+// TestFetchCRMapCmd_NilDB verifies that fetchCRMapCmd with a nil database
+// delivers a crMapLoadedMsg with a non-nil empty map.
+func TestFetchCRMapCmd_NilDB(t *testing.T) {
+	cmd := fetchCRMapCmd(nil, "proj/ticket")
+	if cmd == nil {
+		t.Fatal("expected non-nil cmd")
+	}
+	msg := cmd()
+	loaded, ok := msg.(crMapLoadedMsg)
+	if !ok {
+		t.Fatalf("expected crMapLoadedMsg, got %T", msg)
+	}
+	if loaded.crMap == nil {
 		t.Error("expected crMap to be non-nil empty map when database is nil")
 	}
-	if len(v.crMap) != 0 {
-		t.Errorf("expected empty crMap, got %d entries", len(v.crMap))
+	if len(loaded.crMap) != 0 {
+		t.Errorf("expected empty crMap, got %d entries", len(loaded.crMap))
+	}
+}
+
+// TestCRMapLoadedMsg_SetsCRMap verifies that receiving a crMapLoadedMsg
+// stores the map on DiffView.
+func TestCRMapLoadedMsg_SetsCRMap(t *testing.T) {
+	v := DiffView{width: 80, height: 24}
+	crMap := map[string]models.ChangeRequest{
+		"file.go:1": {CodeLocation: "file.go:1", Description: "test"},
+	}
+	updated, cmd := v.Update(crMapLoadedMsg{crMap: crMap})
+	dv := updated.(DiffView)
+	if cmd != nil {
+		t.Error("expected nil cmd from crMapLoadedMsg")
+	}
+	if dv.crMap == nil {
+		t.Fatal("expected crMap to be set")
+	}
+	if _, ok := dv.crMap["file.go:1"]; !ok {
+		t.Error("expected crMap to contain 'file.go:1'")
 	}
 }
 

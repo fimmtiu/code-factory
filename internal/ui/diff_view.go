@@ -52,6 +52,11 @@ type diffShowStatMsg struct {
 	output string
 }
 
+// crMapLoadedMsg carries the result of the async CR-map fetch.
+type crMapLoadedMsg struct {
+	crMap map[string]models.ChangeRequest
+}
+
 // switchToDiffViewerMsg is sent when the user presses Tab/Enter to view the diff.
 // DiffView.Update handles this by kicking off an async diff fetch; the result
 // arrives as diffContentMsg which activates the viewer screen.
@@ -471,8 +476,10 @@ func (v DiffView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if err != nil {
 			return v, nil
 		}
-		v.loadCRMap(msg.identifier)
-		return v, fetchCommitsCmd(wp, msg.identifier)
+		return v, tea.Batch(
+			fetchCommitsCmd(wp, msg.identifier),
+			fetchCRMapCmd(v.database, msg.identifier),
+		)
 
 	case diffCommitListMsg:
 		if msg.errMsg != "" {
@@ -485,6 +492,10 @@ func (v DiffView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		v.clampScroll()
 		// Fetch stat for the initial selection.
 		return v, v.fetchStatForCurrent()
+
+	case crMapLoadedMsg:
+		v.crMap = msg.crMap
+		return v, nil
 
 	case diffShowStatMsg:
 		v.statHash = msg.hash
@@ -587,22 +598,24 @@ func (v DiffView) openTerminal() (tea.Model, tea.Cmd) {
 	return v, nil
 }
 
-// loadCRMap loads open change requests for the given identifier from the
-// database and builds crMap keyed by CodeLocation. If the database is nil
-// or the lookup fails, crMap is set to an empty map.
-func (v *DiffView) loadCRMap(identifier string) {
-	if v.database == nil {
-		v.crMap = make(map[string]models.ChangeRequest)
-		return
-	}
-	crs, err := v.database.OpenChangeRequests(identifier)
-	if err != nil {
-		v.crMap = make(map[string]models.ChangeRequest)
-		return
-	}
-	v.crMap = make(map[string]models.ChangeRequest, len(crs))
-	for _, cr := range crs {
-		v.crMap[cr.CodeLocation] = cr
+// fetchCRMapCmd returns a tea.Cmd that asynchronously loads open change
+// requests for the given identifier from the database and delivers the
+// result as a crMapLoadedMsg. If the database is nil or the lookup fails,
+// the message carries an empty map.
+func fetchCRMapCmd(database *db.DB, identifier string) tea.Cmd {
+	return func() tea.Msg {
+		if database == nil {
+			return crMapLoadedMsg{crMap: make(map[string]models.ChangeRequest)}
+		}
+		crs, err := database.OpenChangeRequests(identifier)
+		if err != nil {
+			return crMapLoadedMsg{crMap: make(map[string]models.ChangeRequest)}
+		}
+		crMap := make(map[string]models.ChangeRequest, len(crs))
+		for _, cr := range crs {
+			crMap[cr.CodeLocation] = cr
+		}
+		return crMapLoadedMsg{crMap: crMap}
 	}
 }
 
