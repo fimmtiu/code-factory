@@ -347,19 +347,6 @@ func TestViewCRDialog_Update_StatusToggledMsgReopens(t *testing.T) {
 	}
 }
 
-// ── Edit mode tests ─────────────────────────────────────────────────────────
-
-func TestViewCRDialog_Update_ESendsEditMsg(t *testing.T) {
-	ensureTheme(t)
-	d := newTestViewCRDialog(sampleCR())
-
-	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}}
-	_, cmd := d.Update(msg)
-	if cmd == nil {
-		t.Fatal("expected a command from e key")
-	}
-}
-
 // ── Init test ────────────────────────────────────────────────────────────────
 
 func TestViewCRDialog_Init_ReturnsNil(t *testing.T) {

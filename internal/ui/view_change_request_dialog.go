@@ -20,16 +20,6 @@ type openViewChangeRequestDialogMsg struct {
 	worktreePath string
 }
 
-// openEditChangeRequestDialogMsg asks the root model to open the edit CR dialog.
-type openEditChangeRequestDialogMsg struct {
-	identifier   string
-	fileName     string
-	lineNum      int
-	context      string
-	worktreePath string
-	existingCR   *models.ChangeRequest
-}
-
 // viewCRStatusToggledMsg is sent when the CR status toggle completes.
 type viewCRStatusToggledMsg struct {
 	status string
@@ -119,22 +109,6 @@ func (d *ViewChangeRequestDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "x":
 			return d, d.toggleStatus()
-
-		case "e":
-			cr := d.cr
-			return d, tea.Batch(
-				dismissDialogCmd(),
-				func() tea.Msg {
-					return openEditChangeRequestDialogMsg{
-						identifier:   d.identifier,
-						fileName:     d.fileName,
-						lineNum:      d.lineNum,
-						context:      d.codeContext,
-						worktreePath: d.worktreePath,
-						existingCR:   &cr,
-					}
-				},
-			)
 		}
 	}
 	return d, nil
