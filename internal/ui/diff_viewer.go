@@ -89,19 +89,6 @@ func newDiffViewerModel(files []diff.File, paneWidth, paneHeight int, crMap map[
 	return m
 }
 
-// crLocationsSet derives a map[string]bool from the stored crMap for use
-// by the renderer. Returns nil if crMap is nil.
-func (m *DiffViewerModel) crLocationsSet() map[string]bool {
-	if m.crMap == nil {
-		return nil
-	}
-	locs := make(map[string]bool, len(m.crMap))
-	for loc := range m.crMap {
-		locs[loc] = true
-	}
-	return locs
-}
-
 // setSize updates the content-pane dimensions and re-clamps the scroll offset.
 func (m *DiffViewerModel) setSize(paneWidth, paneHeight int) {
 	m.paneWidth = paneWidth
@@ -234,7 +221,7 @@ func (m *DiffViewerModel) rerender() {
 	if w < 1 {
 		w = 1
 	}
-	rd := renderDiffResult(m.files, w, m.collapsed, m.crLocationsSet())
+	rd := renderDiffResult(m.files, w, m.collapsed, m.crMap)
 	m.text = rd.text
 	m.fileStarts = rd.fileStarts
 	m.lineMeta = rd.lineMeta

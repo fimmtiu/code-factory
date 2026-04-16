@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/fimmtiu/code-factory/internal/diff"
+	"github.com/fimmtiu/code-factory/internal/models"
 	"github.com/fimmtiu/code-factory/internal/ui/theme"
 )
 
@@ -41,11 +42,11 @@ type renderedDiff struct {
 // new field here and a method on this struct, not a signature change to
 // every rendering function in the chain.
 type renderContext struct {
-	paneWidth   int
-	crLocations map[string]bool // "file:line" -> true for lines with change requests
-	meta        []diffLineMeta  // per-line metadata accumulated during rendering
-	fileIndex   int             // current file index during rendering
-	fileName    string          // current file name during rendering
+	paneWidth int
+	crMap     map[string][]models.ChangeRequest // "file:line" -> CRs; shared with DiffViewerModel
+	meta      []diffLineMeta                     // per-line metadata accumulated during rendering
+	fileIndex int                                // current file index during rendering
+	fileName  string                             // current file name during rendering
 }
 
 // HasAnnotation returns true if the current file and the given line number
@@ -53,7 +54,8 @@ type renderContext struct {
 // format in one place instead of scattering fmt.Sprintf calls across the
 // hot loop.
 func (rc *renderContext) HasAnnotation(lineNum int) bool {
-	return rc.crLocations[fmt.Sprintf("%s:%d", rc.fileName, lineNum)]
+	_, ok := rc.crMap[fmt.Sprintf("%s:%d", rc.fileName, lineNum)]
+	return ok
 }
 
 // appendMeta appends n metadata entries for the current file with the given
@@ -78,10 +80,10 @@ func renderDiff(files []diff.File, paneWidth int) string {
 
 // renderDiffResult is the full-featured renderer that returns both the
 // formatted text and per-file start offsets. collapsed controls per-file
-// collapse state; nil means all expanded. crLocations maps "file:line"
-// strings to true for lines that have change requests; those lines render
-// with a speech balloon emoji suffix and wrap 4 columns sooner.
-func renderDiffResult(files []diff.File, paneWidth int, collapsed []bool, crLocations map[string]bool) renderedDiff {
+// collapse state; nil means all expanded. crMap maps "file:line" strings
+// to change request slices; lines with entries render with a speech
+// balloon emoji suffix and wrap 4 columns sooner.
+func renderDiffResult(files []diff.File, paneWidth int, collapsed []bool, crMap map[string][]models.ChangeRequest) renderedDiff {
 	if len(files) == 0 {
 		return renderedDiff{}
 	}
@@ -90,8 +92,8 @@ func renderDiffResult(files []diff.File, paneWidth int, collapsed []bool, crLoca
 	lineCount := 0 // tracks the current line number in the output
 	fileStarts := make([]int, 0, len(files))
 	rc := &renderContext{
-		paneWidth:   paneWidth,
-		crLocations: crLocations,
+		paneWidth: paneWidth,
+		crMap:     crMap,
 	}
 
 	for i, f := range files {
