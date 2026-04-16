@@ -593,6 +593,7 @@ func (v DiffView) openTerminal() (tea.Model, tea.Cmd) {
 // or the lookup fails, crMap is set to an empty map.
 func (v *DiffView) loadCRMap(identifier string) {
 	if v.database == nil {
+		v.crMap = make(map[string]models.ChangeRequest)
 		return
 	}
 	crs, err := v.database.OpenChangeRequests(identifier)

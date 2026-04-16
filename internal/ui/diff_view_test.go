@@ -1021,6 +1021,19 @@ func TestDiffView_NilCRMapProducesNilSet(t *testing.T) {
 	}
 }
 
+// TestDiffView_LoadCRMapNilDB verifies that loadCRMap with a nil database
+// sets crMap to a non-nil empty map (matching the doc comment contract).
+func TestDiffView_LoadCRMapNilDB(t *testing.T) {
+	v := NewDiffView(nil)
+	v.loadCRMap("proj/ticket")
+	if v.crMap == nil {
+		t.Error("expected crMap to be non-nil empty map when database is nil")
+	}
+	if len(v.crMap) != 0 {
+		t.Errorf("expected empty crMap, got %d entries", len(v.crMap))
+	}
+}
+
 // TestDiffView_ResetForTicketClearsCRMap verifies that switching tickets
 // clears the crMap.
 func TestDiffView_ResetForTicketClearsCRMap(t *testing.T) {
