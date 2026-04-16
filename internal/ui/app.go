@@ -163,6 +163,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.dialog = NewChangeRequestDialog(m.db, msg.identifier, msg.fileName, msg.lineNum, msg.context, msg.worktreePath, m.width)
 		return m, nil
 
+	case openViewChangeRequestDialogMsg:
+		m.dialog = NewViewChangeRequestDialog(m.db, msg.cr, msg.identifier, msg.worktreePath, m.width)
+		return m, nil
+
 	case crCreatedMsg:
 		if msg.errMsg != "" {
 			return m, ShowNotification("CR failed: " + msg.errMsg)

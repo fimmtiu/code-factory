@@ -1053,6 +1053,232 @@ func TestDiffView_ResetForTicketClearsCRMap(t *testing.T) {
 	}
 }
 
+// ── Enter key / openViewChangeRequestDialog tests ────────────────────────────
+
+// TestOpenViewChangeRequestDialog_ReturnsCmdForCRLine verifies that
+// openViewChangeRequestDialog returns a non-nil Cmd when the selected line
+// has a change request in the crMap.
+func TestOpenViewChangeRequestDialog_ReturnsCmdForCRLine(t *testing.T) {
+	files := sampleFiles()
+	v := makeDiffViewInViewerMode(files, 80, 24)
+	v.identifier = "proj/ticket"
+	v.worktreePath = "/tmp/fake-worktree"
+	v.crMap = map[string]models.ChangeRequest{
+		"internal/ui/app.go:10": {
+			CodeLocation: "internal/ui/app.go:10",
+			Description:  "fix this",
+			Author:       "alice",
+		},
+	}
+
+	// Enter line-select mode and position on a line in the first file.
+	v.viewer.enterLineSelect()
+	if !v.viewer.lineSelectMode {
+		t.Fatal("expected line-select mode to be active")
+	}
+
+	// Move to the line that corresponds to app.go:10 (context line).
+	// selectedLineInfo should return the file and line number.
+	// We need to find a selectable line that maps to app.go:10.
+	found := false
+	for i, meta := range v.viewer.lineMeta {
+		if v.viewer.isSelectable(i) && meta.lineNum == 10 &&
+			meta.fileIndex == 0 {
+			v.viewer.selectedLine = i
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatal("could not find selectable line for app.go:10")
+	}
+
+	cmd := v.openViewChangeRequestDialog()
+	if cmd == nil {
+		t.Fatal("expected non-nil cmd for line with CR")
+	}
+
+	// Execute the cmd and verify the message type.
+	msg := cmd()
+	openMsg, ok := msg.(openViewChangeRequestDialogMsg)
+	if !ok {
+		t.Fatalf("expected openViewChangeRequestDialogMsg, got %T", msg)
+	}
+	if openMsg.cr.CodeLocation != "internal/ui/app.go:10" {
+		t.Errorf("cr.CodeLocation = %q, want %q", openMsg.cr.CodeLocation, "internal/ui/app.go:10")
+	}
+	if openMsg.cr.Description != "fix this" {
+		t.Errorf("cr.Description = %q, want %q", openMsg.cr.Description, "fix this")
+	}
+	if openMsg.identifier != "proj/ticket" {
+		t.Errorf("identifier = %q, want %q", openMsg.identifier, "proj/ticket")
+	}
+	if openMsg.worktreePath != "/tmp/fake-worktree" {
+		t.Errorf("worktreePath = %q, want %q", openMsg.worktreePath, "/tmp/fake-worktree")
+	}
+}
+
+// TestOpenViewChangeRequestDialog_ReturnsNilForNonCRLine verifies that
+// openViewChangeRequestDialog returns nil when the selected line has no CR.
+func TestOpenViewChangeRequestDialog_ReturnsNilForNonCRLine(t *testing.T) {
+	files := sampleFiles()
+	v := makeDiffViewInViewerMode(files, 80, 24)
+	v.identifier = "proj/ticket"
+	v.worktreePath = "/tmp/fake-worktree"
+	v.crMap = map[string]models.ChangeRequest{} // empty crMap
+
+	v.viewer.enterLineSelect()
+	if !v.viewer.lineSelectMode {
+		t.Fatal("expected line-select mode to be active")
+	}
+
+	cmd := v.openViewChangeRequestDialog()
+	if cmd != nil {
+		t.Error("expected nil cmd for line without CR")
+	}
+}
+
+// TestOpenViewChangeRequestDialog_ReturnsNilWhenNoViewer verifies that
+// openViewChangeRequestDialog returns nil when viewer is nil.
+func TestOpenViewChangeRequestDialog_ReturnsNilWhenNoViewer(t *testing.T) {
+	v := DiffView{
+		identifier:   "proj/ticket",
+		worktreePath: "/tmp/fake-worktree",
+		crMap:        map[string]models.ChangeRequest{},
+	}
+	cmd := v.openViewChangeRequestDialog()
+	if cmd != nil {
+		t.Error("expected nil cmd when viewer is nil")
+	}
+}
+
+// TestOpenViewChangeRequestDialog_ReturnsNilWhenNoWorktreePath verifies that
+// openViewChangeRequestDialog returns nil when worktreePath is empty.
+func TestOpenViewChangeRequestDialog_ReturnsNilWhenNoWorktreePath(t *testing.T) {
+	files := sampleFiles()
+	v := makeDiffViewInViewerMode(files, 80, 24)
+	v.worktreePath = "" // empty
+	v.crMap = map[string]models.ChangeRequest{
+		"internal/ui/app.go:10": {CodeLocation: "internal/ui/app.go:10"},
+	}
+	v.viewer.enterLineSelect()
+
+	cmd := v.openViewChangeRequestDialog()
+	if cmd != nil {
+		t.Error("expected nil cmd when worktreePath is empty")
+	}
+}
+
+// TestEnterKeyInLineSelectMode_OpensCRDialog verifies that pressing Enter in
+// line-select mode on a CR line returns a command (routed via DiffView.Update).
+func TestEnterKeyInLineSelectMode_OpensCRDialog(t *testing.T) {
+	files := sampleFiles()
+	v := makeDiffViewInViewerMode(files, 80, 24)
+	v.identifier = "proj/ticket"
+	v.worktreePath = "/tmp/fake-worktree"
+	v.crMap = map[string]models.ChangeRequest{
+		"internal/ui/app.go:10": {CodeLocation: "internal/ui/app.go:10"},
+	}
+
+	v.viewer.enterLineSelect()
+	// Position on a CR line.
+	for i, meta := range v.viewer.lineMeta {
+		if v.viewer.isSelectable(i) && meta.lineNum == 10 && meta.fileIndex == 0 {
+			v.viewer.selectedLine = i
+			break
+		}
+	}
+
+	updated, cmd := v.Update(fakeKeyMsg("enter"))
+	dv := updated.(DiffView)
+	if dv.viewer == nil {
+		t.Fatal("viewer should still be active after Enter on CR line")
+	}
+	if cmd == nil {
+		t.Error("expected non-nil cmd from Enter on CR line in line-select mode")
+	}
+}
+
+// TestEnterKeyInLineSelectMode_NoOpForNonCRLine verifies that pressing Enter
+// in line-select mode on a non-CR line does nothing (falls through).
+func TestEnterKeyInLineSelectMode_NoOpForNonCRLine(t *testing.T) {
+	files := sampleFiles()
+	v := makeDiffViewInViewerMode(files, 80, 24)
+	v.identifier = "proj/ticket"
+	v.worktreePath = "/tmp/fake-worktree"
+	v.crMap = map[string]models.ChangeRequest{} // no CRs
+
+	v.viewer.enterLineSelect()
+
+	updated, cmd := v.Update(fakeKeyMsg("enter"))
+	dv := updated.(DiffView)
+	if dv.viewer == nil {
+		t.Fatal("viewer should still be active after Enter on non-CR line")
+	}
+	// Enter should fall through to the viewer's handler, which is a no-op in
+	// line-select mode; cmd should be nil.
+	if cmd != nil {
+		t.Error("expected nil cmd from Enter on non-CR line in line-select mode")
+	}
+}
+
+// TestHintPairs_LineSelectMode_ContainsEnterViewCR verifies that the hint
+// pairs in line-select mode include "Enter" / "view CR".
+func TestHintPairs_LineSelectMode_ContainsEnterViewCR(t *testing.T) {
+	v := DiffView{
+		width:  80,
+		height: 24,
+		viewer: &DiffViewerModel{lineSelectMode: true},
+	}
+	pairs := v.HintPairs()
+
+	// Find "Enter" key and check its description.
+	foundEnter := false
+	for i := 0; i < len(pairs)-1; i += 2 {
+		if pairs[i] == "Enter" {
+			foundEnter = true
+			if pairs[i+1] != "view CR" {
+				t.Errorf("Enter hint description = %q, want %q", pairs[i+1], "view CR")
+			}
+			break
+		}
+	}
+	if !foundEnter {
+		t.Errorf("expected 'Enter' in line-select mode hint pairs, got %v", pairs)
+	}
+}
+
+// TestHintPairs_LineSelectMode_OrderBeforeR verifies that "Enter" appears
+// before "R" in the hint pairs for line-select mode.
+func TestHintPairs_LineSelectMode_OrderBeforeR(t *testing.T) {
+	v := DiffView{
+		width:  80,
+		height: 24,
+		viewer: &DiffViewerModel{lineSelectMode: true},
+	}
+	pairs := v.HintPairs()
+
+	enterIdx := -1
+	rIdx := -1
+	for i := 0; i < len(pairs)-1; i += 2 {
+		if pairs[i] == "Enter" {
+			enterIdx = i
+		}
+		if pairs[i] == "R" {
+			rIdx = i
+		}
+	}
+	if enterIdx == -1 {
+		t.Fatal("missing 'Enter' in hint pairs")
+	}
+	if rIdx == -1 {
+		t.Fatal("missing 'R' in hint pairs")
+	}
+	if enterIdx >= rIdx {
+		t.Errorf("Enter (idx %d) should appear before R (idx %d)", enterIdx, rIdx)
+	}
+}
+
 // ── Theme integration tests ──────────────────────────────────────────────────
 
 // withTestTheme temporarily replaces CurrentTheme with a modified theme that
