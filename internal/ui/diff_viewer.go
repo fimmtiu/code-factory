@@ -312,6 +312,39 @@ func (m *DiffViewerModel) scrollToSelection() {
 	m.clampScroll()
 }
 
+// ── Selected line info ───────────────────────────────────────────────────────
+
+// selectedLineInfo returns the file name, line number, and a few lines of code
+// context around the currently selected line. Returns empty values if not in
+// line select mode or if no line is selected.
+func (m *DiffViewerModel) selectedLineInfo() (fileName string, lineNum int, context string) {
+	if !m.lineSelectMode || m.selectedLine < 0 || m.selectedLine >= len(m.lineMeta) {
+		return "", 0, ""
+	}
+	meta := m.lineMeta[m.selectedLine]
+	if meta.fileIndex >= 0 && meta.fileIndex < len(m.fileNames) {
+		fileName = m.fileNames[meta.fileIndex]
+	}
+	lineNum = meta.lineNum
+
+	// Extract a few lines of context around the selected line.
+	lines := strings.Split(m.text, "\n")
+	start := m.selectedLine - 2
+	if start < 0 {
+		start = 0
+	}
+	end := m.selectedLine + 3
+	if end > len(lines) {
+		end = len(lines)
+	}
+	var ctxLines []string
+	for i := start; i < end; i++ {
+		ctxLines = append(ctxLines, stripAnsi(lines[i]))
+	}
+	context = strings.Join(ctxLines, "\n")
+	return
+}
+
 // ── Left-truncation ──────────────────────────────────────────────────────────
 
 // leftTruncateFilename truncates a filename from the left with an ellipsis
@@ -512,6 +545,7 @@ func (m *DiffViewerModel) KeyBindings() []KeyBinding {
 		return []KeyBinding{
 			{Key: "↑/↓", Description: "Move selection"},
 			{Key: "b/Space", Description: "Page up/down"},
+			{Key: "R", Description: "Create change request"},
 			{Key: "c", Description: "Collapse/expand file"},
 			{Key: "C", Description: "Collapse/expand all"},
 			{Key: "T", Description: "Open terminal in worktree"},

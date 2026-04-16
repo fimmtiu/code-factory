@@ -204,3 +204,5 @@ skills/           Claude Code skills for working with code-factory projects
 * Automatically attempt to use Claude to do merge conflict resolution before foisting it off on the user to fix.
 
 * Create a tool for examining permissions requests and auto-approving them if they're safe.
+
+* Make change requests visible inside the diff viewer.

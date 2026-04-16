@@ -159,6 +159,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.dialog = NewPhasePickerDialog(m.db, msg.wu)
 		return m, nil
 
+	case openChangeRequestDialogMsg:
+		m.dialog = NewChangeRequestDialog(m.db, msg.identifier, msg.fileName, msg.lineNum, msg.context, msg.worktreePath, m.width)
+		return m, nil
+
+	case crCreatedMsg:
+		if msg.errMsg != "" {
+			return m, ShowNotification("CR failed: " + msg.errMsg)
+		}
+		return m, ShowNotification("Change request created")
+
 	case openQuickResponseMsg:
 		// If the worker has a structured permission request pending, show the
 		// options chooser; otherwise fall back to the free-text input.

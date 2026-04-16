@@ -505,6 +505,10 @@ func (v DiffView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		if v.viewer != nil {
+			// R opens change request dialog in line select mode.
+			if v.viewer.lineSelectMode && (msg.String() == "r" || msg.String() == "R") {
+				return v.openChangeRequestDialog()
+			}
 			if isViewerExitKey(v.viewer, msg) {
 				v.viewer = nil
 				return v, nil
@@ -566,6 +570,27 @@ func (v DiffView) openTerminal() (tea.Model, tea.Cmd) {
 	}
 	_ = util.OpenTerminal(v.worktreePath)
 	return v, nil
+}
+
+func (v DiffView) openChangeRequestDialog() (tea.Model, tea.Cmd) {
+	if v.viewer == nil || v.worktreePath == "" {
+		return v, nil
+	}
+	fileName, lineNum, context := v.viewer.selectedLineInfo()
+	if fileName == "" {
+		return v, nil
+	}
+	identifier := v.identifier
+	worktreePath := v.worktreePath
+	return v, func() tea.Msg {
+		return openChangeRequestDialogMsg{
+			identifier:   identifier,
+			fileName:     fileName,
+			lineNum:      lineNum,
+			context:      context,
+			worktreePath: worktreePath,
+		}
+	}
 }
 
 func (v DiffView) openEditorNonblocking() (tea.Model, tea.Cmd) {
@@ -792,7 +817,7 @@ func (v DiffView) KeyBindings() []KeyBinding {
 func (v DiffView) HintPairs() []string {
 	if v.viewer != nil {
 		if v.viewer.lineSelectMode {
-			return []string{"↑/↓", "move", "PgUp/Dn", "page", "C", "collapse/expand", "Esc", "exit select", "Tab", "back"}
+			return []string{"↑/↓", "move", "PgUp/Dn", "page", "R", "change request", "C", "collapse/expand", "Esc", "exit select", "Tab", "back"}
 		}
 		return []string{"↑/↓", "scroll", "PgUp/Dn", "page", "Enter", "select lines", "C", "collapse/expand", "Tab/Esc", "back"}
 	}

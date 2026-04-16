@@ -23,12 +23,13 @@ const (
 type diffLineMeta struct {
 	kind      diffLineKind
 	fileIndex int // index into the files slice (-1 for non-selectable)
+	lineNum   int // new-file line number for selectable lines; 0 otherwise
 }
 
-// appendLineMeta appends n metadata entries with the given kind and file index.
-func appendLineMeta(meta *[]diffLineMeta, n int, kind diffLineKind, fileIndex int) {
+// appendLineMeta appends n metadata entries with the given kind, file index, and line number.
+func appendLineMeta(meta *[]diffLineMeta, n int, kind diffLineKind, fileIndex, lineNum int) {
 	for range n {
-		*meta = append(*meta, diffLineMeta{kind: kind, fileIndex: fileIndex})
+		*meta = append(*meta, diffLineMeta{kind: kind, fileIndex: fileIndex, lineNum: lineNum})
 	}
 }
 
@@ -64,7 +65,7 @@ func renderDiffResult(files []diff.File, paneWidth int, collapsed []bool) render
 
 	// appendNonSelectable records n non-selectable lines for file index fi.
 	appendNonSelectable := func(n, fi int) {
-		appendLineMeta(&meta, n, diffLineNonSelectable, fi)
+		appendLineMeta(&meta, n, diffLineNonSelectable, fi, 0)
 	}
 
 	for i, f := range files {
@@ -139,7 +140,7 @@ func renderHunk(sb *strings.Builder, h diff.Hunk, paneWidth, fileIndex int, meta
 	styled, n := padToWidth(theme.Current().DiffHunkHeaderStyle, header, paneWidth)
 	sb.WriteString(styled)
 	sb.WriteString("\n")
-	appendLineMeta(meta, n, diffLineNonSelectable, fileIndex)
+	appendLineMeta(meta, n, diffLineNonSelectable, fileIndex, 0)
 	lines += n
 
 	// Determine the line-number column width from the max line number in this hunk.
@@ -156,7 +157,7 @@ func renderHunk(sb *strings.Builder, h diff.Hunk, paneWidth, fileIndex int, meta
 			content := prefix + text
 			styled, n := padToWidth(theme.Current().DiffRemovedStyle, content, paneWidth)
 			sb.WriteString(styled)
-			appendLineMeta(meta, n, diffLineHunkContent, fileIndex)
+			appendLineMeta(meta, n, diffLineHunkContent, fileIndex, lineNum)
 			lines += n
 		case diff.LineAdded:
 			// Line number on the left, then content with green background.
@@ -164,14 +165,14 @@ func renderHunk(sb *strings.Builder, h diff.Hunk, paneWidth, fileIndex int, meta
 			content := prefix + text
 			styled, n := padToWidth(theme.Current().DiffAddedStyle, content, paneWidth)
 			sb.WriteString(styled)
-			appendLineMeta(meta, n, diffLineHunkContent, fileIndex)
+			appendLineMeta(meta, n, diffLineHunkContent, fileIndex, lineNum)
 			lines += n
 			lineNum++
 		case diff.LineContext:
 			// Line number on the left, plain text (no background).
 			prefix := fmt.Sprintf("%*d ", numWidth, lineNum)
 			sb.WriteString(prefix + text)
-			appendLineMeta(meta, 1, diffLineHunkContent, fileIndex)
+			appendLineMeta(meta, 1, diffLineHunkContent, fileIndex, lineNum)
 			lines++
 			lineNum++
 		}

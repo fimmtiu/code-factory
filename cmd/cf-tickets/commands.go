@@ -26,6 +26,11 @@ func openDB() (*db.DB, error) {
 }
 
 func runCommand(subcommand string, args []string) error {
+	if subcommand == "help" {
+		printUsage()
+		return nil
+	}
+
 	if subcommand == "init" {
 		return runInit()
 	}
