@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/fimmtiu/code-factory/internal/git"
+	"github.com/fimmtiu/code-factory/internal/models"
 	"github.com/fimmtiu/code-factory/internal/ui/theme"
 )
 
@@ -923,6 +924,132 @@ func TestHintPairs_ViewerMode(t *testing.T) {
 	}
 	if !found {
 		t.Error("expected 'scroll' in viewer hint pairs")
+	}
+}
+
+// ── DiffView CR integration tests ────────────────────────────────────────────
+
+// TestDiffView_NewDiffViewWithDB verifies that NewDiffView stores the database reference.
+func TestDiffView_NewDiffViewWithDB(t *testing.T) {
+	// Passing nil is fine; we just verify the field is stored.
+	v := NewDiffView(nil)
+	if v.database != nil {
+		t.Error("expected nil database when nil passed")
+	}
+}
+
+// TestDiffView_CRMapInitiallyNil verifies that crMap starts as nil.
+func TestDiffView_CRMapInitiallyNil(t *testing.T) {
+	v := NewDiffView(nil)
+	if v.crMap != nil {
+		t.Error("expected crMap to be nil initially")
+	}
+}
+
+// TestDiffView_CRMapPassedToViewer verifies the full crMap is passed through
+// to the viewer when creating it from a diffContentMsg.
+func TestDiffView_CRMapPassedToViewer(t *testing.T) {
+	files := sampleFiles()
+	v := DiffView{
+		width:      80,
+		height:     24,
+		identifier: "proj/ticket",
+		phase:      "implement",
+		crMap: map[string]models.ChangeRequest{
+			"internal/ui/app.go:10": {CodeLocation: "internal/ui/app.go:10"},
+		},
+	}
+
+	// Simulate receiving diffContentMsg which creates the viewer.
+	updated, _ := v.Update(diffContentMsg{files: files})
+	dv := updated.(DiffView)
+	if dv.viewer == nil {
+		t.Fatal("expected viewer to be created")
+	}
+	if dv.viewer.crMap == nil {
+		t.Fatal("expected crMap to be set on viewer")
+	}
+	if _, ok := dv.viewer.crMap["internal/ui/app.go:10"]; !ok {
+		t.Error("expected crMap to contain 'internal/ui/app.go:10'")
+	}
+}
+
+// TestDiffView_EmptyCRMapPassedToViewer verifies that an empty crMap
+// produces an empty (but non-nil) crMap on the viewer.
+func TestDiffView_EmptyCRMapPassedToViewer(t *testing.T) {
+	files := sampleFiles()
+	v := DiffView{
+		width:      80,
+		height:     24,
+		identifier: "proj/ticket",
+		phase:      "implement",
+		crMap:      map[string]models.ChangeRequest{},
+	}
+
+	updated, _ := v.Update(diffContentMsg{files: files})
+	dv := updated.(DiffView)
+	if dv.viewer == nil {
+		t.Fatal("expected viewer to be created")
+	}
+	if dv.viewer.crMap == nil {
+		t.Fatal("expected crMap to be non-nil (empty map)")
+	}
+	if len(dv.viewer.crMap) != 0 {
+		t.Errorf("expected empty crMap, got %d entries", len(dv.viewer.crMap))
+	}
+}
+
+// TestDiffView_NilCRMapPassedToViewer verifies that a nil crMap (no DB or
+// ticket not found) produces nil crMap on the viewer.
+func TestDiffView_NilCRMapPassedToViewer(t *testing.T) {
+	files := sampleFiles()
+	v := DiffView{
+		width:      80,
+		height:     24,
+		identifier: "proj/ticket",
+		phase:      "implement",
+		crMap:      nil,
+	}
+
+	updated, _ := v.Update(diffContentMsg{files: files})
+	dv := updated.(DiffView)
+	if dv.viewer == nil {
+		t.Fatal("expected viewer to be created")
+	}
+	if dv.viewer.crMap != nil {
+		t.Error("expected nil crMap when DiffView crMap is nil")
+	}
+}
+
+// TestDiffView_LoadCRMapNilDB verifies that loadCRMap with a nil database
+// sets crMap to a non-nil empty map (matching the doc comment contract).
+func TestDiffView_LoadCRMapNilDB(t *testing.T) {
+	v := NewDiffView(nil)
+	v.loadCRMap("proj/ticket")
+	if v.crMap == nil {
+		t.Error("expected crMap to be non-nil empty map when database is nil")
+	}
+	if len(v.crMap) != 0 {
+		t.Errorf("expected empty crMap, got %d entries", len(v.crMap))
+	}
+}
+
+// TestDiffView_ResetForTicketClearsCRMap verifies that switching tickets
+// clears the crMap.
+func TestDiffView_ResetForTicketClearsCRMap(t *testing.T) {
+	v := DiffView{
+		width:      80,
+		height:     24,
+		identifier: "old/ticket",
+		crMap: map[string]models.ChangeRequest{
+			"file.go:1": {CodeLocation: "file.go:1"},
+		},
+	}
+
+	v.resetForTicket("new/ticket", "review", false, "/tmp/worktree", nil)
+
+	if v.crMap != nil {
+		t.Error("expected crMap to be cleared on ticket reset")
 	}
 }
 

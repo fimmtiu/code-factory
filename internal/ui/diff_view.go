@@ -8,6 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/fimmtiu/code-factory/internal/db"
 	"github.com/fimmtiu/code-factory/internal/git"
 	"github.com/fimmtiu/code-factory/internal/models"
 	"github.com/fimmtiu/code-factory/internal/storage"
@@ -69,11 +70,17 @@ type DiffView struct {
 	width  int
 	height int
 
+	// Database reference for loading change requests.
+	database *db.DB
+
 	// Ticket context
 	identifier   string
 	phase        string
 	isProject    bool
 	worktreePath string // resolved once from identifier; empty until set
+
+	// Change request map: keyed by CodeLocation ("file:line") for the current ticket.
+	crMap map[string]models.ChangeRequest
 
 	// Commit data
 	rows []commitRow
@@ -98,9 +105,9 @@ type DiffView struct {
 	viewerEndHash   string // newest commit hash in the viewed range
 }
 
-// NewDiffView creates an empty DiffView.
-func NewDiffView() DiffView {
-	return DiffView{}
+// NewDiffView creates an empty DiffView with the given database reference.
+func NewDiffView(database *db.DB) DiffView {
+	return DiffView{database: database}
 }
 
 // Init returns nil; the view loads data when a ticket is set.
@@ -122,6 +129,7 @@ func (v *DiffView) resetForTicket(identifier, phase string, isProject bool, work
 	v.statOutput = ""
 	v.statHash = ""
 	v.viewer = nil
+	v.crMap = nil
 	if err != nil {
 		v.errorMsg = fmt.Sprintf("worktree error: %s", err)
 		v.worktreePath = ""
@@ -463,6 +471,7 @@ func (v DiffView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if err != nil {
 			return v, nil
 		}
+		v.loadCRMap(msg.identifier)
 		return v, fetchCommitsCmd(wp, msg.identifier)
 
 	case diffCommitListMsg:
@@ -492,7 +501,7 @@ func (v DiffView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return v, fetchDiffCmd(v.worktreePath, msg.startCommit, msg.endCommit)
 
 	case diffContentMsg:
-		v.viewer = newDiffViewerModel(msg.files, v.width, v.viewerPaneHeight())
+		v.viewer = newDiffViewerModel(msg.files, v.width, v.viewerPaneHeight(), v.crMap)
 		return v, nil
 
 	case tea.KeyMsg:
@@ -570,6 +579,25 @@ func (v DiffView) openTerminal() (tea.Model, tea.Cmd) {
 	}
 	_ = util.OpenTerminal(v.worktreePath)
 	return v, nil
+}
+
+// loadCRMap loads open change requests for the given identifier from the
+// database and builds crMap keyed by CodeLocation. If the database is nil
+// or the lookup fails, crMap is set to an empty map.
+func (v *DiffView) loadCRMap(identifier string) {
+	if v.database == nil {
+		v.crMap = make(map[string]models.ChangeRequest)
+		return
+	}
+	crs, err := v.database.OpenChangeRequests(identifier)
+	if err != nil {
+		v.crMap = make(map[string]models.ChangeRequest)
+		return
+	}
+	v.crMap = make(map[string]models.ChangeRequest, len(crs))
+	for _, cr := range crs {
+		v.crMap[cr.CodeLocation] = cr
+	}
 }
 
 func (v DiffView) openChangeRequestDialog() (tea.Model, tea.Cmd) {
