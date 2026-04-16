@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"strconv"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -108,31 +107,9 @@ func (d *ViewChangeRequestDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (d *ViewChangeRequestDialog) toggleStatus() tea.Cmd {
-	id, err := strconv.ParseInt(d.cr.ID, 10, 64)
-	if err != nil {
-		return nil
-	}
-
-	var dbAction func(*db.DB, int64) error
-	var newStatus string
-	if d.cr.Status == models.ChangeRequestOpen {
-		dbAction = func(database *db.DB, crID int64) error { return database.DismissChangeRequest(crID) }
-		newStatus = models.ChangeRequestDismissed
-	} else {
-		dbAction = func(database *db.DB, crID int64) error { return database.ReopenChangeRequest(crID) }
-		newStatus = models.ChangeRequestOpen
-	}
-
-	database := d.database
-	return func() tea.Msg {
-		if database == nil {
-			return nil
-		}
-		if err := dbAction(database, id); err != nil {
-			return nil
-		}
+	return toggleCRStatusCmd(d.database, d.cr, func(newStatus string) tea.Msg {
 		return viewCRStatusToggledMsg{status: newStatus}
-	}
+	})
 }
 
 func dialogContentWidth(totalWidth int) int {

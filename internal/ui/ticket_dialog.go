@@ -449,32 +449,47 @@ func (d *TicketDialog) clampContentScroll() {
 
 // ── Action commands ───────────────────────────────────────────────────────────
 
-func (d *TicketDialog) dismissCR(idx int) tea.Cmd {
-	id, err := strconv.ParseInt(d.changeRequests[idx].ID, 10, 64)
+// toggleCRStatusCmd returns a Cmd that flips a CR between open and dismissed.
+// The onSuccess callback produces the message to send on a successful DB update.
+// Both TicketDialog and ViewChangeRequestDialog use this to avoid duplicating
+// the parse-ID / pick-DB-method / execute pattern.
+func toggleCRStatusCmd(database *db.DB, cr models.ChangeRequest, onSuccess func(newStatus string) tea.Msg) tea.Cmd {
+	id, err := strconv.ParseInt(cr.ID, 10, 64)
 	if err != nil {
 		return nil
 	}
-	database := d.database
+
+	var dbAction func(*db.DB, int64) error
+	var newStatus string
+	if cr.Status == models.ChangeRequestOpen {
+		dbAction = func(database *db.DB, crID int64) error { return database.DismissChangeRequest(crID) }
+		newStatus = models.ChangeRequestDismissed
+	} else {
+		dbAction = func(database *db.DB, crID int64) error { return database.ReopenChangeRequest(crID) }
+		newStatus = models.ChangeRequestOpen
+	}
+
 	return func() tea.Msg {
-		if err := database.DismissChangeRequest(id); err != nil {
+		if database == nil {
 			return nil
 		}
-		return crStatusChangedMsg{idx: idx, status: models.ChangeRequestDismissed}
+		if err := dbAction(database, id); err != nil {
+			return nil
+		}
+		return onSuccess(newStatus)
 	}
 }
 
+func (d *TicketDialog) dismissCR(idx int) tea.Cmd {
+	return toggleCRStatusCmd(d.database, d.changeRequests[idx], func(newStatus string) tea.Msg {
+		return crStatusChangedMsg{idx: idx, status: newStatus}
+	})
+}
+
 func (d *TicketDialog) reopenCR(idx int) tea.Cmd {
-	id, err := strconv.ParseInt(d.changeRequests[idx].ID, 10, 64)
-	if err != nil {
-		return nil
-	}
-	database := d.database
-	return func() tea.Msg {
-		if err := database.ReopenChangeRequest(id); err != nil {
-			return nil
-		}
-		return crStatusChangedMsg{idx: idx, status: models.ChangeRequestOpen}
-	}
+	return toggleCRStatusCmd(d.database, d.changeRequests[idx], func(newStatus string) tea.Msg {
+		return crStatusChangedMsg{idx: idx, status: newStatus}
+	})
 }
 
 func (d *TicketDialog) editCRDescription(idx int) tea.Cmd {
