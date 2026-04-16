@@ -512,12 +512,14 @@ func (d *TicketDialog) contentLines() []string {
 	return nil
 }
 
-func (d *TicketDialog) crContentLines(idx int) []string {
-	cr := d.changeRequests[idx]
+// crDetailLines returns the raw display lines for a change request's metadata:
+// File, Line, Status, code context, and description. Both TicketDialog and
+// ViewChangeRequestDialog use this to avoid duplicating the rendering logic.
+func crDetailLines(cr models.ChangeRequest, worktreePath string) string {
 	filename, lineNumber := parseCodeLocationForDisplay(cr.CodeLocation)
-	codeCtx := fetchCodeContext(d.worktree, cr.CommitHash, filename, lineNumber)
+	codeCtx := fetchCodeContext(worktreePath, cr.CommitHash, filename, lineNumber)
 
-	raw := strings.Join([]string{
+	return strings.Join([]string{
 		theme.Current().DetailLabelStyle.Render("File:") + " " + filename,
 		theme.Current().DetailLabelStyle.Render("Line:") + " " + strconv.Itoa(lineNumber),
 		theme.Current().DetailLabelStyle.Render("Status:") + " " + cr.Status,
@@ -529,6 +531,10 @@ func (d *TicketDialog) crContentLines(idx int) []string {
 		"",
 		cr.Description,
 	}, "\n")
+}
+
+func (d *TicketDialog) crContentLines(idx int) []string {
+	raw := crDetailLines(d.changeRequests[idx], d.worktree)
 
 	var result []string
 	for _, line := range strings.Split(raw, "\n") {

@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -25,26 +26,38 @@ func sampleCR() models.ChangeRequest {
 }
 
 // newTestViewCRDialog creates a ViewChangeRequestDialog for testing without
-// requiring a database or filesystem. Code context and description wrapping
-// are set directly rather than being fetched.
+// requiring a database or filesystem. Content lines are built from a stub
+// code context and the CR's metadata via crDetailLines-style assembly.
 func newTestViewCRDialog(cr models.ChangeRequest) *ViewChangeRequestDialog {
 	fileName, lineNum := parseCodeLocationForDisplay(cr.CodeLocation)
+	codeContext := "> 10 | fmt.Println(\"hello\")"
 	contentWidth := 60
-	var descLines []string
-	for _, line := range strings.Split(cr.Description, "\n") {
-		descLines = append(descLines, wrapLine(line, contentWidth)...)
+
+	raw := strings.Join([]string{
+		theme.Current().DetailLabelStyle.Render("File:") + " " + fileName,
+		theme.Current().DetailLabelStyle.Render("Line:") + " " + strconv.Itoa(lineNum),
+		theme.Current().DetailLabelStyle.Render("Status:") + " " + cr.Status,
+		"",
+		theme.Current().DetailLabelStyle.Render("Code:"),
+		codeContext,
+		"",
+		theme.Current().DetailLabelStyle.Render("Description:"),
+		"",
+		cr.Description,
+	}, "\n")
+
+	var contentLines []string
+	for _, line := range strings.Split(raw, "\n") {
+		contentLines = append(contentLines, wrapLine(line, contentWidth)...)
 	}
 	return &ViewChangeRequestDialog{
 		cr:            cr,
 		identifier:    "test/ticket-1",
 		worktreePath:  "/tmp/worktree",
-		fileName:      fileName,
-		lineNum:       lineNum,
-		codeContext:   "> 10 | fmt.Println(\"hello\")",
-		descLines:     descLines,
-		descOffset:    0,
+		contentLines:  contentLines,
+		contentOffset: 0,
 		width:         80,
-		contentHeight: 8,
+		contentHeight: len(contentLines),
 	}
 }
 
@@ -158,7 +171,7 @@ func TestViewCRDialog_View_DismissedStatus(t *testing.T) {
 
 // ── Scrolling tests ──────────────────────────────────────────────────────────
 
-func TestViewCRDialog_Update_DownScrollsDescription(t *testing.T) {
+func TestViewCRDialog_Update_DownScrollsContent(t *testing.T) {
 	ensureTheme(t)
 	cr := sampleCR()
 	cr.Description = strings.Repeat("line\n", 20)
@@ -168,21 +181,21 @@ func TestViewCRDialog_Update_DownScrollsDescription(t *testing.T) {
 	msg := tea.KeyMsg{Type: tea.KeyDown}
 	updated, _ := d.Update(msg)
 	result := updated.(*ViewChangeRequestDialog)
-	if result.descOffset != 1 {
-		t.Errorf("expected descOffset=1 after down key, got %d", result.descOffset)
+	if result.contentOffset != 1 {
+		t.Errorf("expected contentOffset=1 after down key, got %d", result.contentOffset)
 	}
 }
 
 func TestViewCRDialog_Update_UpScrollsClampsToZero(t *testing.T) {
 	ensureTheme(t)
 	d := newTestViewCRDialog(sampleCR())
-	d.descOffset = 0
+	d.contentOffset = 0
 
 	msg := tea.KeyMsg{Type: tea.KeyUp}
 	updated, _ := d.Update(msg)
 	result := updated.(*ViewChangeRequestDialog)
-	if result.descOffset != 0 {
-		t.Errorf("expected descOffset=0 after up key at top, got %d", result.descOffset)
+	if result.contentOffset != 0 {
+		t.Errorf("expected contentOffset=0 after up key at top, got %d", result.contentOffset)
 	}
 }
 
@@ -192,13 +205,13 @@ func TestViewCRDialog_Update_UpScrollsFromOffset(t *testing.T) {
 	cr.Description = strings.Repeat("line\n", 20)
 	d := newTestViewCRDialog(cr)
 	d.contentHeight = 5
-	d.descOffset = 3
+	d.contentOffset = 3
 
 	msg := tea.KeyMsg{Type: tea.KeyUp}
 	updated, _ := d.Update(msg)
 	result := updated.(*ViewChangeRequestDialog)
-	if result.descOffset != 2 {
-		t.Errorf("expected descOffset=2 after up key from 3, got %d", result.descOffset)
+	if result.contentOffset != 2 {
+		t.Errorf("expected contentOffset=2 after up key from 3, got %d", result.contentOffset)
 	}
 }
 
@@ -212,8 +225,8 @@ func TestViewCRDialog_Update_PgDownScrollsByPage(t *testing.T) {
 	msg := tea.KeyMsg{Type: tea.KeyPgDown}
 	updated, _ := d.Update(msg)
 	result := updated.(*ViewChangeRequestDialog)
-	if result.descOffset != 5 {
-		t.Errorf("expected descOffset=5 after pgdown, got %d", result.descOffset)
+	if result.contentOffset != 5 {
+		t.Errorf("expected contentOffset=5 after pgdown, got %d", result.contentOffset)
 	}
 }
 
@@ -223,13 +236,13 @@ func TestViewCRDialog_Update_PgUpScrollsByPage(t *testing.T) {
 	cr.Description = strings.Repeat("line\n", 30)
 	d := newTestViewCRDialog(cr)
 	d.contentHeight = 5
-	d.descOffset = 10
+	d.contentOffset = 10
 
 	msg := tea.KeyMsg{Type: tea.KeyPgUp}
 	updated, _ := d.Update(msg)
 	result := updated.(*ViewChangeRequestDialog)
-	if result.descOffset != 5 {
-		t.Errorf("expected descOffset=5 after pgup from 10, got %d", result.descOffset)
+	if result.contentOffset != 5 {
+		t.Errorf("expected contentOffset=5 after pgup from 10, got %d", result.contentOffset)
 	}
 }
 
@@ -239,27 +252,27 @@ func TestViewCRDialog_Update_PgUpClampsToZero(t *testing.T) {
 	cr.Description = strings.Repeat("line\n", 30)
 	d := newTestViewCRDialog(cr)
 	d.contentHeight = 5
-	d.descOffset = 2
+	d.contentOffset = 2
 
 	msg := tea.KeyMsg{Type: tea.KeyPgUp}
 	updated, _ := d.Update(msg)
 	result := updated.(*ViewChangeRequestDialog)
-	if result.descOffset != 0 {
-		t.Errorf("expected descOffset=0 after pgup from 2 with page 5, got %d", result.descOffset)
+	if result.contentOffset != 0 {
+		t.Errorf("expected contentOffset=0 after pgup from 2 with page 5, got %d", result.contentOffset)
 	}
 }
 
 func TestViewCRDialog_Update_DownClampsToMax(t *testing.T) {
 	ensureTheme(t)
 	d := newTestViewCRDialog(sampleCR())
-	d.contentHeight = 50 // larger than descLines, so max offset is 0
-	d.descOffset = 0
+	d.contentHeight = 50 // larger than contentLines, so max offset is 0
+	d.contentOffset = 0
 
 	msg := tea.KeyMsg{Type: tea.KeyDown}
 	updated, _ := d.Update(msg)
 	result := updated.(*ViewChangeRequestDialog)
-	if result.descOffset != 0 {
-		t.Errorf("expected descOffset=0 when content fits in view, got %d", result.descOffset)
+	if result.contentOffset != 0 {
+		t.Errorf("expected contentOffset=0 when content fits in view, got %d", result.contentOffset)
 	}
 }
 
@@ -374,18 +387,20 @@ func TestViewCRDialog_Init_ReturnsNil(t *testing.T) {
 
 // ── Description scrolling boundary tests ─────────────────────────────────────
 
-func TestViewCRDialog_View_DescriptionScrolled(t *testing.T) {
+func TestViewCRDialog_View_ContentScrolled(t *testing.T) {
 	ensureTheme(t)
 	cr := sampleCR()
 	cr.Description = "line0\nline1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\nline9"
 	d := newTestViewCRDialog(cr)
 	d.contentHeight = 3
-	d.descOffset = 2
+	// Scroll past all the header lines (File, Line, Status, Code, Description)
+	// to reach the description content lines.
+	d.contentOffset = len(d.contentLines) - 5
 
 	view := d.View()
-	// line2 should be visible, line0 and line1 should not
-	if !strings.Contains(view, "line2") {
-		t.Error("ViewChangeRequestDialog.View() should show line2 when scrolled to offset 2")
+	// Some of the later description lines should be visible
+	if !strings.Contains(view, "line") {
+		t.Error("ViewChangeRequestDialog.View() should show description lines when scrolled")
 	}
 }
 

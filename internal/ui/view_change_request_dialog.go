@@ -28,31 +28,26 @@ type viewCRStatusToggledMsg struct {
 // ── ViewChangeRequestDialog ─────────────────────────────────────────────────
 
 // ViewChangeRequestDialog is the read-only modal that displays a single
-// change request's details with scrollable description.
+// change request's details with scrollable content.
 type ViewChangeRequestDialog struct {
 	database      *db.DB
 	cr            models.ChangeRequest
 	identifier    string
 	worktreePath  string
-	fileName      string
-	lineNum       int
-	codeContext   string
-	descLines     []string
-	descOffset    int
+	contentLines  []string
+	contentOffset int
 	width         int
 	contentHeight int
 }
 
 // NewViewChangeRequestDialog creates a ViewChangeRequestDialog for the given CR.
 func NewViewChangeRequestDialog(database *db.DB, cr models.ChangeRequest, identifier, worktreePath string, width int) *ViewChangeRequestDialog {
-	fileName, lineNum := parseCodeLocationForDisplay(cr.CodeLocation)
-	codeContext := fetchCodeContext(worktreePath, cr.CommitHash, fileName, lineNum)
-
 	contentWidth := dialogContentWidth(width)
+	raw := crDetailLines(cr, worktreePath)
 
-	var descLines []string
-	for _, line := range strings.Split(cr.Description, "\n") {
-		descLines = append(descLines, wrapLine(line, contentWidth)...)
+	var contentLines []string
+	for _, line := range strings.Split(raw, "\n") {
+		contentLines = append(contentLines, wrapLine(line, contentWidth)...)
 	}
 
 	return &ViewChangeRequestDialog{
@@ -60,10 +55,7 @@ func NewViewChangeRequestDialog(database *db.DB, cr models.ChangeRequest, identi
 		cr:            cr,
 		identifier:    identifier,
 		worktreePath:  worktreePath,
-		fileName:      fileName,
-		lineNum:       lineNum,
-		codeContext:   codeContext,
-		descLines:     descLines,
+		contentLines:  contentLines,
 		width:         width,
 		contentHeight: 8,
 	}
@@ -75,6 +67,7 @@ func (d *ViewChangeRequestDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case viewCRStatusToggledMsg:
 		d.cr.Status = msg.status
+		d.rebuildContentLines()
 		return d, nil
 
 	case tea.KeyMsg:
@@ -85,26 +78,26 @@ func (d *ViewChangeRequestDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return d, dismissDialogCmd()
 
 		case "up":
-			if d.descOffset > 0 {
-				d.descOffset--
+			if d.contentOffset > 0 {
+				d.contentOffset--
 			}
 			return d, nil
 
 		case "down":
-			d.descOffset++
-			d.clampDescScroll()
+			d.contentOffset++
+			d.clampContentScroll()
 			return d, nil
 
 		case "pgup":
-			d.descOffset -= d.contentHeight
-			if d.descOffset < 0 {
-				d.descOffset = 0
+			d.contentOffset -= d.contentHeight
+			if d.contentOffset < 0 {
+				d.contentOffset = 0
 			}
 			return d, nil
 
 		case "pgdown":
-			d.descOffset += d.contentHeight
-			d.clampDescScroll()
+			d.contentOffset += d.contentHeight
+			d.clampContentScroll()
 			return d, nil
 
 		case "x":
@@ -151,16 +144,26 @@ func dialogContentWidth(totalWidth int) int {
 	return w
 }
 
-func (d *ViewChangeRequestDialog) clampDescScroll() {
-	maxOffset := len(d.descLines) - d.contentHeight
+func (d *ViewChangeRequestDialog) rebuildContentLines() {
+	contentWidth := dialogContentWidth(d.width)
+	raw := crDetailLines(d.cr, d.worktreePath)
+
+	d.contentLines = nil
+	for _, line := range strings.Split(raw, "\n") {
+		d.contentLines = append(d.contentLines, wrapLine(line, contentWidth)...)
+	}
+}
+
+func (d *ViewChangeRequestDialog) clampContentScroll() {
+	maxOffset := len(d.contentLines) - d.contentHeight
 	if maxOffset < 0 {
 		maxOffset = 0
 	}
-	if d.descOffset > maxOffset {
-		d.descOffset = maxOffset
+	if d.contentOffset > maxOffset {
+		d.contentOffset = maxOffset
 	}
-	if d.descOffset < 0 {
-		d.descOffset = 0
+	if d.contentOffset < 0 {
+		d.contentOffset = 0
 	}
 }
 
@@ -170,31 +173,13 @@ func (d *ViewChangeRequestDialog) View() string {
 	sb.WriteString(theme.Current().DialogTitleStyle.Render("Change Request"))
 	sb.WriteString("\n")
 
-	// File, line, and status info.
-	sb.WriteString(theme.Current().DetailLabelStyle.Render("File:") + " " + d.fileName)
-	sb.WriteString("\n")
-	sb.WriteString(theme.Current().DetailLabelStyle.Render("Line:") + " " + strconv.Itoa(d.lineNum))
-	sb.WriteString("\n")
-	sb.WriteString(theme.Current().DetailLabelStyle.Render("Status:") + " " + d.cr.Status)
-	sb.WriteString("\n\n")
-
-	// Code context.
-	contentWidth := dialogContentWidth(d.width)
-	for _, line := range strings.Split(d.codeContext, "\n") {
-		sb.WriteString(theme.Current().QuickResponseOutputStyle.Render(truncateLine(strings.TrimRight(line, " \t"), contentWidth)))
-		sb.WriteString("\n")
+	// Scrollable content (File, Line, Status, Code context, Description).
+	end := d.contentOffset + d.contentHeight
+	if end > len(d.contentLines) {
+		end = len(d.contentLines)
 	}
-	sb.WriteString("\n")
-
-	// Description.
-	sb.WriteString(theme.Current().DetailLabelStyle.Render("Description:"))
-	sb.WriteString("\n")
-	end := d.descOffset + d.contentHeight
-	if end > len(d.descLines) {
-		end = len(d.descLines)
-	}
-	for i := d.descOffset; i < end; i++ {
-		sb.WriteString(d.descLines[i])
+	for i := d.contentOffset; i < end; i++ {
+		sb.WriteString(d.contentLines[i])
 		sb.WriteString("\n")
 	}
 	sb.WriteString("\n")
