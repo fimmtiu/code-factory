@@ -507,7 +507,7 @@ func (v DiffView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if v.viewer != nil {
 			// R opens change request dialog in line select mode.
 			if v.viewer.lineSelectMode && (msg.String() == "r" || msg.String() == "R") {
-				return v.openChangeRequestDialog()
+				return v.openEditChangeRequestDialog()
 			}
 			if isViewerExitKey(v.viewer, msg) {
 				v.viewer = nil
@@ -572,7 +572,7 @@ func (v DiffView) openTerminal() (tea.Model, tea.Cmd) {
 	return v, nil
 }
 
-func (v DiffView) openChangeRequestDialog() (tea.Model, tea.Cmd) {
+func (v DiffView) openEditChangeRequestDialog() (tea.Model, tea.Cmd) {
 	if v.viewer == nil || v.worktreePath == "" {
 		return v, nil
 	}
@@ -583,7 +583,7 @@ func (v DiffView) openChangeRequestDialog() (tea.Model, tea.Cmd) {
 	identifier := v.identifier
 	worktreePath := v.worktreePath
 	return v, func() tea.Msg {
-		return openChangeRequestDialogMsg{
+		return openEditChangeRequestDialogMsg{
 			identifier:   identifier,
 			fileName:     fileName,
 			lineNum:      lineNum,

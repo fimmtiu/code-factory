@@ -159,8 +159,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.dialog = NewPhasePickerDialog(m.db, msg.wu)
 		return m, nil
 
-	case openChangeRequestDialogMsg:
-		m.dialog = NewChangeRequestDialog(m.db, msg.identifier, msg.fileName, msg.lineNum, msg.context, msg.worktreePath, m.width)
+	case openEditChangeRequestDialogMsg:
+		m.dialog = NewEditChangeRequestDialog(m.db, msg.identifier, msg.fileName, msg.lineNum, msg.context, msg.worktreePath, m.width)
 		return m, nil
 
 	case crCreatedMsg:
