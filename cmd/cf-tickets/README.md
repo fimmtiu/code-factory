@@ -55,7 +55,7 @@ Creates a project or ticket with the given slash-separated identifier (e.g. `my-
 cf-tickets set-status <identifier> <phase> [<status>]
 ```
 
-Updates a ticket's phase (e.g. `implement`, `refactor`, `review`, `respond`, `done`) and optionally its status (defaults to `idle`). Setting phase to `done` automatically merges the ticket's worktree into its parent project's worktree (or the repo's default branch FIXME FIXME) and removes the worktree.
+Updates a ticket's phase (e.g. `implement`, `refactor`, `review`, `respond`, `done`) and optionally its status (defaults to `idle`). Setting phase to `done` rebases the ticket's branch onto its parent project's worktree (or the repo's default branch) and fast-forwards the parent to the rebased tip, then removes the worktree. If the rebase hits conflicts, it is left in progress in the ticket's worktree for manual resolution.
 
 ### Resetting a ticket
 

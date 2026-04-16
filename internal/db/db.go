@@ -596,7 +596,8 @@ func (d *DB) CreateTicket(identifier, description string, deps []string, parentB
 }
 
 // SetStatus updates the phase (and optionally status) of a ticket. When phase
-// is "done", the ticket's branch is merged and its worktree is removed.
+// is "done", the ticket's branch is rebased onto its parent and fast-forwarded
+// in, then the worktree is removed.
 func (d *DB) SetStatus(identifier string, phase models.TicketPhase, status models.TicketStatus) error {
 	if !models.IsValidTicketPhase(string(phase)) {
 		return fmt.Errorf("invalid ticket phase %q", phase)
@@ -656,7 +657,35 @@ func (d *DB) RebaseTicketOnParent(identifier, parentIdentifier, parentBranch str
 		ontoBranch = branch
 	}
 
-	return d.git.RebaseOnto(worktreePath, ontoBranch)
+	if err := d.git.RebaseOnto(worktreePath, ontoBranch); err != nil {
+		_ = d.git.AbortRebase(worktreePath)
+		return err
+	}
+	return nil
+}
+
+// rebaseAndFastForward combines a work unit's branch into its parent using a
+// rebase strategy: rebase the child branch onto the parent's current HEAD,
+// then fast-forward the parent to the rebased tip. The result is linear
+// history with no merge commit. If the rebase hits conflicts, it is left in
+// progress in the child's worktree so the user can resolve them manually,
+// and the returned MergeConflictError points at that worktree.
+func (d *DB) rebaseAndFastForward(identifier, mergeTarget string) error {
+	childWorktree := d.worktreePath(identifier)
+
+	targetBranch, err := d.git.GetCurrentBranch(mergeTarget)
+	if err != nil {
+		return fmt.Errorf("detect target branch for %s: %w", mergeTarget, err)
+	}
+
+	if err := d.git.RebaseOnto(childWorktree, targetBranch); err != nil {
+		return &MergeConflictError{WorktreePath: childWorktree, Branch: identifier, Err: err}
+	}
+
+	if err := d.git.MergeBranch(mergeTarget, identifier); err != nil {
+		return &MergeConflictError{WorktreePath: mergeTarget, Branch: identifier, Err: err}
+	}
+	return nil
 }
 
 // mergeLock returns the mutex that serializes merges into the given target
@@ -676,9 +705,11 @@ func (d *DB) mergeLock(target string) *sync.Mutex {
 	return mu
 }
 
-// markTicketDone merges the ticket's branch into the parent project's worktree
-// (or repoRoot if there is no parent), updates the DB, and removes the worktree.
-// If parentBranch is non-empty, it overrides the default merge target.
+// markTicketDone rebases the ticket's branch onto the parent project's
+// worktree branch (or repoRoot's branch if there is no parent),
+// fast-forwards the parent onto the rebased tip, updates the DB, and
+// removes the worktree. If parentBranch is non-empty, it overrides the
+// default target.
 func (d *DB) markTicketDone(ticketID int64, identifier string, projectID sql.NullInt64, parentBranch string) error {
 	mergeTarget := d.mergeTargetDir(parentBranch, projectID)
 
@@ -686,15 +717,8 @@ func (d *DB) markTicketDone(ticketID int64, identifier string, projectID sql.Nul
 	mu.Lock()
 	defer mu.Unlock()
 
-	// Best-effort rebase onto the target branch before merging. This brings
-	// the ticket up to date with sibling changes that already landed,
-	// reducing the chance of a merge conflict.
-	if targetBranch, err := d.git.GetCurrentBranch(mergeTarget); err == nil {
-		_ = d.git.RebaseOnto(d.worktreePath(identifier), targetBranch)
-	}
-
-	if err := d.git.MergeBranch(mergeTarget, identifier); err != nil {
-		return &MergeConflictError{WorktreePath: mergeTarget, Branch: identifier, Err: err}
+	if err := d.rebaseAndFastForward(identifier, mergeTarget); err != nil {
+		return err
 	}
 
 	if err := d.withTx(func(tx *sql.Tx) error {
@@ -1474,8 +1498,9 @@ func (d *DB) GetTicketPhase(identifier string) (models.TicketPhase, error) {
 }
 
 // SetProjectPhase updates the phase of the project with the given identifier.
-// When phase is "done", the project's branch is merged into the parent project's
-// worktree (or repoRoot if there is no parent).
+// When phase is "done", the project's branch is rebased onto its parent and
+// fast-forwarded in (or into repoRoot if there is no parent), producing linear
+// history with no merge commit.
 func (d *DB) SetProjectPhase(identifier, phase string) error {
 	var projectID int64
 	var parentProjectID sql.NullInt64
@@ -1493,12 +1518,8 @@ func (d *DB) SetProjectPhase(identifier, phase string) error {
 		mu.Lock()
 		defer mu.Unlock()
 
-		if targetBranch, err := d.git.GetCurrentBranch(mergeTarget); err == nil {
-			_ = d.git.RebaseOnto(d.worktreePath(identifier), targetBranch)
-		}
-
-		if err := d.git.MergeBranch(mergeTarget, identifier); err != nil {
-			return &MergeConflictError{WorktreePath: mergeTarget, Branch: identifier, Err: err}
+		if err := d.rebaseAndFastForward(identifier, mergeTarget); err != nil {
+			return err
 		}
 	}
 

@@ -1,6 +1,7 @@
 package db_test
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -681,6 +682,85 @@ func TestSetProjectPhase_UsesParentBranch(t *testing.T) {
 	}
 	if git.MergeTargets[0] != expectedTarget {
 		t.Errorf("expected merge target %q, got %q", expectedTarget, git.MergeTargets[0])
+	}
+}
+
+func TestMarkTicketDone_RebasesBeforeMerging(t *testing.T) {
+	d, _, git := openTestDB(t)
+
+	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj/ticket", "A ticket", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	// Clear anything captured while setting up worktrees.
+	git.RebaseTargets = nil
+	git.MergeTargets = nil
+
+	if err := d.SetStatus("proj/ticket", models.PhaseDone, models.StatusIdle); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(git.RebaseTargets) == 0 {
+		t.Fatal("expected RebaseOnto to be called as part of the rebase strategy")
+	}
+	if len(git.MergeTargets) == 0 {
+		t.Fatal("expected MergeBranch (fast-forward) to be called after rebase")
+	}
+}
+
+func TestMarkTicketDone_RebaseConflictReturnsChildWorktreePath(t *testing.T) {
+	d, ticketsDir, git := openTestDB(t)
+
+	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj/ticket", "A ticket", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	// Force the rebase to fail so we can verify the error points at the
+	// child's worktree (where the user will resolve the conflict), and that
+	// no fast-forward merge is attempted.
+	git.RebaseErr = errors.New("rebase conflict")
+	git.MergeTargets = nil
+
+	err := d.SetStatus("proj/ticket", models.PhaseDone, models.StatusIdle)
+	if err == nil {
+		t.Fatal("expected error from rebase conflict")
+	}
+	var mergeErr *db.MergeConflictError
+	if !errors.As(err, &mergeErr) {
+		t.Fatalf("expected *db.MergeConflictError, got %T: %v", err, err)
+	}
+	expectedWorktree := filepath.Join(ticketsDir, "proj", "ticket", "worktree")
+	if mergeErr.WorktreePath != expectedWorktree {
+		t.Errorf("expected conflict worktree %q, got %q", expectedWorktree, mergeErr.WorktreePath)
+	}
+	if len(git.MergeTargets) != 0 {
+		t.Errorf("expected no FF merge after a failed rebase, got %v", git.MergeTargets)
+	}
+}
+
+func TestRebaseTicketOnParent_AbortsOnFailure(t *testing.T) {
+	d, _, git := openTestDB(t)
+	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj/ticket", "A ticket", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	git.RebaseErr = errors.New("rebase conflict")
+	git.RebasesAborted = nil
+
+	if err := d.RebaseTicketOnParent("proj/ticket", "proj", ""); err == nil {
+		t.Fatal("expected error from failing rebase")
+	}
+	if len(git.RebasesAborted) == 0 {
+		t.Fatal("expected AbortRebase to be called so the worktree is left clean")
 	}
 }
 

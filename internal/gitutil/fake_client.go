@@ -7,6 +7,11 @@ type FakeGitClient struct {
 	WorktreesCreated []string
 	MergeTargets     []string
 	RebaseTargets    []string // ontoBranch values passed to RebaseOnto
+	RebasesAborted   []string // worktreeDir values passed to AbortRebase
+
+	// RebaseErr, if non-nil, is returned from RebaseOnto instead of success.
+	// Useful for exercising the conflict path in callers.
+	RebaseErr error
 }
 
 func (f *FakeGitClient) CreateWorktree(_, worktreePath, _ string) error {
@@ -22,5 +27,9 @@ func (f *FakeGitClient) GetHeadCommit(_ string) (string, error)    { return "", 
 func (f *FakeGitClient) GetCurrentBranch(_ string) (string, error) { return "main", nil }
 func (f *FakeGitClient) RebaseOnto(_, ontoBranch string) error {
 	f.RebaseTargets = append(f.RebaseTargets, ontoBranch)
+	return f.RebaseErr
+}
+func (f *FakeGitClient) AbortRebase(worktreeDir string) error {
+	f.RebasesAborted = append(f.RebasesAborted, worktreeDir)
 	return nil
 }

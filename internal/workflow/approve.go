@@ -13,8 +13,8 @@ import (
 //	implement → refactor
 //	refactor  → review
 //	review    → respond
-//	respond   → done (merges branch, removes worktree, then checks recursive
-//	            project completion)
+//	respond   → done (rebases branch onto parent, fast-forwards the parent,
+//	            removes worktree, then checks recursive project completion)
 //
 // Returns an error if the ticket is not found or is in a phase that cannot be
 // approved (blocked, done).

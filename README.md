@@ -17,7 +17,7 @@ Each ticket moves through four phases of work:
 | `review` | Reviews the refactored changes and makes change requests |
 | `respond` | Applies any open change requests which it deems worth doing |
 
-You approve each phase transition. When all phases are done, the ticket's branch is merged into its parent project's worktree (or a top-level project branch) and the worktree is removed.
+You approve each phase transition. When all phases are done, the ticket's branch is rebased onto its parent project's worktree (or a top-level project branch) and the parent is fast-forwarded to the rebased tip, producing linear history with no merge commit. The worktree is then removed.
 
 ---
 
@@ -205,6 +205,8 @@ skills/           Claude Code skills for working with code-factory projects
 
 * Create a tool for examining permissions requests and auto-approving them if they're safe.
 
-* Make change requests visible inside the diff viewer.
-
 * Find a smooth way to handle viewing multiple change requests on the same line.
+
+* Markdown parsing & formatting for CR descriptions, log files.
+
+* Make `cf-refactor` generate better commit messages.

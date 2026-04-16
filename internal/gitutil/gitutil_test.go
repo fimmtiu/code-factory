@@ -214,13 +214,16 @@ func TestMergeBranch(t *testing.T) {
 		t.Fatalf("git commit failed: %v\n%s", err, out)
 	}
 
+	// Record the feature branch tip before fast-forwarding.
+	featureTip := revParse(t, dir, "HEAD")
+
 	// Go back to base branch before merging.
 	out, err = exec.Command("git", "-C", dir, "checkout", baseBranch).CombinedOutput()
 	if err != nil {
 		t.Fatalf("failed to checkout base branch: %v\n%s", err, out)
 	}
 
-	// Merge featureBranch into the currently-checked-out baseBranch.
+	// Fast-forward baseBranch to featureBranch.
 	err = client.MergeBranch(dir, featureBranch)
 	if err != nil {
 		t.Fatalf("MergeBranch returned error: %v", err)
@@ -237,6 +240,61 @@ func TestMergeBranch(t *testing.T) {
 	if branch != baseBranch {
 		t.Fatalf("expected to be on %q after merge, got %q", baseBranch, branch)
 	}
+
+	// Fast-forward means base HEAD == feature HEAD (no merge commit).
+	baseTip := revParse(t, dir, "HEAD")
+	if baseTip != featureTip {
+		t.Fatalf("expected fast-forward (base HEAD %q == feature HEAD %q) but got a merge commit", baseTip, featureTip)
+	}
+}
+
+func TestMergeBranch_NonFastForwardFails(t *testing.T) {
+	dir := initTestRepo(t)
+	client := gitutil.NewRealGitClient()
+
+	baseBranch := currentBranch(t, dir)
+
+	// Create a feature branch and commit on it.
+	if out, err := exec.Command("git", "-C", dir, "checkout", "-b", "diverge").CombinedOutput(); err != nil {
+		t.Fatalf("checkout diverge failed: %v\n%s", err, out)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "f.txt"), []byte("feature\n"), 0644); err != nil {
+		t.Fatalf("write f.txt: %v", err)
+	}
+	if out, err := exec.Command("git", "-C", dir, "add", "f.txt").CombinedOutput(); err != nil {
+		t.Fatalf("add: %v\n%s", err, out)
+	}
+	if out, err := exec.Command("git", "-C", dir, "commit", "-m", "feature").CombinedOutput(); err != nil {
+		t.Fatalf("commit: %v\n%s", err, out)
+	}
+
+	// Advance baseBranch with an unrelated commit so it has diverged from diverge.
+	if out, err := exec.Command("git", "-C", dir, "checkout", baseBranch).CombinedOutput(); err != nil {
+		t.Fatalf("checkout base: %v\n%s", err, out)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "b.txt"), []byte("base\n"), 0644); err != nil {
+		t.Fatalf("write b.txt: %v", err)
+	}
+	if out, err := exec.Command("git", "-C", dir, "add", "b.txt").CombinedOutput(); err != nil {
+		t.Fatalf("add: %v\n%s", err, out)
+	}
+	if out, err := exec.Command("git", "-C", dir, "commit", "-m", "base").CombinedOutput(); err != nil {
+		t.Fatalf("commit: %v\n%s", err, out)
+	}
+
+	// diverge is no longer a descendant of baseBranch, so --ff-only must fail.
+	if err := client.MergeBranch(dir, "diverge"); err == nil {
+		t.Fatal("expected MergeBranch to fail when fast-forward is not possible")
+	}
+}
+
+func revParse(t *testing.T, repoRoot, ref string) string {
+	t.Helper()
+	out, err := exec.Command("git", "-C", repoRoot, "rev-parse", ref).Output()
+	if err != nil {
+		t.Fatalf("rev-parse %q: %v", ref, err)
+	}
+	return strings.TrimSpace(string(out))
 }
 
 func TestRemoveWorktree(t *testing.T) {

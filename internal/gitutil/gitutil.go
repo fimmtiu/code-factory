@@ -11,9 +11,10 @@ import (
 // GitClient defines the git operations needed by the tickets tool.
 type GitClient interface {
 	CreateWorktree(repoRoot, worktreePath, branchName string) error
-	// MergeBranch merges fromBranch into whichever branch is currently checked
-	// out at worktreeDir using --no-ff. worktreeDir must already be on the
-	// desired target branch (e.g. the parent project's worktree, or repoRoot).
+	// MergeBranch fast-forwards the branch currently checked out at
+	// worktreeDir to the tip of fromBranch. The caller must ensure fromBranch
+	// is already a descendant of the target (typically by rebasing it first);
+	// otherwise the fast-forward will fail.
 	MergeBranch(worktreeDir, fromBranch string) error
 	RemoveWorktree(repoRoot, worktreePath, branchName string) error
 	// GetHeadCommit returns the abbreviated HEAD commit hash for the git
@@ -23,9 +24,13 @@ type GitClient interface {
 	// at the given path.
 	GetCurrentBranch(path string) (string, error)
 	// RebaseOnto rebases the branch checked out at worktreeDir onto
-	// ontoBranch. If the rebase fails (e.g. conflicts), it is aborted so
-	// the worktree is left in its original state.
+	// ontoBranch. On failure, the rebase is left in progress with conflict
+	// markers in place so conflicts can be resolved manually. Callers that
+	// want a clean worktree on failure should call AbortRebase.
 	RebaseOnto(worktreeDir, ontoBranch string) error
+	// AbortRebase aborts an in-progress rebase in worktreeDir, restoring the
+	// worktree to its pre-rebase state.
+	AbortRebase(worktreeDir string) error
 }
 
 // RealGitClient implements GitClient using actual git commands.
@@ -91,17 +96,13 @@ func (g *RealGitClient) CreateWorktree(repoRoot, worktreePath, branchName string
 	return nil
 }
 
-// MergeBranch merges fromBranch into the branch currently checked out at
-// worktreeDir using --no-ff. The caller is responsible for ensuring worktreeDir
-// is already on the desired target branch.
+// MergeBranch fast-forwards the branch currently checked out at worktreeDir
+// to the tip of fromBranch. The caller is responsible for ensuring fromBranch
+// is a descendant of the target branch (typically by rebasing it first);
+// otherwise `--ff-only` will fail.
 func (g *RealGitClient) MergeBranch(worktreeDir, fromBranch string) error {
 	safeBranchName := strings.ReplaceAll(fromBranch, "/", "_")
-	intoBranch, err := runGitOutput("-C", worktreeDir, "rev-parse", "--abbrev-ref", "HEAD")
-	if err != nil {
-		return fmt.Errorf("MergeBranch: could not determine current branch: %w", err)
-	}
-	mergeMsg := fmt.Sprintf("merge %s into %s", safeBranchName, intoBranch)
-	return runGit("-C", worktreeDir, "merge", "--no-ff", safeBranchName, "-m", mergeMsg)
+	return runGit("-C", worktreeDir, "merge", "--ff-only", safeBranchName)
 }
 
 // GetHeadCommit returns the abbreviated HEAD commit hash for the git
@@ -116,14 +117,18 @@ func (g *RealGitClient) GetCurrentBranch(path string) (string, error) {
 }
 
 // RebaseOnto rebases the branch checked out at worktreeDir onto ontoBranch.
-// If the rebase fails (e.g. due to conflicts), the rebase is aborted so the
-// worktree is left in its original state.
+// On failure (e.g. conflicts), the rebase is left in progress with conflict
+// markers in place so the caller or user can resolve them. Callers that want
+// a clean worktree on failure must call AbortRebase.
 func (g *RealGitClient) RebaseOnto(worktreeDir, ontoBranch string) error {
-	if err := runGit("-C", worktreeDir, "rebase", ontoBranch); err != nil {
-		_ = runGit("-C", worktreeDir, "rebase", "--abort")
-		return err
-	}
-	return nil
+	return runGit("-C", worktreeDir, "rebase", ontoBranch)
+}
+
+// AbortRebase aborts an in-progress rebase in worktreeDir, restoring the
+// worktree to its pre-rebase state. The underlying `git rebase --abort`
+// error (if any) is returned so callers can decide whether to surface it.
+func (g *RealGitClient) AbortRebase(worktreeDir string) error {
+	return runGit("-C", worktreeDir, "rebase", "--abort")
 }
 
 // RemoveWorktree removes the linked worktree at worktreePath and deletes its
