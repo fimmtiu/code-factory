@@ -5,7 +5,6 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/fimmtiu/code-factory/internal/db"
 	"github.com/fimmtiu/code-factory/internal/models"
 	"github.com/fimmtiu/code-factory/internal/ui/theme"
 )
@@ -24,7 +23,6 @@ type openViewChangeRequestDialogMsg struct {
 // ViewChangeRequestDialog is the modal shown when the user presses Enter on a
 // diff line that has a change request. It displays the CR details read-only.
 type ViewChangeRequestDialog struct {
-	database     *db.DB
 	cr           models.ChangeRequest
 	identifier   string
 	worktreePath string
@@ -32,9 +30,8 @@ type ViewChangeRequestDialog struct {
 }
 
 // NewViewChangeRequestDialog creates a ViewChangeRequestDialog for the given CR.
-func NewViewChangeRequestDialog(database *db.DB, cr models.ChangeRequest, identifier, worktreePath string, width int) ViewChangeRequestDialog {
+func NewViewChangeRequestDialog(cr models.ChangeRequest, identifier, worktreePath string, width int) ViewChangeRequestDialog {
 	return ViewChangeRequestDialog{
-		database:     database,
 		cr:           cr,
 		identifier:   identifier,
 		worktreePath: worktreePath,

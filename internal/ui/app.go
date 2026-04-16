@@ -164,7 +164,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case openViewChangeRequestDialogMsg:
-		m.dialog = NewViewChangeRequestDialog(m.db, msg.cr, msg.identifier, msg.worktreePath, m.width)
+		m.dialog = NewViewChangeRequestDialog(msg.cr, msg.identifier, msg.worktreePath, m.width)
 		return m, nil
 
 	case crCreatedMsg:
