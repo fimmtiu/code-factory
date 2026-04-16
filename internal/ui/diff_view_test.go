@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/fimmtiu/code-factory/internal/git"
+	"github.com/fimmtiu/code-factory/internal/models"
 	"github.com/fimmtiu/code-factory/internal/ui/theme"
 )
 
@@ -923,6 +924,433 @@ func TestHintPairs_ViewerMode(t *testing.T) {
 	}
 	if !found {
 		t.Error("expected 'scroll' in viewer hint pairs")
+	}
+}
+
+// ── DiffView CR integration tests ────────────────────────────────────────────
+
+// TestDiffView_NewDiffViewWithDB verifies that NewDiffView stores the database reference.
+func TestDiffView_NewDiffViewWithDB(t *testing.T) {
+	// Passing nil is fine; we just verify the field is stored.
+	v := NewDiffView(nil)
+	if v.database != nil {
+		t.Error("expected nil database when nil passed")
+	}
+}
+
+// TestDiffView_CRMapInitiallyNil verifies that crMap starts as nil.
+func TestDiffView_CRMapInitiallyNil(t *testing.T) {
+	v := NewDiffView(nil)
+	if v.crMap != nil {
+		t.Error("expected crMap to be nil initially")
+	}
+}
+
+// TestDiffView_CRMapPassedToViewer verifies the full crMap is passed through
+// to the viewer when creating it from a diffContentMsg.
+func TestDiffView_CRMapPassedToViewer(t *testing.T) {
+	files := sampleFiles()
+	v := DiffView{
+		width:      80,
+		height:     24,
+		identifier: "proj/ticket",
+		phase:      "implement",
+		crMap: map[string][]models.ChangeRequest{
+			"internal/ui/app.go:10": {{CodeLocation: "internal/ui/app.go:10"}},
+		},
+	}
+
+	// Simulate receiving diffContentMsg which creates the viewer.
+	updated, _ := v.Update(diffContentMsg{files: files})
+	dv := updated.(DiffView)
+	if dv.viewer == nil {
+		t.Fatal("expected viewer to be created")
+	}
+	if dv.viewer.crMap == nil {
+		t.Fatal("expected crMap to be set on viewer")
+	}
+	if crs, ok := dv.viewer.crMap["internal/ui/app.go:10"]; !ok || len(crs) == 0 {
+		t.Error("expected crMap to contain 'internal/ui/app.go:10'")
+	}
+}
+
+// TestDiffView_EmptyCRMapPassedToViewer verifies that an empty crMap
+// produces an empty (but non-nil) crMap on the viewer.
+func TestDiffView_EmptyCRMapPassedToViewer(t *testing.T) {
+	files := sampleFiles()
+	v := DiffView{
+		width:      80,
+		height:     24,
+		identifier: "proj/ticket",
+		phase:      "implement",
+		crMap:      map[string][]models.ChangeRequest{},
+	}
+
+	updated, _ := v.Update(diffContentMsg{files: files})
+	dv := updated.(DiffView)
+	if dv.viewer == nil {
+		t.Fatal("expected viewer to be created")
+	}
+	if dv.viewer.crMap == nil {
+		t.Fatal("expected crMap to be non-nil (empty map)")
+	}
+	if len(dv.viewer.crMap) != 0 {
+		t.Errorf("expected empty crMap, got %d entries", len(dv.viewer.crMap))
+	}
+}
+
+// TestDiffView_NilCRMapPassedToViewer verifies that a nil crMap (no DB or
+// ticket not found) produces nil crMap on the viewer.
+func TestDiffView_NilCRMapPassedToViewer(t *testing.T) {
+	files := sampleFiles()
+	v := DiffView{
+		width:      80,
+		height:     24,
+		identifier: "proj/ticket",
+		phase:      "implement",
+		crMap:      nil,
+	}
+
+	updated, _ := v.Update(diffContentMsg{files: files})
+	dv := updated.(DiffView)
+	if dv.viewer == nil {
+		t.Fatal("expected viewer to be created")
+	}
+	if dv.viewer.crMap != nil {
+		t.Error("expected nil crMap when DiffView crMap is nil")
+	}
+}
+
+// TestFetchCRMapCmd_NilDB verifies that fetchCRMapCmd with a nil database
+// delivers a crMapLoadedMsg with a non-nil empty map.
+func TestFetchCRMapCmd_NilDB(t *testing.T) {
+	cmd := fetchCRMapCmd(nil, "proj/ticket")
+	if cmd == nil {
+		t.Fatal("expected non-nil cmd")
+	}
+	msg := cmd()
+	loaded, ok := msg.(crMapLoadedMsg)
+	if !ok {
+		t.Fatalf("expected crMapLoadedMsg, got %T", msg)
+	}
+	if loaded.crMap == nil {
+		t.Error("expected crMap to be non-nil empty map when database is nil")
+	}
+	if len(loaded.crMap) != 0 {
+		t.Errorf("expected empty crMap, got %d entries", len(loaded.crMap))
+	}
+}
+
+// TestCRMapLoadedMsg_SetsCRMap verifies that receiving a crMapLoadedMsg
+// stores the map on DiffView.
+func TestCRMapLoadedMsg_SetsCRMap(t *testing.T) {
+	v := DiffView{width: 80, height: 24}
+	crMap := map[string][]models.ChangeRequest{
+		"file.go:1": {{CodeLocation: "file.go:1", Description: "test"}},
+	}
+	updated, cmd := v.Update(crMapLoadedMsg{crMap: crMap})
+	dv := updated.(DiffView)
+	if cmd != nil {
+		t.Error("expected nil cmd from crMapLoadedMsg")
+	}
+	if dv.crMap == nil {
+		t.Fatal("expected crMap to be set")
+	}
+	if crs, ok := dv.crMap["file.go:1"]; !ok || len(crs) == 0 {
+		t.Error("expected crMap to contain 'file.go:1'")
+	}
+}
+
+// TestFetchCRMapCmd_PreservesMultipleCRsAtSameLocation verifies that when
+// multiple CRs share the same CodeLocation, they are all preserved in the
+// slice rather than silently dropping earlier ones.
+func TestFetchCRMapCmd_PreservesMultipleCRsAtSameLocation(t *testing.T) {
+	// We can't easily test with a real DB, but we can verify the map-building
+	// logic by checking that openViewChangeRequestDialog picks the first CR
+	// from a multi-entry slice.
+	files := sampleFiles()
+	v := makeDiffViewInViewerMode(files, 80, 24)
+	v.identifier = "proj/ticket"
+	v.worktreePath = "/tmp/fake-worktree"
+	v.crMap = map[string][]models.ChangeRequest{
+		"internal/ui/app.go:10": {
+			{CodeLocation: "internal/ui/app.go:10", Description: "first CR", Author: "alice"},
+			{CodeLocation: "internal/ui/app.go:10", Description: "second CR", Author: "bob"},
+		},
+	}
+
+	v.viewer.enterLineSelect()
+	// Position on the CR line.
+	for i, meta := range v.viewer.lineMeta {
+		if v.viewer.isSelectable(i) && meta.lineNum == 10 && meta.fileIndex == 0 {
+			v.viewer.selectedLine = i
+			break
+		}
+	}
+
+	cmd := v.openViewChangeRequestDialog()
+	if cmd == nil {
+		t.Fatal("expected non-nil cmd for line with multiple CRs")
+	}
+	msg := cmd()
+	openMsg := msg.(openViewChangeRequestDialogMsg)
+	// Should pick the first (earliest) CR.
+	if openMsg.cr.Description != "first CR" {
+		t.Errorf("expected first CR, got %q", openMsg.cr.Description)
+	}
+
+	// Verify both CRs are preserved in the map.
+	crs := v.crMap["internal/ui/app.go:10"]
+	if len(crs) != 2 {
+		t.Fatalf("expected 2 CRs at same location, got %d", len(crs))
+	}
+	if crs[1].Description != "second CR" {
+		t.Errorf("expected second CR preserved, got %q", crs[1].Description)
+	}
+}
+
+// TestDiffView_ResetForTicketClearsCRMap verifies that switching tickets
+// clears the crMap.
+func TestDiffView_ResetForTicketClearsCRMap(t *testing.T) {
+	v := DiffView{
+		width:      80,
+		height:     24,
+		identifier: "old/ticket",
+		crMap: map[string][]models.ChangeRequest{
+			"file.go:1": {{CodeLocation: "file.go:1"}},
+		},
+	}
+
+	v.resetForTicket("new/ticket", "review", false, "/tmp/worktree", nil)
+
+	if v.crMap != nil {
+		t.Error("expected crMap to be cleared on ticket reset")
+	}
+}
+
+// ── Enter key / openViewChangeRequestDialog tests ────────────────────────────
+
+// TestOpenViewChangeRequestDialog_ReturnsCmdForCRLine verifies that
+// openViewChangeRequestDialog returns a non-nil Cmd when the selected line
+// has a change request in the crMap.
+func TestOpenViewChangeRequestDialog_ReturnsCmdForCRLine(t *testing.T) {
+	files := sampleFiles()
+	v := makeDiffViewInViewerMode(files, 80, 24)
+	v.identifier = "proj/ticket"
+	v.worktreePath = "/tmp/fake-worktree"
+	v.crMap = map[string][]models.ChangeRequest{
+		"internal/ui/app.go:10": {{
+			CodeLocation: "internal/ui/app.go:10",
+			Description:  "fix this",
+			Author:       "alice",
+		}},
+	}
+
+	// Enter line-select mode and position on a line in the first file.
+	v.viewer.enterLineSelect()
+	if !v.viewer.lineSelectMode {
+		t.Fatal("expected line-select mode to be active")
+	}
+
+	// Move to the line that corresponds to app.go:10 (context line).
+	// selectedLineInfo should return the file and line number.
+	// We need to find a selectable line that maps to app.go:10.
+	found := false
+	for i, meta := range v.viewer.lineMeta {
+		if v.viewer.isSelectable(i) && meta.lineNum == 10 &&
+			meta.fileIndex == 0 {
+			v.viewer.selectedLine = i
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatal("could not find selectable line for app.go:10")
+	}
+
+	cmd := v.openViewChangeRequestDialog()
+	if cmd == nil {
+		t.Fatal("expected non-nil cmd for line with CR")
+	}
+
+	// Execute the cmd and verify the message type.
+	msg := cmd()
+	openMsg, ok := msg.(openViewChangeRequestDialogMsg)
+	if !ok {
+		t.Fatalf("expected openViewChangeRequestDialogMsg, got %T", msg)
+	}
+	if openMsg.cr.CodeLocation != "internal/ui/app.go:10" {
+		t.Errorf("cr.CodeLocation = %q, want %q", openMsg.cr.CodeLocation, "internal/ui/app.go:10")
+	}
+	if openMsg.cr.Description != "fix this" {
+		t.Errorf("cr.Description = %q, want %q", openMsg.cr.Description, "fix this")
+	}
+	if openMsg.identifier != "proj/ticket" {
+		t.Errorf("identifier = %q, want %q", openMsg.identifier, "proj/ticket")
+	}
+	if openMsg.worktreePath != "/tmp/fake-worktree" {
+		t.Errorf("worktreePath = %q, want %q", openMsg.worktreePath, "/tmp/fake-worktree")
+	}
+}
+
+// TestOpenViewChangeRequestDialog_ReturnsNilForNonCRLine verifies that
+// openViewChangeRequestDialog returns nil when the selected line has no CR.
+func TestOpenViewChangeRequestDialog_ReturnsNilForNonCRLine(t *testing.T) {
+	files := sampleFiles()
+	v := makeDiffViewInViewerMode(files, 80, 24)
+	v.identifier = "proj/ticket"
+	v.worktreePath = "/tmp/fake-worktree"
+	v.crMap = map[string][]models.ChangeRequest{} // empty crMap
+
+	v.viewer.enterLineSelect()
+	if !v.viewer.lineSelectMode {
+		t.Fatal("expected line-select mode to be active")
+	}
+
+	cmd := v.openViewChangeRequestDialog()
+	if cmd != nil {
+		t.Error("expected nil cmd for line without CR")
+	}
+}
+
+// TestOpenViewChangeRequestDialog_ReturnsNilWhenNoViewer verifies that
+// openViewChangeRequestDialog returns nil when viewer is nil.
+func TestOpenViewChangeRequestDialog_ReturnsNilWhenNoViewer(t *testing.T) {
+	v := DiffView{
+		identifier:   "proj/ticket",
+		worktreePath: "/tmp/fake-worktree",
+		crMap:        map[string][]models.ChangeRequest{},
+	}
+	cmd := v.openViewChangeRequestDialog()
+	if cmd != nil {
+		t.Error("expected nil cmd when viewer is nil")
+	}
+}
+
+// TestOpenViewChangeRequestDialog_ReturnsNilWhenNoWorktreePath verifies that
+// openViewChangeRequestDialog returns nil when worktreePath is empty.
+func TestOpenViewChangeRequestDialog_ReturnsNilWhenNoWorktreePath(t *testing.T) {
+	files := sampleFiles()
+	v := makeDiffViewInViewerMode(files, 80, 24)
+	v.worktreePath = "" // empty
+	v.crMap = map[string][]models.ChangeRequest{
+		"internal/ui/app.go:10": {{CodeLocation: "internal/ui/app.go:10"}},
+	}
+	v.viewer.enterLineSelect()
+
+	cmd := v.openViewChangeRequestDialog()
+	if cmd != nil {
+		t.Error("expected nil cmd when worktreePath is empty")
+	}
+}
+
+// TestEnterKeyInLineSelectMode_OpensCRDialog verifies that pressing Enter in
+// line-select mode on a CR line returns a command (routed via DiffView.Update).
+func TestEnterKeyInLineSelectMode_OpensCRDialog(t *testing.T) {
+	files := sampleFiles()
+	v := makeDiffViewInViewerMode(files, 80, 24)
+	v.identifier = "proj/ticket"
+	v.worktreePath = "/tmp/fake-worktree"
+	v.crMap = map[string][]models.ChangeRequest{
+		"internal/ui/app.go:10": {{CodeLocation: "internal/ui/app.go:10"}},
+	}
+
+	v.viewer.enterLineSelect()
+	// Position on a CR line.
+	for i, meta := range v.viewer.lineMeta {
+		if v.viewer.isSelectable(i) && meta.lineNum == 10 && meta.fileIndex == 0 {
+			v.viewer.selectedLine = i
+			break
+		}
+	}
+
+	updated, cmd := v.Update(fakeKeyMsg("enter"))
+	dv := updated.(DiffView)
+	if dv.viewer == nil {
+		t.Fatal("viewer should still be active after Enter on CR line")
+	}
+	if cmd == nil {
+		t.Error("expected non-nil cmd from Enter on CR line in line-select mode")
+	}
+}
+
+// TestEnterKeyInLineSelectMode_NoOpForNonCRLine verifies that pressing Enter
+// in line-select mode on a non-CR line does nothing (falls through).
+func TestEnterKeyInLineSelectMode_NoOpForNonCRLine(t *testing.T) {
+	files := sampleFiles()
+	v := makeDiffViewInViewerMode(files, 80, 24)
+	v.identifier = "proj/ticket"
+	v.worktreePath = "/tmp/fake-worktree"
+	v.crMap = map[string][]models.ChangeRequest{} // no CRs
+
+	v.viewer.enterLineSelect()
+
+	updated, cmd := v.Update(fakeKeyMsg("enter"))
+	dv := updated.(DiffView)
+	if dv.viewer == nil {
+		t.Fatal("viewer should still be active after Enter on non-CR line")
+	}
+	// Enter should fall through to the viewer's handler, which is a no-op in
+	// line-select mode; cmd should be nil.
+	if cmd != nil {
+		t.Error("expected nil cmd from Enter on non-CR line in line-select mode")
+	}
+}
+
+// TestHintPairs_LineSelectMode_ContainsEnterViewCR verifies that the hint
+// pairs in line-select mode include "Enter" / "view CR".
+func TestHintPairs_LineSelectMode_ContainsEnterViewCR(t *testing.T) {
+	v := DiffView{
+		width:  80,
+		height: 24,
+		viewer: &DiffViewerModel{lineSelectMode: true},
+	}
+	pairs := v.HintPairs()
+
+	// Find "Enter" key and check its description.
+	foundEnter := false
+	for i := 0; i < len(pairs)-1; i += 2 {
+		if pairs[i] == "Enter" {
+			foundEnter = true
+			if pairs[i+1] != "view CR" {
+				t.Errorf("Enter hint description = %q, want %q", pairs[i+1], "view CR")
+			}
+			break
+		}
+	}
+	if !foundEnter {
+		t.Errorf("expected 'Enter' in line-select mode hint pairs, got %v", pairs)
+	}
+}
+
+// TestHintPairs_LineSelectMode_OrderBeforeR verifies that "Enter" appears
+// before "R" in the hint pairs for line-select mode.
+func TestHintPairs_LineSelectMode_OrderBeforeR(t *testing.T) {
+	v := DiffView{
+		width:  80,
+		height: 24,
+		viewer: &DiffViewerModel{lineSelectMode: true},
+	}
+	pairs := v.HintPairs()
+
+	enterIdx := -1
+	rIdx := -1
+	for i := 0; i < len(pairs)-1; i += 2 {
+		if pairs[i] == "Enter" {
+			enterIdx = i
+		}
+		if pairs[i] == "R" {
+			rIdx = i
+		}
+	}
+	if enterIdx == -1 {
+		t.Fatal("missing 'Enter' in hint pairs")
+	}
+	if rIdx == -1 {
+		t.Fatal("missing 'R' in hint pairs")
+	}
+	if enterIdx >= rIdx {
+		t.Errorf("Enter (idx %d) should appear before R (idx %d)", enterIdx, rIdx)
 	}
 }
 

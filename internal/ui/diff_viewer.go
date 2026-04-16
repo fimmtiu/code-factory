@@ -10,6 +10,7 @@ import (
 
 	"github.com/fimmtiu/code-factory/internal/diff"
 	"github.com/fimmtiu/code-factory/internal/git"
+	"github.com/fimmtiu/code-factory/internal/models"
 	"github.com/fimmtiu/code-factory/internal/ui/theme"
 )
 
@@ -59,18 +60,24 @@ type DiffViewerModel struct {
 	lineSelectMode bool // true when the user is selecting individual lines
 	selectedLine   int  // index of the currently selected line in the rendered text
 	frozenFileIdx  int  // file index frozen on exit from line select; -1 when not frozen
+
+	// CR indicator state: keyed by "file:line". Multiple CRs may share a location.
+	crMap map[string][]models.ChangeRequest
 }
 
 // newDiffViewerModel creates a DiffViewerModel from parsed diff files.
 // paneWidth and paneHeight are the dimensions of the content area only
 // (DiffView accounts for the status bar, separator, and chrome).
-func newDiffViewerModel(files []diff.File, paneWidth, paneHeight int) *DiffViewerModel {
+// crMap contains change request data keyed by "file:line"; multiple CRs
+// may share a location. nil means no CR indicators.
+func newDiffViewerModel(files []diff.File, paneWidth, paneHeight int, crMap map[string][]models.ChangeRequest) *DiffViewerModel {
 	m := &DiffViewerModel{
 		paneWidth:     paneWidth,
 		paneHeight:    paneHeight,
 		files:         files,
 		collapsed:     make([]bool, len(files)),
 		frozenFileIdx: -1,
+		crMap:         crMap,
 	}
 
 	if len(files) == 0 {
@@ -214,7 +221,7 @@ func (m *DiffViewerModel) rerender() {
 	if w < 1 {
 		w = 1
 	}
-	rd := renderDiffResult(m.files, w, m.collapsed)
+	rd := renderDiffResult(m.files, w, m.collapsed, m.crMap)
 	m.text = rd.text
 	m.fileStarts = rd.fileStarts
 	m.lineMeta = rd.lineMeta
