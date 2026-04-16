@@ -59,24 +59,19 @@ type EditChangeRequestDialog struct {
 }
 
 // NewEditChangeRequestDialog creates an EditChangeRequestDialog for the given file location.
-func NewEditChangeRequestDialog(database *db.DB, identifier, fileName string, lineNum int, context, worktreePath string, width int) EditChangeRequestDialog {
-	dialogPad := theme.Current().DialogBoxStyle.GetHorizontalFrameSize()
-	inputPad := theme.Current().QuickResponseInputStyle.GetHorizontalFrameSize()
-	textWidth := width - dialogPad - inputPad
-	if textWidth < 20 {
-		textWidth = 20
-	}
-	return EditChangeRequestDialog{
+func NewEditChangeRequestDialog(database *db.DB, msg openEditChangeRequestDialogMsg, width int) EditChangeRequestDialog {
+	d := EditChangeRequestDialog{
 		database:     database,
-		identifier:   identifier,
-		fileName:     fileName,
-		lineNum:      lineNum,
-		context:      context,
-		worktreePath: worktreePath,
-		textArea:     NewTextArea(textWidth, 5),
+		identifier:   msg.identifier,
+		fileName:     msg.fileName,
+		lineNum:      msg.lineNum,
+		context:      msg.context,
+		worktreePath: msg.worktreePath,
 		focused:      crFocusTextArea,
 		width:        width,
 	}
+	d.textArea = NewTextArea(d.textAreaWidth(), 5)
+	return d
 }
 
 func (d EditChangeRequestDialog) Init() tea.Cmd { return nil }
