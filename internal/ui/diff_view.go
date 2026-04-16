@@ -641,6 +641,11 @@ func (v DiffView) openChangeRequestDialog() (tea.Model, tea.Cmd) {
 	}
 }
 
+// openViewChangeRequestDialog returns a tea.Cmd that sends an
+// openViewChangeRequestDialogMsg for the change request at the currently
+// selected diff line. Returns nil if no viewer is active, no line is
+// selected, or the selected line has no associated change request,
+// allowing the Enter key to fall through to the viewer's default handler.
 func (v DiffView) openViewChangeRequestDialog() tea.Cmd {
 	if v.viewer == nil || v.worktreePath == "" {
 		return nil
