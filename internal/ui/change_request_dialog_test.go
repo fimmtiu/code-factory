@@ -10,24 +10,18 @@ import (
 	"github.com/fimmtiu/code-factory/internal/ui/theme"
 )
 
-// testCRMsg returns a default openEditChangeRequestDialogMsg for tests.
-// Callers that need specific field values should override after calling.
-func testCRMsg() openEditChangeRequestDialogMsg {
-	return openEditChangeRequestDialogMsg{
-		identifier: "id", fileName: "file.go", lineNum: 1,
-		context: "ctx", worktreePath: "/tmp",
-	}
+// newTestCRDialog creates a default EditChangeRequestDialog for tests.
+func newTestCRDialog(t *testing.T, width int) EditChangeRequestDialog {
+	t.Helper()
+	ensureTheme(t)
+	return NewEditChangeRequestDialog(nil, "id", "file.go", 1, "ctx", "/tmp", width)
 }
 
 // ── EditChangeRequestDialog constructor tests ───────────────────────────────
 
 func TestNewEditChangeRequestDialog_ReturnsCorrectType(t *testing.T) {
 	ensureTheme(t)
-	msg := openEditChangeRequestDialogMsg{
-		identifier: "proj/ticket", fileName: "main.go", lineNum: 42,
-		context: "func main() {}", worktreePath: "/tmp/wt",
-	}
-	d := NewEditChangeRequestDialog(nil, msg, 80)
+	d := NewEditChangeRequestDialog(nil, "proj/ticket", "main.go", 42, "func main() {}", "/tmp/wt", 80)
 	// Verify it's an EditChangeRequestDialog (compile-time check via type assertion).
 	var _ EditChangeRequestDialog = d
 	if d.fileName != "main.go" {
@@ -41,37 +35,46 @@ func TestNewEditChangeRequestDialog_ReturnsCorrectType(t *testing.T) {
 	}
 }
 
-func TestNewEditChangeRequestDialog_SetsTextAreaWidth(t *testing.T) {
-	ensureTheme(t)
-	d := NewEditChangeRequestDialog(nil, testCRMsg(), 80)
-	// The text area should have been created (non-zero width).
+func TestNewEditChangeRequestDialog_StoresWidth(t *testing.T) {
+	d := newTestCRDialog(t, 80)
 	if d.width != 80 {
 		t.Errorf("width = %d, want 80", d.width)
 	}
 }
 
+func TestNewEditChangeRequestDialog_SetsTextAreaWidth(t *testing.T) {
+	d := newTestCRDialog(t, 80)
+	taWidth := d.textAreaWidth()
+	if taWidth <= 0 {
+		t.Errorf("textAreaWidth() = %d, want > 0", taWidth)
+	}
+	if taWidth >= 80 {
+		t.Errorf("textAreaWidth() = %d, should be less than outer width 80", taWidth)
+	}
+}
+
 func TestNewEditChangeRequestDialog_InitialFocusIsTextArea(t *testing.T) {
-	ensureTheme(t)
-	d := NewEditChangeRequestDialog(nil, testCRMsg(), 80)
+	d := newTestCRDialog(t, 80)
 	if d.focused != crFocusTextArea {
 		t.Errorf("focused = %d, want %d (crFocusTextArea)", d.focused, crFocusTextArea)
 	}
 }
 
 func TestNewEditChangeRequestDialog_MinimumTextWidth(t *testing.T) {
-	ensureTheme(t)
-	// Very small width should be clamped to minimum.
-	d := NewEditChangeRequestDialog(nil, testCRMsg(), 5)
+	// Very small width should result in textAreaWidth() clamping to minimum of 20.
+	d := newTestCRDialog(t, 5)
 	if d.width != 5 {
 		t.Errorf("width = %d, want 5", d.width)
+	}
+	if taWidth := d.textAreaWidth(); taWidth < 20 {
+		t.Errorf("textAreaWidth() = %d, want >= 20 (minimum clamp)", taWidth)
 	}
 }
 
 // ── EditChangeRequestDialog satisfies dialog interface ──────────────────────
 
 func TestEditChangeRequestDialog_ImplementsDialogInterface(t *testing.T) {
-	ensureTheme(t)
-	d := NewEditChangeRequestDialog(nil, testCRMsg(), 80)
+	d := newTestCRDialog(t, 80)
 	// Compile-time check: EditChangeRequestDialog must satisfy the dialog interface.
 	var _ dialog = d
 }
@@ -79,8 +82,7 @@ func TestEditChangeRequestDialog_ImplementsDialogInterface(t *testing.T) {
 // ── EditChangeRequestDialog Init ────────────────────────────────────────────
 
 func TestEditChangeRequestDialog_Init_ReturnsNil(t *testing.T) {
-	ensureTheme(t)
-	d := NewEditChangeRequestDialog(nil, testCRMsg(), 80)
+	d := newTestCRDialog(t, 80)
 	if cmd := d.Init(); cmd != nil {
 		t.Error("Init() should return nil")
 	}
@@ -90,23 +92,16 @@ func TestEditChangeRequestDialog_Init_ReturnsNil(t *testing.T) {
 
 func TestEditChangeRequestDialog_View_ContainsTitle(t *testing.T) {
 	ensureTheme(t)
-	msg := testCRMsg()
-	msg.fileName = "main.go"
-	msg.lineNum = 10
-	msg.context = "some context"
-	d := NewEditChangeRequestDialog(nil, msg, 80)
+	d := NewEditChangeRequestDialog(nil, "id", "main.go", 10, "some context", "/tmp", 80)
 	view := d.View()
-	if !strings.Contains(view, "New Change Request") {
-		t.Error("View() should contain 'New Change Request' title")
+	if !strings.Contains(view, "Create Change Request") {
+		t.Error("View() should contain 'Create Change Request' title")
 	}
 }
 
 func TestEditChangeRequestDialog_View_ContainsFileAndLine(t *testing.T) {
 	ensureTheme(t)
-	msg := testCRMsg()
-	msg.fileName = "main.go"
-	msg.lineNum = 42
-	d := NewEditChangeRequestDialog(nil, msg, 80)
+	d := NewEditChangeRequestDialog(nil, "id", "main.go", 42, "ctx", "/tmp", 80)
 	view := d.View()
 	if !strings.Contains(view, "main.go:42") {
 		t.Error("View() should contain file:line info")
@@ -114,8 +109,7 @@ func TestEditChangeRequestDialog_View_ContainsFileAndLine(t *testing.T) {
 }
 
 func TestEditChangeRequestDialog_View_ContainsButtons(t *testing.T) {
-	ensureTheme(t)
-	d := NewEditChangeRequestDialog(nil, testCRMsg(), 80)
+	d := newTestCRDialog(t, 80)
 	view := d.View()
 	if !strings.Contains(view, "Cancel") {
 		t.Error("View() should contain 'Cancel' button")
@@ -127,9 +121,7 @@ func TestEditChangeRequestDialog_View_ContainsButtons(t *testing.T) {
 
 func TestEditChangeRequestDialog_View_ContainsCodeContext(t *testing.T) {
 	ensureTheme(t)
-	msg := testCRMsg()
-	msg.context = "func hello() {}"
-	d := NewEditChangeRequestDialog(nil, msg, 80)
+	d := NewEditChangeRequestDialog(nil, "id", "file.go", 1, "func hello() {}", "/tmp", 80)
 	view := d.View()
 	if !strings.Contains(view, "func hello()") {
 		t.Error("View() should contain code context")
@@ -137,8 +129,7 @@ func TestEditChangeRequestDialog_View_ContainsCodeContext(t *testing.T) {
 }
 
 func TestEditChangeRequestDialog_View_ShowsErrorMessage(t *testing.T) {
-	ensureTheme(t)
-	d := NewEditChangeRequestDialog(nil, testCRMsg(), 80)
+	d := newTestCRDialog(t, 80)
 	d.errMsg = "Description cannot be empty"
 	view := d.View()
 	if !strings.Contains(view, "Description cannot be empty") {
@@ -149,8 +140,7 @@ func TestEditChangeRequestDialog_View_ShowsErrorMessage(t *testing.T) {
 // ── EditChangeRequestDialog Update tests ────────────────────────────────────
 
 func TestEditChangeRequestDialog_Update_EscDismisses(t *testing.T) {
-	ensureTheme(t)
-	d := NewEditChangeRequestDialog(nil, testCRMsg(), 80)
+	d := newTestCRDialog(t, 80)
 	_, cmd := d.Update(tea.KeyMsg{Type: tea.KeyEsc})
 	if cmd == nil {
 		t.Error("Esc should return a dismiss command")
@@ -158,8 +148,7 @@ func TestEditChangeRequestDialog_Update_EscDismisses(t *testing.T) {
 }
 
 func TestEditChangeRequestDialog_Update_TabCyclesFocus(t *testing.T) {
-	ensureTheme(t)
-	d := NewEditChangeRequestDialog(nil, testCRMsg(), 80)
+	d := newTestCRDialog(t, 80)
 	if d.focused != crFocusTextArea {
 		t.Fatal("initial focus should be text area")
 	}
@@ -184,8 +173,7 @@ func TestEditChangeRequestDialog_Update_TabCyclesFocus(t *testing.T) {
 }
 
 func TestEditChangeRequestDialog_Update_ShiftTabCyclesBackward(t *testing.T) {
-	ensureTheme(t)
-	d := NewEditChangeRequestDialog(nil, testCRMsg(), 80)
+	d := newTestCRDialog(t, 80)
 
 	updated, _ := d.Update(tea.KeyMsg{Type: tea.KeyShiftTab})
 	d2 := updated.(EditChangeRequestDialog)
@@ -195,8 +183,7 @@ func TestEditChangeRequestDialog_Update_ShiftTabCyclesBackward(t *testing.T) {
 }
 
 func TestEditChangeRequestDialog_Update_CancelEnterDismisses(t *testing.T) {
-	ensureTheme(t)
-	d := NewEditChangeRequestDialog(nil, testCRMsg(), 80)
+	d := newTestCRDialog(t, 80)
 	d.focused = crFocusCancel
 
 	_, cmd := d.Update(tea.KeyMsg{Type: tea.KeyEnter})
@@ -206,8 +193,7 @@ func TestEditChangeRequestDialog_Update_CancelEnterDismisses(t *testing.T) {
 }
 
 func TestEditChangeRequestDialog_Update_SubmitEmptyShowsError(t *testing.T) {
-	ensureTheme(t)
-	d := NewEditChangeRequestDialog(nil, testCRMsg(), 80)
+	d := newTestCRDialog(t, 80)
 	d.focused = crFocusOK
 
 	updated, _ := d.Update(tea.KeyMsg{Type: tea.KeyEnter})
@@ -221,41 +207,13 @@ func TestEditChangeRequestDialog_Update_SubmitEmptyShowsError(t *testing.T) {
 }
 
 func TestEditChangeRequestDialog_Update_TabClearsError(t *testing.T) {
-	ensureTheme(t)
-	d := NewEditChangeRequestDialog(nil, testCRMsg(), 80)
+	d := newTestCRDialog(t, 80)
 	d.errMsg = "some error"
 
 	updated, _ := d.Update(tea.KeyMsg{Type: tea.KeyTab})
 	d2 := updated.(EditChangeRequestDialog)
 	if d2.errMsg != "" {
 		t.Errorf("Tab should clear errMsg, got %q", d2.errMsg)
-	}
-}
-
-// ── openEditChangeRequestDialogMsg tests ────────────────────────────────────
-
-func TestOpenEditChangeRequestDialogMsg_HasExpectedFields(t *testing.T) {
-	msg := openEditChangeRequestDialogMsg{
-		identifier:   "proj/ticket",
-		fileName:     "main.go",
-		lineNum:      10,
-		context:      "func foo() {}",
-		worktreePath: "/tmp/wt",
-	}
-	if msg.identifier != "proj/ticket" {
-		t.Errorf("identifier = %q, want %q", msg.identifier, "proj/ticket")
-	}
-	if msg.fileName != "main.go" {
-		t.Errorf("fileName = %q, want %q", msg.fileName, "main.go")
-	}
-	if msg.lineNum != 10 {
-		t.Errorf("lineNum = %d, want 10", msg.lineNum)
-	}
-	if msg.context != "func foo() {}" {
-		t.Errorf("context = %q, want %q", msg.context, "func foo() {}")
-	}
-	if msg.worktreePath != "/tmp/wt" {
-		t.Errorf("worktreePath = %q, want %q", msg.worktreePath, "/tmp/wt")
 	}
 }
 
@@ -290,7 +248,7 @@ func TestEditChangeRequestDialog_View_UsesThemeDialogBoxStyle(t *testing.T) {
 	saveTheme(t)
 	// NormalBorder uses "┌" while the default Tan theme uses RoundedBorder "╭".
 	theme.Current().DialogBoxStyle = lipgloss.NewStyle().Border(lipgloss.NormalBorder())
-	d := NewEditChangeRequestDialog(nil, testCRMsg(), 120)
+	d := NewEditChangeRequestDialog(nil, "id", "file.go", 1, "ctx", "/tmp", 120)
 	view := d.View()
 	if !strings.Contains(view, "┌") {
 		t.Error("EditChangeRequestDialog.View() did not use theme.Current().DialogBoxStyle")

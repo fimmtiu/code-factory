@@ -59,14 +59,14 @@ type EditChangeRequestDialog struct {
 }
 
 // NewEditChangeRequestDialog creates an EditChangeRequestDialog for the given file location.
-func NewEditChangeRequestDialog(database *db.DB, msg openEditChangeRequestDialogMsg, width int) EditChangeRequestDialog {
+func NewEditChangeRequestDialog(database *db.DB, identifier, fileName string, lineNum int, context, worktreePath string, width int) EditChangeRequestDialog {
 	d := EditChangeRequestDialog{
 		database:     database,
-		identifier:   msg.identifier,
-		fileName:     msg.fileName,
-		lineNum:      msg.lineNum,
-		context:      msg.context,
-		worktreePath: msg.worktreePath,
+		identifier:   identifier,
+		fileName:     fileName,
+		lineNum:      lineNum,
+		context:      context,
+		worktreePath: worktreePath,
 		focused:      crFocusTextArea,
 		width:        width,
 	}
@@ -147,7 +147,7 @@ func createCRCmd(database *db.DB, identifier, codeLocation, description, worktre
 func (d EditChangeRequestDialog) View() string {
 	var sb strings.Builder
 
-	sb.WriteString(theme.Current().DialogTitleStyle.Render("New Change Request"))
+	sb.WriteString(theme.Current().DialogTitleStyle.Render("Create Change Request"))
 	sb.WriteString("\n")
 
 	// File and line info.
