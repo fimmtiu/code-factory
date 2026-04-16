@@ -47,10 +47,15 @@ var phaseOrder = []struct {
 	{models.PhaseRespond, "Respond"},
 }
 
-// wrapLine splits a single line into display lines of at most width runes,
-// preferring to break at spaces, tabs, or after dashes. Falls back to a hard
-// break only when no such boundary exists in the current segment.
+// wrapLine splits a single line into display lines of at most width visual
+// characters, preferring to break at spaces or after dashes. Falls back to a
+// hard break only when no such boundary exists in the current segment.
+//
+// Tabs are expanded to spaces first so the wrap points match the width that
+// lipgloss will render (it also expands tabs before measuring).
 func wrapLine(line string, width int) []string {
+	// Expand tabs to 4 spaces to match lipgloss's default tab rendering.
+	line = strings.ReplaceAll(line, "\t", "    ")
 	runes := []rune(line)
 	if len(runes) <= width {
 		return []string{line}
@@ -59,7 +64,7 @@ func wrapLine(line string, width int) []string {
 	for len(runes) > width {
 		cut, skipOne := width, false
 		for i := width - 1; i >= 0; i-- {
-			if runes[i] == ' ' || runes[i] == '\t' {
+			if runes[i] == ' ' {
 				cut = i
 				skipOne = true
 				break
