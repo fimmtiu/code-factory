@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/fimmtiu/code-factory/internal/db"
 	"github.com/fimmtiu/code-factory/internal/git"
+	"github.com/fimmtiu/code-factory/internal/models"
 	"github.com/fimmtiu/code-factory/internal/ui/theme"
 )
 
@@ -21,6 +23,7 @@ type openEditChangeRequestDialogMsg struct {
 	lineNum      int
 	context      string
 	worktreePath string
+	existingCR   *models.ChangeRequest
 }
 
 // crCreatedMsg is the result of running cf-tickets create-cr.
@@ -50,6 +53,7 @@ type EditChangeRequestDialog struct {
 	lineNum      int
 	context      string
 	worktreePath string
+	existingCR   *models.ChangeRequest
 
 	textArea TextArea
 	focused  crDialogFocus
@@ -59,7 +63,8 @@ type EditChangeRequestDialog struct {
 }
 
 // NewEditChangeRequestDialog creates an EditChangeRequestDialog for the given file location.
-func NewEditChangeRequestDialog(database *db.DB, identifier, fileName string, lineNum int, context, worktreePath string, width int) EditChangeRequestDialog {
+// If existingCR is non-nil, the dialog operates in edit mode with the description pre-populated.
+func NewEditChangeRequestDialog(database *db.DB, identifier, fileName string, lineNum int, context, worktreePath string, existingCR *models.ChangeRequest, width int) EditChangeRequestDialog {
 	d := EditChangeRequestDialog{
 		database:     database,
 		identifier:   identifier,
@@ -67,10 +72,14 @@ func NewEditChangeRequestDialog(database *db.DB, identifier, fileName string, li
 		lineNum:      lineNum,
 		context:      context,
 		worktreePath: worktreePath,
+		existingCR:   existingCR,
 		focused:      crFocusTextArea,
 		width:        width,
 	}
 	d.textArea = NewTextArea(d.textAreaWidth(), 5)
+	if existingCR != nil {
+		d.textArea.SetValue(existingCR.Description)
+	}
 	return d
 }
 
@@ -119,6 +128,18 @@ func (d EditChangeRequestDialog) submit() (tea.Model, tea.Cmd) {
 		return d, nil
 	}
 
+	if d.existingCR != nil {
+		id, err := strconv.ParseInt(d.existingCR.ID, 10, 64)
+		if err != nil {
+			return d, nil
+		}
+		database := d.database
+		return d, tea.Batch(
+			dismissDialogCmd(),
+			updateCRDescriptionCmd(database, id, description),
+		)
+	}
+
 	codeLocation := fmt.Sprintf("%s:%d", d.fileName, d.lineNum)
 	database := d.database
 	identifier := d.identifier
@@ -127,6 +148,16 @@ func (d EditChangeRequestDialog) submit() (tea.Model, tea.Cmd) {
 		dismissDialogCmd(),
 		createCRCmd(database, identifier, codeLocation, description, worktreePath),
 	)
+}
+
+// updateCRDescriptionCmd returns a command that updates an existing CR's description.
+func updateCRDescriptionCmd(database *db.DB, id int64, description string) tea.Cmd {
+	return func() tea.Msg {
+		if err := database.UpdateChangeRequestDescription(id, description); err != nil {
+			return crCreatedMsg{errMsg: fmt.Sprintf("update-cr: %s", err)}
+		}
+		return crCreatedMsg{}
+	}
 }
 
 // createCRCmd returns a command that creates a change request via the database.
@@ -147,12 +178,23 @@ func createCRCmd(database *db.DB, identifier, codeLocation, description, worktre
 func (d EditChangeRequestDialog) View() string {
 	var sb strings.Builder
 
-	sb.WriteString(theme.Current().DialogTitleStyle.Render("Create Change Request"))
+	title := "New Change Request"
+	if d.existingCR != nil {
+		title = "Edit Change Request"
+	}
+	sb.WriteString(theme.Current().DialogTitleStyle.Render(title))
 	sb.WriteString("\n")
 
 	// File and line info.
 	sb.WriteString(theme.Current().DetailLabelStyle.Render(fmt.Sprintf("%s:%d", d.fileName, d.lineNum)))
-	sb.WriteString("\n\n")
+	sb.WriteString("\n")
+
+	// Status line (edit mode only).
+	if d.existingCR != nil {
+		sb.WriteString(theme.Current().DetailLabelStyle.Render("Status:") + " " + d.existingCR.Status)
+		sb.WriteString("\n")
+	}
+	sb.WriteString("\n")
 
 	// Code context.
 	taWidth := d.textAreaWidth()
