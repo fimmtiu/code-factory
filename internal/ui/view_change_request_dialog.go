@@ -132,10 +132,11 @@ func (d *ViewChangeRequestDialog) toggleStatus() tea.Cmd {
 
 	database := d.database
 	return func() tea.Msg {
-		if database != nil {
-			if err := dbAction(database, id); err != nil {
-				return nil
-			}
+		if database == nil {
+			return nil
+		}
+		if err := dbAction(database, id); err != nil {
+			return nil
 		}
 		return viewCRStatusToggledMsg{status: newStatus}
 	}

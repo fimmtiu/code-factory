@@ -347,6 +347,22 @@ func TestViewCRDialog_Update_StatusToggledMsgReopens(t *testing.T) {
 	}
 }
 
+func TestViewCRDialog_ToggleStatus_NilDatabaseReturnsNil(t *testing.T) {
+	ensureTheme(t)
+	d := newTestViewCRDialog(sampleCR())
+	d.database = nil // explicitly nil
+
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}}
+	_, cmd := d.Update(msg)
+	if cmd == nil {
+		t.Fatal("expected a command from x key")
+	}
+	result := cmd()
+	if result != nil {
+		t.Errorf("expected nil from toggle when database is nil, got %T", result)
+	}
+}
+
 // ── Init test ────────────────────────────────────────────────────────────────
 
 func TestViewCRDialog_Init_ReturnsNil(t *testing.T) {
