@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/fimmtiu/code-factory/internal/diff"
+	"github.com/fimmtiu/code-factory/internal/models"
 	"github.com/fimmtiu/code-factory/internal/ui/theme"
 )
 
@@ -891,8 +892,8 @@ func TestRenderDiffResult_CRLocations_AddedLine(t *testing.T) {
 		},
 	}
 
-	crLocations := map[string]bool{"main.go:10": true}
-	rd := renderDiffResult(files, 60, nil, crLocations)
+	crMap := map[string][]models.ChangeRequest{"main.go:10": {{}}}
+	rd := renderDiffResult(files, 60, nil, crMap)
 
 	lines := strings.Split(rd.text, "\n")
 	// Find lines with the emoji. The added line at lineNum 10 should have it.
@@ -938,8 +939,8 @@ func TestRenderDiffResult_CRLocations_RemovedLine(t *testing.T) {
 	// Removed lines use the same lineNum as the next added/context line.
 	// In this hunk, lineNum starts at 10. The removed line is at lineNum 10,
 	// the added line increments to 11.
-	crLocations := map[string]bool{"main.go:10": true}
-	rd := renderDiffResult(files, 60, nil, crLocations)
+	crMap := map[string][]models.ChangeRequest{"main.go:10": {{}}}
+	rd := renderDiffResult(files, 60, nil, crMap)
 
 	lines := strings.Split(rd.text, "\n")
 	foundEmoji := false
@@ -975,8 +976,8 @@ func TestRenderDiffResult_CRLocations_ContextLine(t *testing.T) {
 		},
 	}
 
-	crLocations := map[string]bool{"main.go:5": true}
-	rd := renderDiffResult(files, 60, nil, crLocations)
+	crMap := map[string][]models.ChangeRequest{"main.go:5": {{}}}
+	rd := renderDiffResult(files, 60, nil, crMap)
 
 	lines := strings.Split(rd.text, "\n")
 	foundEmoji := false
@@ -1046,11 +1047,11 @@ func TestRenderDiffResult_CRLocations_EmptyMap(t *testing.T) {
 		},
 	}
 
-	rd := renderDiffResult(files, 60, nil, map[string]bool{})
+	rd := renderDiffResult(files, 60, nil, map[string][]models.ChangeRequest{})
 	lines := strings.Split(rd.text, "\n")
 	for _, line := range lines {
 		if strings.Contains(line, "\U0001F4AC") {
-			t.Error("expected no emoji when crLocations is empty")
+			t.Error("expected no emoji when crMap is empty")
 		}
 	}
 }
@@ -1079,8 +1080,8 @@ func TestRenderDiffResult_CRLocations_MultipleFiles(t *testing.T) {
 		},
 	}
 
-	crLocations := map[string]bool{"b.go:5": true}
-	rd := renderDiffResult(files, 60, nil, crLocations)
+	crMap := map[string][]models.ChangeRequest{"b.go:5": {{}}}
+	rd := renderDiffResult(files, 60, nil, crMap)
 
 	lines := strings.Split(rd.text, "\n")
 	emojiOnA := false
@@ -1123,8 +1124,8 @@ func TestRenderDiffResult_CRLine_ReducedWidth(t *testing.T) {
 	}
 
 	paneWidth := 40
-	crLocations := map[string]bool{"main.go:1": true}
-	rd := renderDiffResult(files, paneWidth, nil, crLocations)
+	crMap := map[string][]models.ChangeRequest{"main.go:1": {{}}}
+	rd := renderDiffResult(files, paneWidth, nil, crMap)
 
 	lines := strings.Split(rd.text, "\n")
 	for _, line := range lines {
@@ -1141,31 +1142,38 @@ func TestRenderDiffResult_CRLine_ReducedWidth(t *testing.T) {
 // ── renderContext tests ──────────────────────────────────────────────────────
 
 // TestRenderContext_HasAnnotation verifies that HasAnnotation correctly looks
-// up "file:line" keys in the crLocations map.
+// up "file:line" keys in the crMap using the context's fileName.
 func TestRenderContext_HasAnnotation(t *testing.T) {
 	rc := &renderContext{
-		crLocations: map[string]bool{"main.go:10": true, "util.go:5": true},
+		crMap: map[string][]models.ChangeRequest{
+			"main.go:10": {{}},
+			"util.go:5":  {{}},
+		},
 	}
-	if !rc.HasAnnotation("main.go", 10) {
+	rc.fileName = "main.go"
+	if !rc.HasAnnotation(10) {
 		t.Error("expected HasAnnotation to return true for main.go:10")
 	}
-	if !rc.HasAnnotation("util.go", 5) {
+	rc.fileName = "util.go"
+	if !rc.HasAnnotation(5) {
 		t.Error("expected HasAnnotation to return true for util.go:5")
 	}
-	if rc.HasAnnotation("main.go", 11) {
+	rc.fileName = "main.go"
+	if rc.HasAnnotation(11) {
 		t.Error("expected HasAnnotation to return false for main.go:11")
 	}
-	if rc.HasAnnotation("other.go", 10) {
+	rc.fileName = "other.go"
+	if rc.HasAnnotation(10) {
 		t.Error("expected HasAnnotation to return false for other.go:10")
 	}
 }
 
 // TestRenderContext_HasAnnotation_NilMap verifies HasAnnotation returns false
-// when crLocations is nil.
+// when crMap is nil.
 func TestRenderContext_HasAnnotation_NilMap(t *testing.T) {
-	rc := &renderContext{crLocations: nil}
-	if rc.HasAnnotation("main.go", 10) {
-		t.Error("expected HasAnnotation to return false for nil crLocations")
+	rc := &renderContext{crMap: nil, fileName: "main.go"}
+	if rc.HasAnnotation(10) {
+		t.Error("expected HasAnnotation to return false for nil crMap")
 	}
 }
 

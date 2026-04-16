@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/fimmtiu/code-factory/internal/diff"
+	"github.com/fimmtiu/code-factory/internal/models"
 	"github.com/fimmtiu/code-factory/internal/ui/theme"
 )
 
@@ -26,13 +27,6 @@ type diffLineMeta struct {
 	lineNum   int // new-file line number for selectable lines; 0 otherwise
 }
 
-// appendLineMeta appends n metadata entries with the given kind, file index, and line number.
-func appendLineMeta(meta *[]diffLineMeta, n int, kind diffLineKind, fileIndex, lineNum int) {
-	for range n {
-		*meta = append(*meta, diffLineMeta{kind: kind, fileIndex: fileIndex, lineNum: lineNum})
-	}
-}
-
 // renderedDiff holds the formatted diff output together with the line offsets
 // where each file section starts. Computing offsets during rendering avoids
 // fragile re-parsing of the output string.
@@ -48,21 +42,28 @@ type renderedDiff struct {
 // new field here and a method on this struct, not a signature change to
 // every rendering function in the chain.
 type renderContext struct {
-	paneWidth   int
-	crLocations map[string]bool // "file:line" -> true for lines with change requests
-	meta        []diffLineMeta  // per-line metadata accumulated during rendering
+	paneWidth int
+	crMap     map[string][]models.ChangeRequest // "file:line" -> CRs; shared with DiffViewerModel
+	meta      []diffLineMeta                     // per-line metadata accumulated during rendering
+	fileIndex int                                // current file index during rendering
+	fileName  string                             // current file name during rendering
 }
 
-// HasAnnotation returns true if the given file and line number has a change
-// request annotation. This centralises the "file:line" key format in one
-// place instead of scattering fmt.Sprintf calls across the hot loop.
-func (rc *renderContext) HasAnnotation(fileName string, lineNum int) bool {
-	return rc.crLocations[fmt.Sprintf("%s:%d", fileName, lineNum)]
+// HasAnnotation returns true if the current file and the given line number
+// has a change request annotation. This centralises the "file:line" key
+// format in one place instead of scattering fmt.Sprintf calls across the
+// hot loop.
+func (rc *renderContext) HasAnnotation(lineNum int) bool {
+	_, ok := rc.crMap[fmt.Sprintf("%s:%d", rc.fileName, lineNum)]
+	return ok
 }
 
-// appendMeta appends n metadata entries with the given kind, file index, and line number.
-func (rc *renderContext) appendMeta(n int, kind diffLineKind, fileIndex, lineNum int) {
-	appendLineMeta(&rc.meta, n, kind, fileIndex, lineNum)
+// appendMeta appends n metadata entries for the current file with the given
+// kind and line number.
+func (rc *renderContext) appendMeta(n int, kind diffLineKind, lineNum int) {
+	for range n {
+		rc.meta = append(rc.meta, diffLineMeta{kind: kind, fileIndex: rc.fileIndex, lineNum: lineNum})
+	}
 }
 
 // crEmojiSuffix is the 4-visual-column suffix appended to lines with CRs:
@@ -79,10 +80,10 @@ func renderDiff(files []diff.File, paneWidth int) string {
 
 // renderDiffResult is the full-featured renderer that returns both the
 // formatted text and per-file start offsets. collapsed controls per-file
-// collapse state; nil means all expanded. crLocations maps "file:line"
-// strings to true for lines that have change requests; those lines render
-// with a speech balloon emoji suffix and wrap 4 columns sooner.
-func renderDiffResult(files []diff.File, paneWidth int, collapsed []bool, crLocations map[string]bool) renderedDiff {
+// collapse state; nil means all expanded. crMap maps "file:line" strings
+// to change request slices; lines with entries render with a speech
+// balloon emoji suffix and wrap 4 columns sooner.
+func renderDiffResult(files []diff.File, paneWidth int, collapsed []bool, crMap map[string][]models.ChangeRequest) renderedDiff {
 	if len(files) == 0 {
 		return renderedDiff{}
 	}
@@ -91,15 +92,17 @@ func renderDiffResult(files []diff.File, paneWidth int, collapsed []bool, crLoca
 	lineCount := 0 // tracks the current line number in the output
 	fileStarts := make([]int, 0, len(files))
 	rc := &renderContext{
-		paneWidth:   paneWidth,
-		crLocations: crLocations,
+		paneWidth: paneWidth,
+		crMap:     crMap,
 	}
 
 	for i, f := range files {
+		rc.fileIndex = i
+		rc.fileName = f.Name
 		isCollapsed := len(collapsed) > i && collapsed[i]
 		fileStarts = append(fileStarts, lineCount)
 		sb.WriteString("\n") // blank line before each file (including the first)
-		rc.appendMeta(1, diffLineNonSelectable, i, 0)
+		rc.appendMeta(1, diffLineNonSelectable, 0)
 		lineCount++
 
 		indicator := "▽ "
@@ -108,7 +111,7 @@ func renderDiffResult(files []diff.File, paneWidth int, collapsed []bool, crLoca
 		}
 		sb.WriteString(theme.Current().DiffFileHeaderStyle.Render(indicator + f.Name + ":"))
 		sb.WriteString("\n")
-		rc.appendMeta(1, diffLineNonSelectable, i, 0)
+		rc.appendMeta(1, diffLineNonSelectable, 0)
 		lineCount++
 
 		if isCollapsed {
@@ -120,28 +123,28 @@ func renderDiffResult(files []diff.File, paneWidth int, collapsed []bool, crLoca
 			sb.WriteString("  ")
 			sb.WriteString(theme.Current().EmptyStateStyle.Render("(binary stuff)"))
 			sb.WriteString("\n")
-			rc.appendMeta(1, diffLineNonSelectable, i, 0)
+			rc.appendMeta(1, diffLineNonSelectable, 0)
 			lineCount++
 		case diff.Delete:
 			sb.WriteString("  ")
 			sb.WriteString(theme.Current().DiffDeletedMsgStyle.Render("Deleted"))
 			sb.WriteString("\n")
-			rc.appendMeta(1, diffLineNonSelectable, i, 0)
+			rc.appendMeta(1, diffLineNonSelectable, 0)
 			lineCount++
 		case diff.Rename:
 			sb.WriteString("  ")
 			sb.WriteString(theme.Current().DiffRenamedMsgStyle.Render("Renamed to "))
 			sb.WriteString(f.RenameTo)
 			sb.WriteString("\n")
-			rc.appendMeta(1, diffLineNonSelectable, i, 0)
+			rc.appendMeta(1, diffLineNonSelectable, 0)
 			lineCount++
 			for _, h := range f.Hunks {
-				lineCount += renderHunk(&sb, h, rc, i, f.Name)
+				lineCount += renderHunk(&sb, h, rc)
 			}
 		default:
 			// Normal and New files: render hunks.
 			for _, h := range f.Hunks {
-				lineCount += renderHunk(&sb, h, rc, i, f.Name)
+				lineCount += renderHunk(&sb, h, rc)
 			}
 		}
 	}
@@ -156,7 +159,7 @@ func renderDiffResult(files []diff.File, paneWidth int, collapsed []bool, crLoca
 
 // renderHunk renders a single hunk: the @@ header followed by content lines.
 // It returns the number of lines written and appends per-line metadata to rc.
-func renderHunk(sb *strings.Builder, h diff.Hunk, rc *renderContext, fileIndex int, fileName string) int {
+func renderHunk(sb *strings.Builder, h diff.Hunk, rc *renderContext) int {
 	lines := 0
 
 	// Hunk header.
@@ -167,7 +170,7 @@ func renderHunk(sb *strings.Builder, h diff.Hunk, rc *renderContext, fileIndex i
 	styled, n := padToWidth(theme.Current().DiffHunkHeaderStyle, header, rc.paneWidth)
 	sb.WriteString(styled)
 	sb.WriteString("\n")
-	rc.appendMeta(n, diffLineNonSelectable, fileIndex, 0)
+	rc.appendMeta(n, diffLineNonSelectable, 0)
 	lines += n
 
 	// Determine the line-number column width from the max line number in this hunk.
@@ -177,21 +180,21 @@ func renderHunk(sb *strings.Builder, h diff.Hunk, rc *renderContext, fileIndex i
 	lineNum := h.NewStart
 	for _, line := range h.Lines {
 		text := expandTabs(line.Content)
-		hasCR := rc.HasAnnotation(fileName, lineNum)
+		hasCR := rc.HasAnnotation(lineNum)
 		switch line.Type {
 		case diff.LineRemoved:
 			// Blank line-number space, then content with pink background.
 			prefix := strings.Repeat(" ", numWidth) + " "
 			content := prefix + text
 			n := writeStyledLine(sb, theme.Current().DiffRemovedStyle, content, rc.paneWidth, hasCR)
-			rc.appendMeta(n, diffLineHunkContent, fileIndex, lineNum)
+			rc.appendMeta(n, diffLineHunkContent, lineNum)
 			lines += n
 		case diff.LineAdded:
 			// Line number on the left, then content with green background.
 			prefix := fmt.Sprintf("%*d ", numWidth, lineNum)
 			content := prefix + text
 			n := writeStyledLine(sb, theme.Current().DiffAddedStyle, content, rc.paneWidth, hasCR)
-			rc.appendMeta(n, diffLineHunkContent, fileIndex, lineNum)
+			rc.appendMeta(n, diffLineHunkContent, lineNum)
 			lines += n
 			lineNum++
 		case diff.LineContext:
@@ -202,7 +205,7 @@ func renderHunk(sb *strings.Builder, h diff.Hunk, rc *renderContext, fileIndex i
 			} else {
 				sb.WriteString(prefix + text)
 			}
-			rc.appendMeta(1, diffLineHunkContent, fileIndex, lineNum)
+			rc.appendMeta(1, diffLineHunkContent, lineNum)
 			lines++
 			lineNum++
 		}

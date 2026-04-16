@@ -61,16 +61,16 @@ type DiffViewerModel struct {
 	selectedLine   int  // index of the currently selected line in the rendered text
 	frozenFileIdx  int  // file index frozen on exit from line select; -1 when not frozen
 
-	// CR indicator state: full change request data keyed by "file:line".
-	crMap map[string]models.ChangeRequest
+	// CR indicator state: keyed by "file:line". Multiple CRs may share a location.
+	crMap map[string][]models.ChangeRequest
 }
 
 // newDiffViewerModel creates a DiffViewerModel from parsed diff files.
 // paneWidth and paneHeight are the dimensions of the content area only
 // (DiffView accounts for the status bar, separator, and chrome).
-// crMap contains the full change request data keyed by "file:line";
-// nil means no CR indicators.
-func newDiffViewerModel(files []diff.File, paneWidth, paneHeight int, crMap map[string]models.ChangeRequest) *DiffViewerModel {
+// crMap contains change request data keyed by "file:line"; multiple CRs
+// may share a location. nil means no CR indicators.
+func newDiffViewerModel(files []diff.File, paneWidth, paneHeight int, crMap map[string][]models.ChangeRequest) *DiffViewerModel {
 	m := &DiffViewerModel{
 		paneWidth:     paneWidth,
 		paneHeight:    paneHeight,
@@ -87,19 +87,6 @@ func newDiffViewerModel(files []diff.File, paneWidth, paneHeight int, crMap map[
 	m.rerender()
 	m.fileNames = fileNamesFromDiff(files)
 	return m
-}
-
-// crLocationsSet derives a map[string]bool from the stored crMap for use
-// by the renderer. Returns nil if crMap is nil.
-func (m *DiffViewerModel) crLocationsSet() map[string]bool {
-	if m.crMap == nil {
-		return nil
-	}
-	locs := make(map[string]bool, len(m.crMap))
-	for loc := range m.crMap {
-		locs[loc] = true
-	}
-	return locs
 }
 
 // setSize updates the content-pane dimensions and re-clamps the scroll offset.
@@ -234,7 +221,7 @@ func (m *DiffViewerModel) rerender() {
 	if w < 1 {
 		w = 1
 	}
-	rd := renderDiffResult(m.files, w, m.collapsed, m.crLocationsSet())
+	rd := renderDiffResult(m.files, w, m.collapsed, m.crMap)
 	m.text = rd.text
 	m.fileStarts = rd.fileStarts
 	m.lineMeta = rd.lineMeta
