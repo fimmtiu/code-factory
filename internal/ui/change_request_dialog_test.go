@@ -7,31 +7,49 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/fimmtiu/code-factory/internal/models"
 	"github.com/fimmtiu/code-factory/internal/ui/theme"
 )
 
-// newTestCRDialog creates a default EditChangeRequestDialog for tests.
+// testCRLocation returns a default crLocation for tests.
+func testCRLocation() crLocation {
+	return crLocation{identifier: "id", fileName: "file.go", lineNum: 1, context: "ctx", worktreePath: "/tmp"}
+}
+
+// newTestCRDialog creates a default EditChangeRequestDialog for tests (new-CR mode).
 func newTestCRDialog(t *testing.T, width int) EditChangeRequestDialog {
 	t.Helper()
 	ensureTheme(t)
-	return NewEditChangeRequestDialog(nil, "id", "file.go", 1, "ctx", "/tmp", width)
+	return NewEditChangeRequestDialog(nil, testCRLocation(), nil, width)
+}
+
+// newTestEditCRDialog creates an EditChangeRequestDialog in edit mode for tests.
+func newTestEditCRDialog(t *testing.T, width int) EditChangeRequestDialog {
+	t.Helper()
+	ensureTheme(t)
+	return NewEditChangeRequestDialog(nil, testCRLocation(), &models.ChangeRequest{
+		ID:          "42",
+		Status:      models.ChangeRequestOpen,
+		Description: "existing description",
+	}, width)
 }
 
 // ── EditChangeRequestDialog constructor tests ───────────────────────────────
 
 func TestNewEditChangeRequestDialog_ReturnsCorrectType(t *testing.T) {
 	ensureTheme(t)
-	d := NewEditChangeRequestDialog(nil, "proj/ticket", "main.go", 42, "func main() {}", "/tmp/wt", 80)
+	loc := crLocation{identifier: "proj/ticket", fileName: "main.go", lineNum: 42, context: "func main() {}", worktreePath: "/tmp/wt"}
+	d := NewEditChangeRequestDialog(nil, loc, nil, 80)
 	// Verify it's an EditChangeRequestDialog (compile-time check via type assertion).
 	var _ EditChangeRequestDialog = d
-	if d.fileName != "main.go" {
-		t.Errorf("fileName = %q, want %q", d.fileName, "main.go")
+	if d.location.fileName != "main.go" {
+		t.Errorf("fileName = %q, want %q", d.location.fileName, "main.go")
 	}
-	if d.lineNum != 42 {
-		t.Errorf("lineNum = %d, want 42", d.lineNum)
+	if d.location.lineNum != 42 {
+		t.Errorf("lineNum = %d, want 42", d.location.lineNum)
 	}
-	if d.identifier != "proj/ticket" {
-		t.Errorf("identifier = %q, want %q", d.identifier, "proj/ticket")
+	if d.location.identifier != "proj/ticket" {
+		t.Errorf("identifier = %q, want %q", d.location.identifier, "proj/ticket")
 	}
 }
 
@@ -90,18 +108,20 @@ func TestEditChangeRequestDialog_Init_ReturnsNil(t *testing.T) {
 
 // ── EditChangeRequestDialog View tests ──────────────────────────────────────
 
-func TestEditChangeRequestDialog_View_ContainsTitle(t *testing.T) {
+func TestEditChangeRequestDialog_View_ContainsNewTitle(t *testing.T) {
 	ensureTheme(t)
-	d := NewEditChangeRequestDialog(nil, "id", "main.go", 10, "some context", "/tmp", 80)
+	loc := crLocation{identifier: "id", fileName: "main.go", lineNum: 10, context: "some context", worktreePath: "/tmp"}
+	d := NewEditChangeRequestDialog(nil, loc, nil, 80)
 	view := d.View()
-	if !strings.Contains(view, "Create Change Request") {
-		t.Error("View() should contain 'Create Change Request' title")
+	if !strings.Contains(view, "New Change Request") {
+		t.Error("View() should contain 'New Change Request' title when creating")
 	}
 }
 
 func TestEditChangeRequestDialog_View_ContainsFileAndLine(t *testing.T) {
 	ensureTheme(t)
-	d := NewEditChangeRequestDialog(nil, "id", "main.go", 42, "ctx", "/tmp", 80)
+	loc := crLocation{identifier: "id", fileName: "main.go", lineNum: 42, context: "ctx", worktreePath: "/tmp"}
+	d := NewEditChangeRequestDialog(nil, loc, nil, 80)
 	view := d.View()
 	if !strings.Contains(view, "main.go:42") {
 		t.Error("View() should contain file:line info")
@@ -121,7 +141,8 @@ func TestEditChangeRequestDialog_View_ContainsButtons(t *testing.T) {
 
 func TestEditChangeRequestDialog_View_ContainsCodeContext(t *testing.T) {
 	ensureTheme(t)
-	d := NewEditChangeRequestDialog(nil, "id", "file.go", 1, "func hello() {}", "/tmp", 80)
+	loc := crLocation{identifier: "id", fileName: "file.go", lineNum: 1, context: "func hello() {}", worktreePath: "/tmp"}
+	d := NewEditChangeRequestDialog(nil, loc, nil, 80)
 	view := d.View()
 	if !strings.Contains(view, "func hello()") {
 		t.Error("View() should contain code context")
@@ -226,11 +247,13 @@ func TestModel_Update_OpenEditChangeRequestDialogMsg_SetsDialog(t *testing.T) {
 	m.height = 40
 
 	updated, _ := m.Update(openEditChangeRequestDialogMsg{
-		identifier:   "proj/ticket",
-		fileName:     "main.go",
-		lineNum:      42,
-		context:      "some code",
-		worktreePath: "/tmp/wt",
+		location: crLocation{
+			identifier:   "proj/ticket",
+			fileName:     "main.go",
+			lineNum:      42,
+			context:      "some code",
+			worktreePath: "/tmp/wt",
+		},
 	})
 	model := updated.(Model)
 	if model.dialog == nil {
@@ -248,9 +271,209 @@ func TestEditChangeRequestDialog_View_UsesThemeDialogBoxStyle(t *testing.T) {
 	saveTheme(t)
 	// NormalBorder uses "┌" while the default Tan theme uses RoundedBorder "╭".
 	theme.Current().DialogBoxStyle = lipgloss.NewStyle().Border(lipgloss.NormalBorder())
-	d := NewEditChangeRequestDialog(nil, "id", "file.go", 1, "ctx", "/tmp", 120)
+	d := NewEditChangeRequestDialog(nil, testCRLocation(), nil, 120)
 	view := d.View()
 	if !strings.Contains(view, "┌") {
 		t.Error("EditChangeRequestDialog.View() did not use theme.Current().DialogBoxStyle")
 	}
+}
+
+// ── Edit mode (existingCR) tests ────────────────────────────────────────────
+
+func TestNewEditChangeRequestDialog_WithExistingCR_StoresField(t *testing.T) {
+	d := newTestEditCRDialog(t, 80)
+	if d.existingCR == nil {
+		t.Fatal("existingCR should be non-nil in edit mode")
+	}
+	if d.existingCR.ID != "42" {
+		t.Errorf("existingCR.ID = %q, want %q", d.existingCR.ID, "42")
+	}
+}
+
+func TestNewEditChangeRequestDialog_WithExistingCR_PrePopulatesTextArea(t *testing.T) {
+	d := newTestEditCRDialog(t, 80)
+	got := d.textArea.Value()
+	if got != "existing description" {
+		t.Errorf("textArea.Value() = %q, want %q", got, "existing description")
+	}
+}
+
+func TestNewEditChangeRequestDialog_WithNilCR_EmptyTextArea(t *testing.T) {
+	d := newTestCRDialog(t, 80)
+	if d.existingCR != nil {
+		t.Error("existingCR should be nil for new-CR mode")
+	}
+	if got := d.textArea.Value(); got != "" {
+		t.Errorf("textArea.Value() = %q, want empty", got)
+	}
+}
+
+func TestEditChangeRequestDialog_View_EditMode_ContainsEditTitle(t *testing.T) {
+	d := newTestEditCRDialog(t, 80)
+	view := d.View()
+	if !strings.Contains(view, "Edit Change Request") {
+		t.Error("View() should contain 'Edit Change Request' title when editing")
+	}
+	if strings.Contains(view, "New Change Request") {
+		t.Error("View() should not contain 'New Change Request' when editing")
+	}
+}
+
+func TestEditChangeRequestDialog_View_EditMode_ShowsStatus(t *testing.T) {
+	d := newTestEditCRDialog(t, 80)
+	view := d.View()
+	if !strings.Contains(view, "Status:") {
+		t.Error("View() should contain 'Status:' label when editing")
+	}
+	if !strings.Contains(view, models.ChangeRequestOpen) {
+		t.Errorf("View() should contain status %q", models.ChangeRequestOpen)
+	}
+}
+
+func TestEditChangeRequestDialog_View_NewMode_NoStatusLine(t *testing.T) {
+	d := newTestCRDialog(t, 80)
+	view := d.View()
+	if strings.Contains(view, "Status:") {
+		t.Error("View() should not contain 'Status:' when creating a new CR")
+	}
+}
+
+func TestEditChangeRequestDialog_Submit_EditMode_ReturnsCmd(t *testing.T) {
+	d := newTestEditCRDialog(t, 80)
+	d.focused = crFocusOK
+
+	// The text area already has "existing description" pre-populated.
+	updated, cmd := d.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	d2 := updated.(EditChangeRequestDialog)
+	if d2.errMsg != "" {
+		t.Errorf("submit in edit mode should not set errMsg, got %q", d2.errMsg)
+	}
+	if cmd == nil {
+		t.Error("submit in edit mode should return a command")
+	}
+}
+
+func TestEditChangeRequestDialog_Submit_EditMode_EmptyShowsError(t *testing.T) {
+	ensureTheme(t)
+	d := NewEditChangeRequestDialog(nil, testCRLocation(), &models.ChangeRequest{
+		ID:          "42",
+		Status:      models.ChangeRequestOpen,
+		Description: "",
+	}, 80)
+	d.focused = crFocusOK
+
+	updated, _ := d.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	d2 := updated.(EditChangeRequestDialog)
+	if d2.errMsg == "" {
+		t.Error("submitting empty description in edit mode should set errMsg")
+	}
+}
+
+// ── Integration: app.go routes openEditChangeRequestDialogMsg with existingCR ─
+
+func TestModel_Update_OpenEditChangeRequestDialogMsg_WithExistingCR(t *testing.T) {
+	ensureTheme(t)
+	m := NewModel(nil, nil, 5)
+	m.width = 120
+	m.height = 40
+
+	cr := &models.ChangeRequest{
+		ID:          "99",
+		Status:      models.ChangeRequestOpen,
+		Description: "fix the bug",
+	}
+
+	updated, _ := m.Update(openEditChangeRequestDialogMsg{
+		location: crLocation{
+			identifier:   "proj/ticket",
+			fileName:     "main.go",
+			lineNum:      42,
+			context:      "some code",
+			worktreePath: "/tmp/wt",
+		},
+		existingCR: cr,
+	})
+	model := updated.(Model)
+	if model.dialog == nil {
+		t.Fatal("dialog should be set after openEditChangeRequestDialogMsg with existingCR")
+	}
+	d, ok := model.dialog.(EditChangeRequestDialog)
+	if !ok {
+		t.Fatalf("dialog is %T, want EditChangeRequestDialog", model.dialog)
+	}
+	if d.existingCR == nil {
+		t.Error("dialog.existingCR should be non-nil")
+	}
+	if d.existingCR.ID != "99" {
+		t.Errorf("dialog.existingCR.ID = %q, want %q", d.existingCR.ID, "99")
+	}
+}
+
+// ── crSavedMsg notification tests ───────────────────────────────────────────
+
+func TestModel_Update_CrSavedMsg_Created_ShowsCreatedNotification(t *testing.T) {
+	ensureTheme(t)
+	m := NewModel(nil, nil, 5)
+	m.width = 120
+	m.height = 40
+
+	updated, cmd := m.Update(crSavedMsg{})
+	model := updated.(Model)
+	if cmd == nil {
+		t.Fatal("expected a notification command")
+	}
+	// Execute the command to get the notification message.
+	msg := cmd()
+	notif, ok := msg.(notifMsg)
+	if !ok {
+		t.Fatalf("expected notifMsg, got %T", msg)
+	}
+	if notif.text != "Change request created" {
+		t.Errorf("expected notification %q, got %q", "Change request created", notif.text)
+	}
+	_ = model
+}
+
+func TestModel_Update_CrSavedMsg_Edited_ShowsUpdatedNotification(t *testing.T) {
+	ensureTheme(t)
+	m := NewModel(nil, nil, 5)
+	m.width = 120
+	m.height = 40
+
+	updated, cmd := m.Update(crSavedMsg{edited: true})
+	model := updated.(Model)
+	if cmd == nil {
+		t.Fatal("expected a notification command")
+	}
+	msg := cmd()
+	notif, ok := msg.(notifMsg)
+	if !ok {
+		t.Fatalf("expected notifMsg, got %T", msg)
+	}
+	if notif.text != "Change request updated" {
+		t.Errorf("expected notification %q, got %q", "Change request updated", notif.text)
+	}
+	_ = model
+}
+
+func TestModel_Update_CrSavedMsg_Error_ShowsErrorNotification(t *testing.T) {
+	ensureTheme(t)
+	m := NewModel(nil, nil, 5)
+	m.width = 120
+	m.height = 40
+
+	updated, cmd := m.Update(crSavedMsg{errMsg: "db error"})
+	model := updated.(Model)
+	if cmd == nil {
+		t.Fatal("expected a notification command")
+	}
+	msg := cmd()
+	notif, ok := msg.(notifMsg)
+	if !ok {
+		t.Fatalf("expected notifMsg, got %T", msg)
+	}
+	if notif.text != "CR failed: db error" {
+		t.Errorf("expected notification %q, got %q", "CR failed: db error", notif.text)
+	}
+	_ = model
 }

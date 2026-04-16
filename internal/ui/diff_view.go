@@ -580,16 +580,15 @@ func (v DiffView) openEditChangeRequestDialog() (tea.Model, tea.Cmd) {
 	if fileName == "" {
 		return v, nil
 	}
-	identifier := v.identifier
-	worktreePath := v.worktreePath
+	loc := crLocation{
+		identifier:   v.identifier,
+		fileName:     fileName,
+		lineNum:      lineNum,
+		context:      context,
+		worktreePath: v.worktreePath,
+	}
 	return v, func() tea.Msg {
-		return openEditChangeRequestDialogMsg{
-			identifier:   identifier,
-			fileName:     fileName,
-			lineNum:      lineNum,
-			context:      context,
-			worktreePath: worktreePath,
-		}
+		return openEditChangeRequestDialogMsg{location: loc}
 	}
 }
 

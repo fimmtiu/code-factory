@@ -160,12 +160,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case openEditChangeRequestDialogMsg:
-		m.dialog = NewEditChangeRequestDialog(m.db, msg.identifier, msg.fileName, msg.lineNum, msg.context, msg.worktreePath, m.width)
+		m.dialog = NewEditChangeRequestDialog(m.db, msg.location, msg.existingCR, m.width)
 		return m, nil
 
-	case crCreatedMsg:
+	case crSavedMsg:
 		if msg.errMsg != "" {
 			return m, ShowNotification("CR failed: " + msg.errMsg)
+		}
+		if msg.edited {
+			return m, ShowNotification("Change request updated")
 		}
 		return m, ShowNotification("Change request created")
 
