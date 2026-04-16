@@ -1138,6 +1138,37 @@ func TestRenderDiffResult_CRLine_ReducedWidth(t *testing.T) {
 	}
 }
 
+// ── renderContext tests ──────────────────────────────────────────────────────
+
+// TestRenderContext_HasAnnotation verifies that HasAnnotation correctly looks
+// up "file:line" keys in the crLocations map.
+func TestRenderContext_HasAnnotation(t *testing.T) {
+	rc := &renderContext{
+		crLocations: map[string]bool{"main.go:10": true, "util.go:5": true},
+	}
+	if !rc.HasAnnotation("main.go", 10) {
+		t.Error("expected HasAnnotation to return true for main.go:10")
+	}
+	if !rc.HasAnnotation("util.go", 5) {
+		t.Error("expected HasAnnotation to return true for util.go:5")
+	}
+	if rc.HasAnnotation("main.go", 11) {
+		t.Error("expected HasAnnotation to return false for main.go:11")
+	}
+	if rc.HasAnnotation("other.go", 10) {
+		t.Error("expected HasAnnotation to return false for other.go:10")
+	}
+}
+
+// TestRenderContext_HasAnnotation_NilMap verifies HasAnnotation returns false
+// when crLocations is nil.
+func TestRenderContext_HasAnnotation_NilMap(t *testing.T) {
+	rc := &renderContext{crLocations: nil}
+	if rc.HasAnnotation("main.go", 10) {
+		t.Error("expected HasAnnotation to return false for nil crLocations")
+	}
+}
+
 // TestRenderDiff_BackwardCompatible verifies that the old renderDiff function
 // (which doesn't pass crLocations) still works correctly.
 func TestRenderDiff_BackwardCompatible(t *testing.T) {
