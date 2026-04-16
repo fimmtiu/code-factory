@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/fimmtiu/code-factory/internal/git"
+	"github.com/fimmtiu/code-factory/internal/models"
 	"github.com/fimmtiu/code-factory/internal/ui/theme"
 )
 
@@ -923,6 +924,119 @@ func TestHintPairs_ViewerMode(t *testing.T) {
 	}
 	if !found {
 		t.Error("expected 'scroll' in viewer hint pairs")
+	}
+}
+
+// ── DiffView CR integration tests ────────────────────────────────────────────
+
+// TestDiffView_NewDiffViewWithDB verifies that NewDiffView stores the database reference.
+func TestDiffView_NewDiffViewWithDB(t *testing.T) {
+	// Passing nil is fine; we just verify the field is stored.
+	v := NewDiffView(nil)
+	if v.database != nil {
+		t.Error("expected nil database when nil passed")
+	}
+}
+
+// TestDiffView_CRMapInitiallyNil verifies that crMap starts as nil.
+func TestDiffView_CRMapInitiallyNil(t *testing.T) {
+	v := NewDiffView(nil)
+	if v.crMap != nil {
+		t.Error("expected crMap to be nil initially")
+	}
+}
+
+// TestDiffView_CRLocationSetFromMap verifies the crLocations set is correctly
+// derived from crMap keys when creating a viewer.
+func TestDiffView_CRLocationSetFromMap(t *testing.T) {
+	files := sampleFiles()
+	v := DiffView{
+		width:      80,
+		height:     24,
+		identifier: "proj/ticket",
+		phase:      "implement",
+		crMap: map[string]models.ChangeRequest{
+			"internal/ui/app.go:10": {CodeLocation: "internal/ui/app.go:10"},
+		},
+	}
+
+	// Simulate receiving diffContentMsg which creates the viewer.
+	updated, _ := v.Update(diffContentMsg{files: files})
+	dv := updated.(DiffView)
+	if dv.viewer == nil {
+		t.Fatal("expected viewer to be created")
+	}
+	if dv.viewer.crLocations == nil {
+		t.Fatal("expected crLocations to be set on viewer")
+	}
+	if !dv.viewer.crLocations["internal/ui/app.go:10"] {
+		t.Error("expected crLocations to contain 'internal/ui/app.go:10'")
+	}
+}
+
+// TestDiffView_EmptyCRMapProducesEmptySet verifies that an empty crMap
+// produces an empty (but non-nil) crLocations set.
+func TestDiffView_EmptyCRMapProducesEmptySet(t *testing.T) {
+	files := sampleFiles()
+	v := DiffView{
+		width:      80,
+		height:     24,
+		identifier: "proj/ticket",
+		phase:      "implement",
+		crMap:      map[string]models.ChangeRequest{},
+	}
+
+	updated, _ := v.Update(diffContentMsg{files: files})
+	dv := updated.(DiffView)
+	if dv.viewer == nil {
+		t.Fatal("expected viewer to be created")
+	}
+	if dv.viewer.crLocations == nil {
+		t.Fatal("expected crLocations to be non-nil (empty set)")
+	}
+	if len(dv.viewer.crLocations) != 0 {
+		t.Errorf("expected empty crLocations, got %d entries", len(dv.viewer.crLocations))
+	}
+}
+
+// TestDiffView_NilCRMapProducesNilSet verifies that a nil crMap (no DB or
+// ticket not found) produces nil crLocations.
+func TestDiffView_NilCRMapProducesNilSet(t *testing.T) {
+	files := sampleFiles()
+	v := DiffView{
+		width:      80,
+		height:     24,
+		identifier: "proj/ticket",
+		phase:      "implement",
+		crMap:      nil,
+	}
+
+	updated, _ := v.Update(diffContentMsg{files: files})
+	dv := updated.(DiffView)
+	if dv.viewer == nil {
+		t.Fatal("expected viewer to be created")
+	}
+	if dv.viewer.crLocations != nil {
+		t.Error("expected nil crLocations when crMap is nil")
+	}
+}
+
+// TestDiffView_ResetForTicketClearsCRMap verifies that switching tickets
+// clears the crMap.
+func TestDiffView_ResetForTicketClearsCRMap(t *testing.T) {
+	v := DiffView{
+		width:      80,
+		height:     24,
+		identifier: "old/ticket",
+		crMap: map[string]models.ChangeRequest{
+			"file.go:1": {CodeLocation: "file.go:1"},
+		},
+	}
+
+	v.resetForTicket("new/ticket", "review", false, "/tmp/worktree", nil)
+
+	if v.crMap != nil {
+		t.Error("expected crMap to be cleared on ticket reset")
 	}
 }
 

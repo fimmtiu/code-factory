@@ -22,13 +22,13 @@ func makeDiffViewInViewerMode(files []diff.File, width, height int) DiffView {
 		identifier: "proj/ticket",
 		phase:      "implement",
 	}
-	v.viewer = newDiffViewerModel(files, v.width, v.viewerPaneHeight())
+	v.viewer = newDiffViewerModel(files, v.width, v.viewerPaneHeight(), nil)
 	return v
 }
 
 // makeViewerModel creates a standalone DiffViewerModel for direct testing.
 func makeViewerModel(files []diff.File, paneWidth, paneHeight int) *DiffViewerModel {
-	return newDiffViewerModel(files, paneWidth, paneHeight)
+	return newDiffViewerModel(files, paneWidth, paneHeight, nil)
 }
 
 // sampleFiles returns a small set of diff files for testing.
@@ -875,6 +875,56 @@ func TestLineSelect_EscExitsLineSelectNotViewer(t *testing.T) {
 	}
 	if dv.viewer.lineSelectMode {
 		t.Error("Esc should exit line-select mode")
+	}
+}
+
+// ── CR locations tests ──────────────────────────────────────────────────────
+
+// TestNewDiffViewerModel_WithCRLocations verifies that CR locations are stored
+// on the model and passed through to the renderer.
+func TestNewDiffViewerModel_WithCRLocations(t *testing.T) {
+	files := sampleFiles()
+	crLocs := map[string]bool{"internal/ui/app.go:10": true}
+	m := newDiffViewerModel(files, 80, 24, crLocs)
+
+	if m.crLocations == nil {
+		t.Fatal("expected crLocations to be stored on model")
+	}
+	if !m.crLocations["internal/ui/app.go:10"] {
+		t.Error("expected crLocations to contain 'internal/ui/app.go:10'")
+	}
+	// The rendered text should contain the emoji for the CR line.
+	if !strings.Contains(m.text, "\U0001F4AC") {
+		t.Error("expected rendered text to contain speech balloon emoji for CR line")
+	}
+}
+
+// TestNewDiffViewerModel_NilCRLocations verifies that nil crLocations
+// produces no emojis.
+func TestNewDiffViewerModel_NilCRLocations(t *testing.T) {
+	files := sampleFiles()
+	m := newDiffViewerModel(files, 80, 24, nil)
+
+	if m.crLocations != nil {
+		t.Error("expected nil crLocations when none provided")
+	}
+	if strings.Contains(m.text, "\U0001F4AC") {
+		t.Error("expected no emoji with nil crLocations")
+	}
+}
+
+// TestDiffViewerModel_Rerender_PreservesCRLocations verifies that rerender
+// passes crLocations through to the renderer.
+func TestDiffViewerModel_Rerender_PreservesCRLocations(t *testing.T) {
+	files := sampleFiles()
+	crLocs := map[string]bool{"internal/ui/app.go:11": true}
+	m := newDiffViewerModel(files, 80, 24, crLocs)
+
+	// Toggle collapse and rerender; CR locations should persist.
+	m.toggleCollapse()
+	m.toggleCollapse() // expand again
+	if !strings.Contains(m.text, "\U0001F4AC") {
+		t.Error("expected emoji to persist after rerender")
 	}
 }
 

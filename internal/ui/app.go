@@ -62,7 +62,7 @@ func NewModel(pool *worker.Pool, database *db.DB, waitSecs int) Model {
 			ViewCommand: NewCommandView(database, pool, waitSecs),
 			ViewWorker:  NewWorkerView(pool),
 			ViewLog:     NewLogView(database),
-			ViewDiff:    NewDiffView(),
+			ViewDiff:    NewDiffView(database),
 		},
 	}
 }

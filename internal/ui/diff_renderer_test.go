@@ -479,7 +479,7 @@ func TestFileStartLines(t *testing.T) {
 		},
 	}
 
-	rd := renderDiffResult(files, 60, nil)
+	rd := renderDiffResult(files, 60, nil, nil)
 	rendered := rd.text
 	starts := rd.fileStarts
 
@@ -521,7 +521,7 @@ func TestFileStartLines(t *testing.T) {
 
 // TestFileStartLines_Empty handles empty input.
 func TestFileStartLines_Empty(t *testing.T) {
-	starts := renderDiffResult(nil, 60, nil).fileStarts
+	starts := renderDiffResult(nil, 60, nil, nil).fileStarts
 	if len(starts) != 0 {
 		t.Errorf("expected empty slice, got %v", starts)
 	}
@@ -746,7 +746,7 @@ func TestLineMeta_MatchesLineCount(t *testing.T) {
 		},
 	}
 
-	rd := renderDiffResult(files, 60, nil)
+	rd := renderDiffResult(files, 60, nil, nil)
 	renderedLineCount := len(strings.Split(rd.text, "\n"))
 	if len(rd.lineMeta) != renderedLineCount {
 		t.Errorf("lineMeta length %d != rendered line count %d", len(rd.lineMeta), renderedLineCount)
@@ -773,7 +773,7 @@ func TestLineMeta_HunkContentIsSelectable(t *testing.T) {
 		},
 	}
 
-	rd := renderDiffResult(files, 60, nil)
+	rd := renderDiffResult(files, 60, nil, nil)
 	selectableCount := 0
 	nonSelectableCount := 0
 	for _, lm := range rd.lineMeta {
@@ -816,7 +816,7 @@ func TestLineMeta_FileIndex(t *testing.T) {
 		},
 	}
 
-	rd := renderDiffResult(files, 60, nil)
+	rd := renderDiffResult(files, 60, nil, nil)
 	// All lines before the second file's blank separator should have fileIndex 0.
 	secondFileStart := rd.fileStarts[1]
 	for i, lm := range rd.lineMeta {
@@ -837,7 +837,7 @@ func TestLineMeta_DeletedAndBinaryNotSelectable(t *testing.T) {
 		{Name: "pic.png", Type: diff.Binary},
 	}
 
-	rd := renderDiffResult(files, 60, nil)
+	rd := renderDiffResult(files, 60, nil, nil)
 	for i, lm := range rd.lineMeta {
 		if lm.kind != diffLineNonSelectable {
 			t.Errorf("line %d: expected non-selectable for delete/binary files, got selectable", i)
@@ -861,10 +861,303 @@ func TestLineMeta_CollapsedFilesHaveNoSelectableLines(t *testing.T) {
 	}
 
 	collapsed := []bool{true}
-	rd := renderDiffResult(files, 60, collapsed)
+	rd := renderDiffResult(files, 60, collapsed, nil)
 	for i, lm := range rd.lineMeta {
 		if lm.kind == diffLineHunkContent {
 			t.Errorf("line %d: expected no selectable lines in collapsed file", i)
 		}
+	}
+}
+
+// ── CR emoji indicator tests ─────────────────────────────────────────────────
+
+// TestRenderDiffResult_CRLocations_AddedLine verifies that an added line with
+// a CR location gets the speech balloon emoji appended.
+func TestRenderDiffResult_CRLocations_AddedLine(t *testing.T) {
+	files := []diff.File{
+		{
+			Name: "main.go",
+			Type: diff.Normal,
+			Hunks: []diff.Hunk{
+				{
+					NewStart: 10,
+					NewCount: 2,
+					Lines: []diff.Line{
+						{Type: diff.LineAdded, Content: "fmt.Println(\"new\")"},
+						{Type: diff.LineAdded, Content: "no CR here"},
+					},
+				},
+			},
+		},
+	}
+
+	crLocations := map[string]bool{"main.go:10": true}
+	rd := renderDiffResult(files, 60, nil, crLocations)
+
+	lines := strings.Split(rd.text, "\n")
+	// Find lines with the emoji. The added line at lineNum 10 should have it.
+	foundEmoji := false
+	foundNoEmoji := false
+	for _, line := range lines {
+		stripped := stripAnsi(line)
+		if strings.Contains(stripped, "fmt.Println") && strings.Contains(stripped, "\U0001F4AC") {
+			foundEmoji = true
+		}
+		if strings.Contains(stripped, "no CR here") && !strings.Contains(stripped, "\U0001F4AC") {
+			foundNoEmoji = true
+		}
+	}
+	if !foundEmoji {
+		t.Error("expected speech balloon emoji on added line with CR")
+	}
+	if !foundNoEmoji {
+		t.Error("expected no emoji on added line without CR")
+	}
+}
+
+// TestRenderDiffResult_CRLocations_RemovedLine verifies that a removed line
+// with a CR location gets the speech balloon emoji appended.
+func TestRenderDiffResult_CRLocations_RemovedLine(t *testing.T) {
+	files := []diff.File{
+		{
+			Name: "main.go",
+			Type: diff.Normal,
+			Hunks: []diff.Hunk{
+				{
+					NewStart: 10,
+					NewCount: 1,
+					Lines: []diff.Line{
+						{Type: diff.LineRemoved, Content: "old line"},
+						{Type: diff.LineAdded, Content: "new line"},
+					},
+				},
+			},
+		},
+	}
+
+	// Removed lines use the same lineNum as the next added/context line.
+	// In this hunk, lineNum starts at 10. The removed line is at lineNum 10,
+	// the added line increments to 11.
+	crLocations := map[string]bool{"main.go:10": true}
+	rd := renderDiffResult(files, 60, nil, crLocations)
+
+	lines := strings.Split(rd.text, "\n")
+	foundEmoji := false
+	for _, line := range lines {
+		stripped := stripAnsi(line)
+		if strings.Contains(stripped, "old line") && strings.Contains(stripped, "\U0001F4AC") {
+			foundEmoji = true
+		}
+	}
+	if !foundEmoji {
+		t.Error("expected speech balloon emoji on removed line with CR")
+	}
+}
+
+// TestRenderDiffResult_CRLocations_ContextLine verifies that a context line
+// with a CR location gets the speech balloon emoji appended.
+func TestRenderDiffResult_CRLocations_ContextLine(t *testing.T) {
+	files := []diff.File{
+		{
+			Name: "main.go",
+			Type: diff.Normal,
+			Hunks: []diff.Hunk{
+				{
+					NewStart: 5,
+					NewCount: 3,
+					Lines: []diff.Line{
+						{Type: diff.LineContext, Content: "context with CR"},
+						{Type: diff.LineContext, Content: "context without CR"},
+						{Type: diff.LineAdded, Content: "added"},
+					},
+				},
+			},
+		},
+	}
+
+	crLocations := map[string]bool{"main.go:5": true}
+	rd := renderDiffResult(files, 60, nil, crLocations)
+
+	lines := strings.Split(rd.text, "\n")
+	foundEmoji := false
+	foundNoEmoji := false
+	for _, line := range lines {
+		stripped := stripAnsi(line)
+		if strings.Contains(stripped, "context with CR") && strings.Contains(stripped, "\U0001F4AC") {
+			foundEmoji = true
+		}
+		if strings.Contains(stripped, "context without CR") && !strings.Contains(stripped, "\U0001F4AC") {
+			foundNoEmoji = true
+		}
+	}
+	if !foundEmoji {
+		t.Error("expected speech balloon emoji on context line with CR")
+	}
+	if !foundNoEmoji {
+		t.Error("expected no emoji on context line without CR")
+	}
+}
+
+// TestRenderDiffResult_CRLocations_NilMap verifies that nil crLocations
+// renders identically to the no-CR case (backward compatibility).
+func TestRenderDiffResult_CRLocations_NilMap(t *testing.T) {
+	files := []diff.File{
+		{
+			Name: "main.go",
+			Type: diff.Normal,
+			Hunks: []diff.Hunk{
+				{
+					NewStart: 1,
+					NewCount: 2,
+					Lines: []diff.Line{
+						{Type: diff.LineAdded, Content: "line1"},
+						{Type: diff.LineContext, Content: "line2"},
+					},
+				},
+			},
+		},
+	}
+
+	rd := renderDiffResult(files, 60, nil, nil)
+	lines := strings.Split(rd.text, "\n")
+	for _, line := range lines {
+		if strings.Contains(line, "\U0001F4AC") {
+			t.Error("expected no emoji when crLocations is nil")
+		}
+	}
+}
+
+// TestRenderDiffResult_CRLocations_EmptyMap verifies that an empty crLocations
+// map produces no emojis.
+func TestRenderDiffResult_CRLocations_EmptyMap(t *testing.T) {
+	files := []diff.File{
+		{
+			Name: "main.go",
+			Type: diff.Normal,
+			Hunks: []diff.Hunk{
+				{
+					NewStart: 1,
+					NewCount: 1,
+					Lines: []diff.Line{
+						{Type: diff.LineAdded, Content: "x"},
+					},
+				},
+			},
+		},
+	}
+
+	rd := renderDiffResult(files, 60, nil, map[string]bool{})
+	lines := strings.Split(rd.text, "\n")
+	for _, line := range lines {
+		if strings.Contains(line, "\U0001F4AC") {
+			t.Error("expected no emoji when crLocations is empty")
+		}
+	}
+}
+
+// TestRenderDiffResult_CRLocations_MultipleFiles verifies CR indicators work
+// correctly across multiple files.
+func TestRenderDiffResult_CRLocations_MultipleFiles(t *testing.T) {
+	files := []diff.File{
+		{
+			Name: "a.go",
+			Type: diff.Normal,
+			Hunks: []diff.Hunk{
+				{NewStart: 1, NewCount: 1, Lines: []diff.Line{
+					{Type: diff.LineAdded, Content: "in file a"},
+				}},
+			},
+		},
+		{
+			Name: "b.go",
+			Type: diff.Normal,
+			Hunks: []diff.Hunk{
+				{NewStart: 5, NewCount: 1, Lines: []diff.Line{
+					{Type: diff.LineAdded, Content: "in file b"},
+				}},
+			},
+		},
+	}
+
+	crLocations := map[string]bool{"b.go:5": true}
+	rd := renderDiffResult(files, 60, nil, crLocations)
+
+	lines := strings.Split(rd.text, "\n")
+	emojiOnA := false
+	emojiOnB := false
+	for _, line := range lines {
+		stripped := stripAnsi(line)
+		if strings.Contains(stripped, "in file a") && strings.Contains(stripped, "\U0001F4AC") {
+			emojiOnA = true
+		}
+		if strings.Contains(stripped, "in file b") && strings.Contains(stripped, "\U0001F4AC") {
+			emojiOnB = true
+		}
+	}
+	if emojiOnA {
+		t.Error("expected no emoji on file a (no CR)")
+	}
+	if !emojiOnB {
+		t.Error("expected emoji on file b line 5 (has CR)")
+	}
+}
+
+// TestRenderDiffResult_CRLine_ReducedWidth verifies that CR lines use
+// paneWidth-4 for content width so the emoji fits without overlapping.
+func TestRenderDiffResult_CRLine_ReducedWidth(t *testing.T) {
+	files := []diff.File{
+		{
+			Name: "main.go",
+			Type: diff.Normal,
+			Hunks: []diff.Hunk{
+				{
+					NewStart: 1,
+					NewCount: 2,
+					Lines: []diff.Line{
+						{Type: diff.LineAdded, Content: "CR line"},
+						{Type: diff.LineAdded, Content: "normal line"},
+					},
+				},
+			},
+		},
+	}
+
+	paneWidth := 40
+	crLocations := map[string]bool{"main.go:1": true}
+	rd := renderDiffResult(files, paneWidth, nil, crLocations)
+
+	lines := strings.Split(rd.text, "\n")
+	for _, line := range lines {
+		stripped := stripAnsi(line)
+		w := lipgloss.Width(stripped)
+		if w > paneWidth {
+			// Wrapped lines are allowed to be at paneWidth each.
+			// But no single visual line should exceed paneWidth.
+			t.Errorf("line exceeds paneWidth (%d): width=%d, content=%q", paneWidth, w, stripped)
+		}
+	}
+}
+
+// TestRenderDiff_BackwardCompatible verifies that the old renderDiff function
+// (which doesn't pass crLocations) still works correctly.
+func TestRenderDiff_BackwardCompatible(t *testing.T) {
+	files := []diff.File{
+		{
+			Name: "main.go",
+			Type: diff.Normal,
+			Hunks: []diff.Hunk{
+				{NewStart: 1, NewCount: 1, Lines: []diff.Line{
+					{Type: diff.LineAdded, Content: "hello"},
+				}},
+			},
+		},
+	}
+
+	result := renderDiff(files, 60)
+	if !strings.Contains(result, "hello") {
+		t.Error("renderDiff should still render content")
+	}
+	if strings.Contains(result, "\U0001F4AC") {
+		t.Error("renderDiff without crLocations should not have emojis")
 	}
 }

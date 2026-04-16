@@ -42,18 +42,24 @@ type renderedDiff struct {
 	lineMeta   []diffLineMeta // per-line metadata for the entire rendered output
 }
 
+// crEmojiSuffix is the 4-visual-column suffix appended to lines with CRs:
+// space + speech balloon (2 cells) + space = 4 columns.
+const crEmojiSuffix = " \U0001F4AC "
+
 // renderDiff produces a formatted diff string from parsed diff files.
 // Each file begins with a blank line (including the first file). paneWidth
 // controls the full-width background padding for hunk headers and
 // added/removed lines.
 func renderDiff(files []diff.File, paneWidth int) string {
-	return renderDiffResult(files, paneWidth, nil).text
+	return renderDiffResult(files, paneWidth, nil, nil).text
 }
 
 // renderDiffResult is the full-featured renderer that returns both the
 // formatted text and per-file start offsets. collapsed controls per-file
-// collapse state; nil means all expanded.
-func renderDiffResult(files []diff.File, paneWidth int, collapsed []bool) renderedDiff {
+// collapse state; nil means all expanded. crLocations maps "file:line"
+// strings to true for lines that have change requests; those lines render
+// with a speech balloon emoji suffix and wrap 4 columns sooner.
+func renderDiffResult(files []diff.File, paneWidth int, collapsed []bool, crLocations map[string]bool) renderedDiff {
 	if len(files) == 0 {
 		return renderedDiff{}
 	}
@@ -109,12 +115,12 @@ func renderDiffResult(files []diff.File, paneWidth int, collapsed []bool) render
 			appendNonSelectable(1, i)
 			lineCount++
 			for _, h := range f.Hunks {
-				lineCount += renderHunk(&sb, h, paneWidth, i, &meta)
+				lineCount += renderHunk(&sb, h, paneWidth, i, &meta, crLocations, f.Name)
 			}
 		default:
 			// Normal and New files: render hunks.
 			for _, h := range f.Hunks {
-				lineCount += renderHunk(&sb, h, paneWidth, i, &meta)
+				lineCount += renderHunk(&sb, h, paneWidth, i, &meta, crLocations, f.Name)
 			}
 		}
 	}
@@ -129,7 +135,9 @@ func renderDiffResult(files []diff.File, paneWidth int, collapsed []bool) render
 
 // renderHunk renders a single hunk: the @@ header followed by content lines.
 // It returns the number of lines written and appends per-line metadata to meta.
-func renderHunk(sb *strings.Builder, h diff.Hunk, paneWidth, fileIndex int, meta *[]diffLineMeta) int {
+// crLocations and fileName are used to check whether each line has a change
+// request and should display the speech balloon emoji.
+func renderHunk(sb *strings.Builder, h diff.Hunk, paneWidth, fileIndex int, meta *[]diffLineMeta, crLocations map[string]bool, fileName string) int {
 	lines := 0
 
 	// Hunk header.
@@ -150,28 +158,47 @@ func renderHunk(sb *strings.Builder, h diff.Hunk, paneWidth, fileIndex int, meta
 	lineNum := h.NewStart
 	for _, line := range h.Lines {
 		text := expandTabs(line.Content)
+		hasCR := crLocations[fmt.Sprintf("%s:%d", fileName, lineNum)]
 		switch line.Type {
 		case diff.LineRemoved:
 			// Blank line-number space, then content with pink background.
 			prefix := strings.Repeat(" ", numWidth) + " "
 			content := prefix + text
-			styled, n := padToWidth(theme.Current().DiffRemovedStyle, content, paneWidth)
-			sb.WriteString(styled)
+			var styled string
+			var n int
+			if hasCR {
+				styled, n = padToWidth(theme.Current().DiffRemovedStyle, content, paneWidth-4)
+				sb.WriteString(appendCREmojiToStyled(styled, n))
+			} else {
+				styled, n = padToWidth(theme.Current().DiffRemovedStyle, content, paneWidth)
+				sb.WriteString(styled)
+			}
 			appendLineMeta(meta, n, diffLineHunkContent, fileIndex, lineNum)
 			lines += n
 		case diff.LineAdded:
 			// Line number on the left, then content with green background.
 			prefix := fmt.Sprintf("%*d ", numWidth, lineNum)
 			content := prefix + text
-			styled, n := padToWidth(theme.Current().DiffAddedStyle, content, paneWidth)
-			sb.WriteString(styled)
+			var styled string
+			var n int
+			if hasCR {
+				styled, n = padToWidth(theme.Current().DiffAddedStyle, content, paneWidth-4)
+				sb.WriteString(appendCREmojiToStyled(styled, n))
+			} else {
+				styled, n = padToWidth(theme.Current().DiffAddedStyle, content, paneWidth)
+				sb.WriteString(styled)
+			}
 			appendLineMeta(meta, n, diffLineHunkContent, fileIndex, lineNum)
 			lines += n
 			lineNum++
 		case diff.LineContext:
 			// Line number on the left, plain text (no background).
 			prefix := fmt.Sprintf("%*d ", numWidth, lineNum)
-			sb.WriteString(prefix + text)
+			if hasCR {
+				sb.WriteString(truncateToWidth(prefix+text, paneWidth-4) + crEmojiSuffix)
+			} else {
+				sb.WriteString(prefix + text)
+			}
 			appendLineMeta(meta, 1, diffLineHunkContent, fileIndex, lineNum)
 			lines++
 			lineNum++
@@ -179,6 +206,40 @@ func renderHunk(sb *strings.Builder, h diff.Hunk, paneWidth, fileIndex int, meta
 		sb.WriteString("\n")
 	}
 	return lines
+}
+
+// appendCREmojiToStyled appends the CR emoji suffix to a styled line.
+// For single-line output (n == 1), the emoji is appended directly.
+// For multi-line (wrapped) output, the emoji is appended to the first line
+// and 4 spaces are appended to subsequent lines so all visual lines have
+// the same total width.
+func appendCREmojiToStyled(styled string, n int) string {
+	if n == 1 {
+		return styled + crEmojiSuffix
+	}
+	parts := strings.Split(styled, "\n")
+	parts[0] += crEmojiSuffix
+	for i := 1; i < len(parts); i++ {
+		parts[i] += "    "
+	}
+	return strings.Join(parts, "\n")
+}
+
+// truncateToWidth truncates text to fit within maxWidth visual columns.
+func truncateToWidth(text string, maxWidth int) string {
+	if maxWidth <= 0 {
+		return ""
+	}
+	if lipgloss.Width(text) <= maxWidth {
+		return text
+	}
+	runes := []rune(text)
+	for i := len(runes); i > 0; i-- {
+		if lipgloss.Width(string(runes[:i])) <= maxWidth {
+			return string(runes[:i])
+		}
+	}
+	return ""
 }
 
 // padToWidth pads text with spaces to fill paneWidth, then applies the style.
