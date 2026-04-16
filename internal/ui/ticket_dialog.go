@@ -493,10 +493,7 @@ func (d *TicketDialog) reopenCR(idx int) tea.Cmd {
 }
 
 func (d *TicketDialog) editCRDescription(idx int) tea.Cmd {
-	id, err := strconv.ParseInt(d.changeRequests[idx].ID, 10, 64)
-	if err != nil {
-		return nil
-	}
+	id := d.changeRequests[idx].ID
 	currentDesc := d.changeRequests[idx].Description
 	database := d.database
 	return wrapEditorCmd(func() tea.Msg {

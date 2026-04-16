@@ -159,17 +159,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.dialog = NewPhasePickerDialog(m.db, msg.wu)
 		return m, nil
 
-	case openChangeRequestDialogMsg:
-		m.dialog = NewChangeRequestDialog(m.db, msg.identifier, msg.fileName, msg.lineNum, msg.context, msg.worktreePath, m.width)
+	case openEditChangeRequestDialogMsg:
+		m.dialog = NewEditChangeRequestDialog(m.db, msg.location, msg.existingCR, m.width)
 		return m, nil
 
 	case openViewChangeRequestDialogMsg:
 		m.dialog = NewViewChangeRequestDialog(m.db, msg.cr, msg.identifier, msg.worktreePath, m.width)
 		return m, nil
 
-	case crCreatedMsg:
+	case crSavedMsg:
 		if msg.errMsg != "" {
 			return m, ShowNotification("CR failed: " + msg.errMsg)
+		}
+		if msg.edited {
+			return m, ShowNotification("Change request updated")
 		}
 		return m, ShowNotification("Change request created")
 
