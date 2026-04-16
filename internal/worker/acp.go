@@ -272,34 +272,41 @@ func (c *acpWorkerClient) WaitForTerminalExit(_ context.Context, _ acp.WaitForTe
 // Ensure acpWorkerClient satisfies the acp.Client interface at compile time.
 var _ acp.Client = (*acpWorkerClient)(nil)
 
+// promptResult bundles the ACP prompt response with its error so both can be
+// sent over a single channel.
+type promptResult struct {
+	resp acp.PromptResponse
+	err  error
+}
+
 // awaitPromptCompletion waits for either the ACP prompt to complete or the
 // subprocess to exit. If the subprocess exits before the prompt completes, it
 // returns an error — even if the exit status is zero — because the ACP
 // protocol requires a prompt response before the session ends. When both
 // channels are ready simultaneously, the prompt result is preferred.
-func awaitPromptCompletion(promptCh <-chan error, waitCh <-chan error) (err error, procExited bool) {
+func awaitPromptCompletion(promptCh <-chan promptResult, waitCh <-chan error) (acp.StopReason, error, bool) {
 	select {
-	case promptErr := <-promptCh:
-		if promptErr != nil {
-			return fmt.Errorf("ACP prompt: %w", promptErr), false
+	case result := <-promptCh:
+		if result.err != nil {
+			return "", fmt.Errorf("ACP prompt: %w", result.err), false
 		}
-		return nil, false
+		return result.resp.StopReason, nil, false
 	case procErr := <-waitCh:
 		// The process exited first. Check whether the prompt also
 		// completed (the two channels may have raced).
 		select {
-		case promptErr := <-promptCh:
-			if promptErr != nil {
-				return fmt.Errorf("ACP prompt: %w", promptErr), true
+		case result := <-promptCh:
+			if result.err != nil {
+				return "", fmt.Errorf("ACP prompt: %w", result.err), true
 			}
-			return nil, true
+			return result.resp.StopReason, nil, true
 		default:
 		}
 		// Subprocess died before the prompt completed.
 		if procErr != nil {
-			return fmt.Errorf("ACP subprocess exited before prompt completed: %w", procErr), true
+			return "", fmt.Errorf("ACP subprocess exited before prompt completed: %w", procErr), true
 		}
-		return fmt.Errorf("ACP subprocess exited before prompt completed"), true
+		return "", fmt.Errorf("ACP subprocess exited before prompt completed"), true
 	}
 }
 
@@ -400,13 +407,13 @@ func runACP(
 	// Run the prompt and subprocess wait in separate goroutines so we
 	// don't deadlock if the subprocess exits without sending a prompt
 	// response or if conn.Prompt blocks after the subprocess finishes.
-	promptCh := make(chan error, 1)
+	promptCh := make(chan promptResult, 1)
 	go func() {
-		_, err := conn.Prompt(ctx, acp.PromptRequest{
+		resp, err := conn.Prompt(ctx, acp.PromptRequest{
 			SessionId: sessResp.SessionId,
 			Prompt:    []acp.ContentBlock{acp.TextBlock(params.Prompt)},
 		})
-		promptCh <- err
+		promptCh <- promptResult{resp, err}
 	}()
 
 	waitCh := make(chan error, 1)
@@ -414,7 +421,13 @@ func runACP(
 		waitCh <- cmd.Wait()
 	}()
 
-	resultErr, procExited := awaitPromptCompletion(promptCh, waitCh)
+	stopReason, resultErr, procExited := awaitPromptCompletion(promptCh, waitCh)
+
+	// Log the stop reason so we can diagnose unexpected early exits.
+	client.flushPartialLine()
+	if stopReason != "" && stopReason != acp.StopReasonEndTurn {
+		client.appendOutput(fmt.Sprintf("\n=== STOP REASON: %s ===\n", stopReason))
+	}
 
 	// Tear down the subprocess and its children.
 	_ = stdin.Close()
