@@ -162,7 +162,7 @@ func (d ChangeRequestDialog) View() string {
 	// Code context.
 	taWidth := d.textAreaWidth()
 	for _, line := range strings.Split(d.context, "\n") {
-		sb.WriteString(theme.Current().QuickResponseOutputStyle.Render(truncateLine(line, taWidth)))
+		sb.WriteString(theme.Current().QuickResponseOutputStyle.Render(truncateLine(strings.TrimRight(line, " \t"), taWidth)))
 		sb.WriteString("\n")
 	}
 	sb.WriteString("\n")

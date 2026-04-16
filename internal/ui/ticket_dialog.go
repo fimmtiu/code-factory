@@ -722,7 +722,7 @@ func fetchCodeContext(worktree, commitHash, filename string, lineNumber int) str
 		if i == targetIdx {
 			marker = "> "
 		}
-		fmt.Fprintf(&sb, "%s%4d | %s\n", marker, i+1, lines[i])
+		fmt.Fprintf(&sb, "%s%4d | %s\n", marker, i+1, strings.TrimRight(lines[i], " \t"))
 	}
 	return strings.TrimRight(sb.String(), "\n")
 }
