@@ -946,9 +946,9 @@ func TestDiffView_CRMapInitiallyNil(t *testing.T) {
 	}
 }
 
-// TestDiffView_CRLocationSetFromMap verifies the crLocations set is correctly
-// derived from crMap keys when creating a viewer.
-func TestDiffView_CRLocationSetFromMap(t *testing.T) {
+// TestDiffView_CRMapPassedToViewer verifies the full crMap is passed through
+// to the viewer when creating it from a diffContentMsg.
+func TestDiffView_CRMapPassedToViewer(t *testing.T) {
 	files := sampleFiles()
 	v := DiffView{
 		width:      80,
@@ -966,17 +966,17 @@ func TestDiffView_CRLocationSetFromMap(t *testing.T) {
 	if dv.viewer == nil {
 		t.Fatal("expected viewer to be created")
 	}
-	if dv.viewer.crLocations == nil {
-		t.Fatal("expected crLocations to be set on viewer")
+	if dv.viewer.crMap == nil {
+		t.Fatal("expected crMap to be set on viewer")
 	}
-	if !dv.viewer.crLocations["internal/ui/app.go:10"] {
-		t.Error("expected crLocations to contain 'internal/ui/app.go:10'")
+	if _, ok := dv.viewer.crMap["internal/ui/app.go:10"]; !ok {
+		t.Error("expected crMap to contain 'internal/ui/app.go:10'")
 	}
 }
 
-// TestDiffView_EmptyCRMapProducesEmptySet verifies that an empty crMap
-// produces an empty (but non-nil) crLocations set.
-func TestDiffView_EmptyCRMapProducesEmptySet(t *testing.T) {
+// TestDiffView_EmptyCRMapPassedToViewer verifies that an empty crMap
+// produces an empty (but non-nil) crMap on the viewer.
+func TestDiffView_EmptyCRMapPassedToViewer(t *testing.T) {
 	files := sampleFiles()
 	v := DiffView{
 		width:      80,
@@ -991,17 +991,17 @@ func TestDiffView_EmptyCRMapProducesEmptySet(t *testing.T) {
 	if dv.viewer == nil {
 		t.Fatal("expected viewer to be created")
 	}
-	if dv.viewer.crLocations == nil {
-		t.Fatal("expected crLocations to be non-nil (empty set)")
+	if dv.viewer.crMap == nil {
+		t.Fatal("expected crMap to be non-nil (empty map)")
 	}
-	if len(dv.viewer.crLocations) != 0 {
-		t.Errorf("expected empty crLocations, got %d entries", len(dv.viewer.crLocations))
+	if len(dv.viewer.crMap) != 0 {
+		t.Errorf("expected empty crMap, got %d entries", len(dv.viewer.crMap))
 	}
 }
 
-// TestDiffView_NilCRMapProducesNilSet verifies that a nil crMap (no DB or
-// ticket not found) produces nil crLocations.
-func TestDiffView_NilCRMapProducesNilSet(t *testing.T) {
+// TestDiffView_NilCRMapPassedToViewer verifies that a nil crMap (no DB or
+// ticket not found) produces nil crMap on the viewer.
+func TestDiffView_NilCRMapPassedToViewer(t *testing.T) {
 	files := sampleFiles()
 	v := DiffView{
 		width:      80,
@@ -1016,8 +1016,8 @@ func TestDiffView_NilCRMapProducesNilSet(t *testing.T) {
 	if dv.viewer == nil {
 		t.Fatal("expected viewer to be created")
 	}
-	if dv.viewer.crLocations != nil {
-		t.Error("expected nil crLocations when crMap is nil")
+	if dv.viewer.crMap != nil {
+		t.Error("expected nil crMap when DiffView crMap is nil")
 	}
 }
 

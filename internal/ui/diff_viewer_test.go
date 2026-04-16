@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/fimmtiu/code-factory/internal/diff"
+	"github.com/fimmtiu/code-factory/internal/models"
 	"github.com/fimmtiu/code-factory/internal/ui/theme"
 )
 
@@ -880,18 +881,24 @@ func TestLineSelect_EscExitsLineSelectNotViewer(t *testing.T) {
 
 // ── CR locations tests ──────────────────────────────────────────────────────
 
-// TestNewDiffViewerModel_WithCRLocations verifies that CR locations are stored
-// on the model and passed through to the renderer.
-func TestNewDiffViewerModel_WithCRLocations(t *testing.T) {
+// TestNewDiffViewerModel_WithCRMap verifies that the full crMap is stored
+// on the model and CR indicators are rendered.
+func TestNewDiffViewerModel_WithCRMap(t *testing.T) {
 	files := sampleFiles()
-	crLocs := map[string]bool{"internal/ui/app.go:10": true}
-	m := newDiffViewerModel(files, 80, 24, crLocs)
-
-	if m.crLocations == nil {
-		t.Fatal("expected crLocations to be stored on model")
+	crMap := map[string]models.ChangeRequest{
+		"internal/ui/app.go:10": {CodeLocation: "internal/ui/app.go:10", Description: "test CR"},
 	}
-	if !m.crLocations["internal/ui/app.go:10"] {
-		t.Error("expected crLocations to contain 'internal/ui/app.go:10'")
+	m := newDiffViewerModel(files, 80, 24, crMap)
+
+	if m.crMap == nil {
+		t.Fatal("expected crMap to be stored on model")
+	}
+	cr, ok := m.crMap["internal/ui/app.go:10"]
+	if !ok {
+		t.Error("expected crMap to contain 'internal/ui/app.go:10'")
+	}
+	if cr.Description != "test CR" {
+		t.Errorf("expected full ChangeRequest data, got description %q", cr.Description)
 	}
 	// The rendered text should contain the emoji for the CR line.
 	if !strings.Contains(m.text, "\U0001F4AC") {
@@ -899,28 +906,29 @@ func TestNewDiffViewerModel_WithCRLocations(t *testing.T) {
 	}
 }
 
-// TestNewDiffViewerModel_NilCRLocations verifies that nil crLocations
-// produces no emojis.
-func TestNewDiffViewerModel_NilCRLocations(t *testing.T) {
+// TestNewDiffViewerModel_NilCRMap verifies that nil crMap produces no emojis.
+func TestNewDiffViewerModel_NilCRMap(t *testing.T) {
 	files := sampleFiles()
 	m := newDiffViewerModel(files, 80, 24, nil)
 
-	if m.crLocations != nil {
-		t.Error("expected nil crLocations when none provided")
+	if m.crMap != nil {
+		t.Error("expected nil crMap when none provided")
 	}
 	if strings.Contains(m.text, "\U0001F4AC") {
-		t.Error("expected no emoji with nil crLocations")
+		t.Error("expected no emoji with nil crMap")
 	}
 }
 
-// TestDiffViewerModel_Rerender_PreservesCRLocations verifies that rerender
-// passes crLocations through to the renderer.
-func TestDiffViewerModel_Rerender_PreservesCRLocations(t *testing.T) {
+// TestDiffViewerModel_Rerender_PreservesCRMap verifies that rerender
+// passes crMap through to the renderer.
+func TestDiffViewerModel_Rerender_PreservesCRMap(t *testing.T) {
 	files := sampleFiles()
-	crLocs := map[string]bool{"internal/ui/app.go:11": true}
-	m := newDiffViewerModel(files, 80, 24, crLocs)
+	crMap := map[string]models.ChangeRequest{
+		"internal/ui/app.go:11": {CodeLocation: "internal/ui/app.go:11"},
+	}
+	m := newDiffViewerModel(files, 80, 24, crMap)
 
-	// Toggle collapse and rerender; CR locations should persist.
+	// Toggle collapse and rerender; CR indicators should persist.
 	m.toggleCollapse()
 	m.toggleCollapse() // expand again
 	if !strings.Contains(m.text, "\U0001F4AC") {

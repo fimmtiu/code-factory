@@ -501,14 +501,7 @@ func (v DiffView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return v, fetchDiffCmd(v.worktreePath, msg.startCommit, msg.endCommit)
 
 	case diffContentMsg:
-		var crLocations map[string]bool
-		if v.crMap != nil {
-			crLocations = make(map[string]bool, len(v.crMap))
-			for loc := range v.crMap {
-				crLocations[loc] = true
-			}
-		}
-		v.viewer = newDiffViewerModel(msg.files, v.width, v.viewerPaneHeight(), crLocations)
+		v.viewer = newDiffViewerModel(msg.files, v.width, v.viewerPaneHeight(), v.crMap)
 		return v, nil
 
 	case tea.KeyMsg:

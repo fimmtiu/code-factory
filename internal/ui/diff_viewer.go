@@ -10,6 +10,7 @@ import (
 
 	"github.com/fimmtiu/code-factory/internal/diff"
 	"github.com/fimmtiu/code-factory/internal/git"
+	"github.com/fimmtiu/code-factory/internal/models"
 	"github.com/fimmtiu/code-factory/internal/ui/theme"
 )
 
@@ -60,23 +61,23 @@ type DiffViewerModel struct {
 	selectedLine   int  // index of the currently selected line in the rendered text
 	frozenFileIdx  int  // file index frozen on exit from line select; -1 when not frozen
 
-	// CR indicator state: set of "file:line" strings that have change requests.
-	crLocations map[string]bool
+	// CR indicator state: full change request data keyed by "file:line".
+	crMap map[string]models.ChangeRequest
 }
 
 // newDiffViewerModel creates a DiffViewerModel from parsed diff files.
 // paneWidth and paneHeight are the dimensions of the content area only
 // (DiffView accounts for the status bar, separator, and chrome).
-// crLocations is a set of "file:line" strings that have change requests;
+// crMap contains the full change request data keyed by "file:line";
 // nil means no CR indicators.
-func newDiffViewerModel(files []diff.File, paneWidth, paneHeight int, crLocations map[string]bool) *DiffViewerModel {
+func newDiffViewerModel(files []diff.File, paneWidth, paneHeight int, crMap map[string]models.ChangeRequest) *DiffViewerModel {
 	m := &DiffViewerModel{
 		paneWidth:     paneWidth,
 		paneHeight:    paneHeight,
 		files:         files,
 		collapsed:     make([]bool, len(files)),
 		frozenFileIdx: -1,
-		crLocations:   crLocations,
+		crMap:         crMap,
 	}
 
 	if len(files) == 0 {
@@ -86,6 +87,19 @@ func newDiffViewerModel(files []diff.File, paneWidth, paneHeight int, crLocation
 	m.rerender()
 	m.fileNames = fileNamesFromDiff(files)
 	return m
+}
+
+// crLocationsSet derives a map[string]bool from the stored crMap for use
+// by the renderer. Returns nil if crMap is nil.
+func (m *DiffViewerModel) crLocationsSet() map[string]bool {
+	if m.crMap == nil {
+		return nil
+	}
+	locs := make(map[string]bool, len(m.crMap))
+	for loc := range m.crMap {
+		locs[loc] = true
+	}
+	return locs
 }
 
 // setSize updates the content-pane dimensions and re-clamps the scroll offset.
@@ -220,7 +234,7 @@ func (m *DiffViewerModel) rerender() {
 	if w < 1 {
 		w = 1
 	}
-	rd := renderDiffResult(m.files, w, m.collapsed, m.crLocations)
+	rd := renderDiffResult(m.files, w, m.collapsed, m.crLocationsSet())
 	m.text = rd.text
 	m.fileStarts = rd.fileStarts
 	m.lineMeta = rd.lineMeta
