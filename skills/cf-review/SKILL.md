@@ -164,9 +164,6 @@ Determine whether the code quality is up to our high standards. Particular areas
 - Unclear code, where the intent isn't obvious from the code itself and no comments explain it
 - Useless comments that just explain what the code is doing without explaining why
 - Misspellings in variable names or comments
-- Excessively large modules, or modules with more than one responsibility
-- Repetitive changes that could be abstracted into a helper class or method
-- Duplicated code — does the codebase already have a way to do this that we're not using?
 - Ignoring established patterns that already exist in the codebase
 - Places where necessary error handling is missing, or errors are being unnecessarily suppressed
 

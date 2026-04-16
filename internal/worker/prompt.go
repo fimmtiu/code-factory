@@ -25,6 +25,7 @@ func BuildPrompt(ticket *models.WorkUnit, database *db.DB, ticketsDir string) (s
 				"Tests that cover your planned changes MUST exist before you begin changing the implementation.\n\n"+
 				"Before you commit, you MUST run linting and tests to ensure your changes are working as expected.\n\n"+
 				"When you're done, commit your changes to the worktree with a commit message that explains what you did and why you did it. "+
+				"Your commit message must not be prefixed with `cf-respond:` or `refactor:`. "+
 				"You may create intermediate commits if you need to, as long as you give them complete commit messages.",
 			worktreePath, identifier, ticket.Description,
 		)

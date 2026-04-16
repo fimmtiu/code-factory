@@ -206,3 +206,5 @@ skills/           Claude Code skills for working with code-factory projects
 * Create a tool for examining permissions requests and auto-approving them if they're safe.
 
 * Make change requests visible inside the diff viewer.
+
+* Find a smooth way to handle viewing multiple change requests on the same line.
