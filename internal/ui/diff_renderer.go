@@ -164,30 +164,14 @@ func renderHunk(sb *strings.Builder, h diff.Hunk, paneWidth, fileIndex int, meta
 			// Blank line-number space, then content with pink background.
 			prefix := strings.Repeat(" ", numWidth) + " "
 			content := prefix + text
-			var styled string
-			var n int
-			if hasCR {
-				styled, n = padToWidth(theme.Current().DiffRemovedStyle, content, paneWidth-4)
-				sb.WriteString(appendCREmojiToStyled(styled, n))
-			} else {
-				styled, n = padToWidth(theme.Current().DiffRemovedStyle, content, paneWidth)
-				sb.WriteString(styled)
-			}
+			n := writeStyledLine(sb, theme.Current().DiffRemovedStyle, content, paneWidth, hasCR)
 			appendLineMeta(meta, n, diffLineHunkContent, fileIndex, lineNum)
 			lines += n
 		case diff.LineAdded:
 			// Line number on the left, then content with green background.
 			prefix := fmt.Sprintf("%*d ", numWidth, lineNum)
 			content := prefix + text
-			var styled string
-			var n int
-			if hasCR {
-				styled, n = padToWidth(theme.Current().DiffAddedStyle, content, paneWidth-4)
-				sb.WriteString(appendCREmojiToStyled(styled, n))
-			} else {
-				styled, n = padToWidth(theme.Current().DiffAddedStyle, content, paneWidth)
-				sb.WriteString(styled)
-			}
+			n := writeStyledLine(sb, theme.Current().DiffAddedStyle, content, paneWidth, hasCR)
 			appendLineMeta(meta, n, diffLineHunkContent, fileIndex, lineNum)
 			lines += n
 			lineNum++
@@ -206,6 +190,19 @@ func renderHunk(sb *strings.Builder, h diff.Hunk, paneWidth, fileIndex int, meta
 		sb.WriteString("\n")
 	}
 	return lines
+}
+
+// writeStyledLine writes a padded, styled content line to sb, appending the CR
+// emoji suffix when hasCR is true. It returns the number of visual lines written.
+func writeStyledLine(sb *strings.Builder, style lipgloss.Style, content string, paneWidth int, hasCR bool) int {
+	if hasCR {
+		styled, n := padToWidth(style, content, paneWidth-4)
+		sb.WriteString(appendCREmojiToStyled(styled, n))
+		return n
+	}
+	styled, n := padToWidth(style, content, paneWidth)
+	sb.WriteString(styled)
+	return n
 }
 
 // appendCREmojiToStyled appends the CR emoji suffix to a styled line.
