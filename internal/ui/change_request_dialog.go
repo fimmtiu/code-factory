@@ -16,14 +16,19 @@ import (
 
 // ── Messages ────────────────────────────────────────────────────────────────
 
-// openEditChangeRequestDialogMsg asks the root model to open the CR dialog.
-type openEditChangeRequestDialogMsg struct {
+// crLocation groups the code-location fields needed to create or edit a change request.
+type crLocation struct {
 	identifier   string
 	fileName     string
 	lineNum      int
 	context      string
 	worktreePath string
-	existingCR   *models.ChangeRequest
+}
+
+// openEditChangeRequestDialogMsg asks the root model to open the CR dialog.
+type openEditChangeRequestDialogMsg struct {
+	location   crLocation
+	existingCR *models.ChangeRequest
 }
 
 // crCreatedMsg is the result of running cf-tickets create-cr.
@@ -47,13 +52,9 @@ const (
 // EditChangeRequestDialog is the modal shown when the user presses R on a selected
 // diff line. It collects a description and creates a change request via the database.
 type EditChangeRequestDialog struct {
-	database     *db.DB
-	identifier   string
-	fileName     string
-	lineNum      int
-	context      string
-	worktreePath string
-	existingCR   *models.ChangeRequest
+	database   *db.DB
+	location   crLocation
+	existingCR *models.ChangeRequest
 
 	textArea TextArea
 	focused  crDialogFocus
@@ -64,17 +65,13 @@ type EditChangeRequestDialog struct {
 
 // NewEditChangeRequestDialog creates an EditChangeRequestDialog for the given file location.
 // If existingCR is non-nil, the dialog operates in edit mode with the description pre-populated.
-func NewEditChangeRequestDialog(database *db.DB, identifier, fileName string, lineNum int, context, worktreePath string, existingCR *models.ChangeRequest, width int) EditChangeRequestDialog {
+func NewEditChangeRequestDialog(database *db.DB, loc crLocation, existingCR *models.ChangeRequest, width int) EditChangeRequestDialog {
 	d := EditChangeRequestDialog{
-		database:     database,
-		identifier:   identifier,
-		fileName:     fileName,
-		lineNum:      lineNum,
-		context:      context,
-		worktreePath: worktreePath,
-		existingCR:   existingCR,
-		focused:      crFocusTextArea,
-		width:        width,
+		database:   database,
+		location:   loc,
+		existingCR: existingCR,
+		focused:    crFocusTextArea,
+		width:      width,
 	}
 	d.textArea = NewTextArea(d.textAreaWidth(), 5)
 	if existingCR != nil {
@@ -140,10 +137,10 @@ func (d EditChangeRequestDialog) submit() (tea.Model, tea.Cmd) {
 		)
 	}
 
-	codeLocation := fmt.Sprintf("%s:%d", d.fileName, d.lineNum)
+	codeLocation := fmt.Sprintf("%s:%d", d.location.fileName, d.location.lineNum)
 	database := d.database
-	identifier := d.identifier
-	worktreePath := d.worktreePath
+	identifier := d.location.identifier
+	worktreePath := d.location.worktreePath
 	return d, tea.Batch(
 		dismissDialogCmd(),
 		createCRCmd(database, identifier, codeLocation, description, worktreePath),
@@ -186,7 +183,7 @@ func (d EditChangeRequestDialog) View() string {
 	sb.WriteString("\n")
 
 	// File and line info.
-	sb.WriteString(theme.Current().DetailLabelStyle.Render(fmt.Sprintf("%s:%d", d.fileName, d.lineNum)))
+	sb.WriteString(theme.Current().DetailLabelStyle.Render(fmt.Sprintf("%s:%d", d.location.fileName, d.location.lineNum)))
 	sb.WriteString("\n")
 
 	// Status line (edit mode only).
@@ -198,7 +195,7 @@ func (d EditChangeRequestDialog) View() string {
 
 	// Code context.
 	taWidth := d.textAreaWidth()
-	for _, line := range strings.Split(d.context, "\n") {
+	for _, line := range strings.Split(d.location.context, "\n") {
 		sb.WriteString(theme.Current().QuickResponseOutputStyle.Render(truncateLine(strings.TrimRight(line, " \t"), taWidth)))
 		sb.WriteString("\n")
 	}

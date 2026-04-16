@@ -11,18 +11,23 @@ import (
 	"github.com/fimmtiu/code-factory/internal/ui/theme"
 )
 
+// testCRLocation returns a default crLocation for tests.
+func testCRLocation() crLocation {
+	return crLocation{identifier: "id", fileName: "file.go", lineNum: 1, context: "ctx", worktreePath: "/tmp"}
+}
+
 // newTestCRDialog creates a default EditChangeRequestDialog for tests (new-CR mode).
 func newTestCRDialog(t *testing.T, width int) EditChangeRequestDialog {
 	t.Helper()
 	ensureTheme(t)
-	return NewEditChangeRequestDialog(nil, "id", "file.go", 1, "ctx", "/tmp", nil, width)
+	return NewEditChangeRequestDialog(nil, testCRLocation(), nil, width)
 }
 
 // newTestEditCRDialog creates an EditChangeRequestDialog in edit mode for tests.
 func newTestEditCRDialog(t *testing.T, width int) EditChangeRequestDialog {
 	t.Helper()
 	ensureTheme(t)
-	return NewEditChangeRequestDialog(nil, "id", "file.go", 1, "ctx", "/tmp", &models.ChangeRequest{
+	return NewEditChangeRequestDialog(nil, testCRLocation(), &models.ChangeRequest{
 		ID:          "42",
 		Status:      models.ChangeRequestOpen,
 		Description: "existing description",
@@ -33,17 +38,18 @@ func newTestEditCRDialog(t *testing.T, width int) EditChangeRequestDialog {
 
 func TestNewEditChangeRequestDialog_ReturnsCorrectType(t *testing.T) {
 	ensureTheme(t)
-	d := NewEditChangeRequestDialog(nil, "proj/ticket", "main.go", 42, "func main() {}", "/tmp/wt", nil, 80)
+	loc := crLocation{identifier: "proj/ticket", fileName: "main.go", lineNum: 42, context: "func main() {}", worktreePath: "/tmp/wt"}
+	d := NewEditChangeRequestDialog(nil, loc, nil, 80)
 	// Verify it's an EditChangeRequestDialog (compile-time check via type assertion).
 	var _ EditChangeRequestDialog = d
-	if d.fileName != "main.go" {
-		t.Errorf("fileName = %q, want %q", d.fileName, "main.go")
+	if d.location.fileName != "main.go" {
+		t.Errorf("fileName = %q, want %q", d.location.fileName, "main.go")
 	}
-	if d.lineNum != 42 {
-		t.Errorf("lineNum = %d, want 42", d.lineNum)
+	if d.location.lineNum != 42 {
+		t.Errorf("lineNum = %d, want 42", d.location.lineNum)
 	}
-	if d.identifier != "proj/ticket" {
-		t.Errorf("identifier = %q, want %q", d.identifier, "proj/ticket")
+	if d.location.identifier != "proj/ticket" {
+		t.Errorf("identifier = %q, want %q", d.location.identifier, "proj/ticket")
 	}
 }
 
@@ -104,7 +110,8 @@ func TestEditChangeRequestDialog_Init_ReturnsNil(t *testing.T) {
 
 func TestEditChangeRequestDialog_View_ContainsNewTitle(t *testing.T) {
 	ensureTheme(t)
-	d := NewEditChangeRequestDialog(nil, "id", "main.go", 10, "some context", "/tmp", nil, 80)
+	loc := crLocation{identifier: "id", fileName: "main.go", lineNum: 10, context: "some context", worktreePath: "/tmp"}
+	d := NewEditChangeRequestDialog(nil, loc, nil, 80)
 	view := d.View()
 	if !strings.Contains(view, "New Change Request") {
 		t.Error("View() should contain 'New Change Request' title when creating")
@@ -113,7 +120,8 @@ func TestEditChangeRequestDialog_View_ContainsNewTitle(t *testing.T) {
 
 func TestEditChangeRequestDialog_View_ContainsFileAndLine(t *testing.T) {
 	ensureTheme(t)
-	d := NewEditChangeRequestDialog(nil, "id", "main.go", 42, "ctx", "/tmp", nil, 80)
+	loc := crLocation{identifier: "id", fileName: "main.go", lineNum: 42, context: "ctx", worktreePath: "/tmp"}
+	d := NewEditChangeRequestDialog(nil, loc, nil, 80)
 	view := d.View()
 	if !strings.Contains(view, "main.go:42") {
 		t.Error("View() should contain file:line info")
@@ -133,7 +141,8 @@ func TestEditChangeRequestDialog_View_ContainsButtons(t *testing.T) {
 
 func TestEditChangeRequestDialog_View_ContainsCodeContext(t *testing.T) {
 	ensureTheme(t)
-	d := NewEditChangeRequestDialog(nil, "id", "file.go", 1, "func hello() {}", "/tmp", nil, 80)
+	loc := crLocation{identifier: "id", fileName: "file.go", lineNum: 1, context: "func hello() {}", worktreePath: "/tmp"}
+	d := NewEditChangeRequestDialog(nil, loc, nil, 80)
 	view := d.View()
 	if !strings.Contains(view, "func hello()") {
 		t.Error("View() should contain code context")
@@ -238,11 +247,13 @@ func TestModel_Update_OpenEditChangeRequestDialogMsg_SetsDialog(t *testing.T) {
 	m.height = 40
 
 	updated, _ := m.Update(openEditChangeRequestDialogMsg{
-		identifier:   "proj/ticket",
-		fileName:     "main.go",
-		lineNum:      42,
-		context:      "some code",
-		worktreePath: "/tmp/wt",
+		location: crLocation{
+			identifier:   "proj/ticket",
+			fileName:     "main.go",
+			lineNum:      42,
+			context:      "some code",
+			worktreePath: "/tmp/wt",
+		},
 	})
 	model := updated.(Model)
 	if model.dialog == nil {
@@ -260,7 +271,7 @@ func TestEditChangeRequestDialog_View_UsesThemeDialogBoxStyle(t *testing.T) {
 	saveTheme(t)
 	// NormalBorder uses "┌" while the default Tan theme uses RoundedBorder "╭".
 	theme.Current().DialogBoxStyle = lipgloss.NewStyle().Border(lipgloss.NormalBorder())
-	d := NewEditChangeRequestDialog(nil, "id", "file.go", 1, "ctx", "/tmp", nil, 120)
+	d := NewEditChangeRequestDialog(nil, testCRLocation(), nil, 120)
 	view := d.View()
 	if !strings.Contains(view, "┌") {
 		t.Error("EditChangeRequestDialog.View() did not use theme.Current().DialogBoxStyle")
@@ -344,7 +355,7 @@ func TestEditChangeRequestDialog_Submit_EditMode_ReturnsCmd(t *testing.T) {
 
 func TestEditChangeRequestDialog_Submit_EditMode_EmptyShowsError(t *testing.T) {
 	ensureTheme(t)
-	d := NewEditChangeRequestDialog(nil, "id", "file.go", 1, "ctx", "/tmp", &models.ChangeRequest{
+	d := NewEditChangeRequestDialog(nil, testCRLocation(), &models.ChangeRequest{
 		ID:          "42",
 		Status:      models.ChangeRequestOpen,
 		Description: "",
@@ -373,12 +384,14 @@ func TestModel_Update_OpenEditChangeRequestDialogMsg_WithExistingCR(t *testing.T
 	}
 
 	updated, _ := m.Update(openEditChangeRequestDialogMsg{
-		identifier:   "proj/ticket",
-		fileName:     "main.go",
-		lineNum:      42,
-		context:      "some code",
-		worktreePath: "/tmp/wt",
-		existingCR:   cr,
+		location: crLocation{
+			identifier:   "proj/ticket",
+			fileName:     "main.go",
+			lineNum:      42,
+			context:      "some code",
+			worktreePath: "/tmp/wt",
+		},
+		existingCR: cr,
 	})
 	model := updated.(Model)
 	if model.dialog == nil {
