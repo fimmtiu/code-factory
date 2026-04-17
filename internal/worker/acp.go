@@ -403,6 +403,17 @@ func runACP(
 		return fmt.Errorf("ACP new session: %w", err)
 	}
 
+	// Put the session into "auto" mode so Claude grants routine permissions
+	// without round-tripping through requestPermission. Undocumented in the
+	// ACP spec and SDKs as of 2026-04, but accepted by the claude-code-acp
+	// wrapper and honored by Claude itself.
+	if _, err := conn.SetSessionMode(ctx, acp.SetSessionModeRequest{
+		SessionId: sessResp.SessionId,
+		ModeId:    "auto",
+	}); err != nil {
+		_, _ = fmt.Fprintf(logFile, "[warn] set session mode to auto: %v\n", err)
+	}
+
 	_, _ = fmt.Fprintf(logFile, "=== SESSION ===\n%s\n\n=== PROMPT ===\n%s\n\n=== OUTPUT ===\n",
 		sessResp.SessionId, params.Prompt)
 
