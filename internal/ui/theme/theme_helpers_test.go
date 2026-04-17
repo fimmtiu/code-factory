@@ -85,7 +85,6 @@ func assertPhaseBadgeStyles(t *testing.T, th *Theme) {
 		models.PhaseImplement,
 		models.PhaseRefactor,
 		models.PhaseReview,
-		models.PhaseRespond,
 		models.PhaseBlocked,
 		models.PhaseDone,
 	}

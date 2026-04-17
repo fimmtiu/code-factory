@@ -832,7 +832,7 @@ func claimTicketRow(tx *sql.Tx, pid int) (int64, *models.WorkUnit, error) {
 		WHERE id = (
 			SELECT id FROM tickets
 			WHERE phase NOT IN ('blocked', 'done')
-			  AND status = 'idle'
+			  AND status IN ('idle', 'responding')
 			  AND claimed_by IS NULL
 			LIMIT 1
 		)
@@ -848,16 +848,17 @@ func claimTicketRow(tx *sql.Tx, pid int) (int64, *models.WorkUnit, error) {
 		return 0, nil, fmt.Errorf("no claimable ticket available")
 	}
 
-	// Read back the ticket we just claimed. The status is still 'idle' at this
-	// point (the caller transitions it to in-progress), and a worker can only
-	// hold one idle ticket at a time, so this is unambiguous.
+	// Read back the ticket we just claimed. The status is still 'idle' or
+	// 'responding' at this point (the caller transitions it to its active
+	// counterpart), and a worker can only hold one claimable ticket at a time,
+	// so this is unambiguous.
 	var id int64
 	var identifier, description, phase, status, parentBranch string
 	var projectID sql.NullInt64
 	err = tx.QueryRow(`
 		SELECT id, identifier, description, phase, status, project_id, parent_branch
 		FROM tickets
-		WHERE claimed_by = ? AND status = 'idle'
+		WHERE claimed_by = ? AND status IN ('idle', 'responding')
 		LIMIT 1
 	`, pid).Scan(&id, &identifier, &description, &phase, &status, &projectID, &parentBranch)
 	if err != nil {
@@ -975,16 +976,19 @@ func (d *DB) ResetTicket(identifier string) error {
 }
 
 // RecoverOrphanedTickets resets all tickets stuck in a running state
-// (in-progress or needs-attention) back to idle with no claim. This is
-// called at startup to recover from hard kills where workers died without
-// cleaning up. Returns the number of tickets recovered.
+// (working, responding, or needs-attention) so they become re-claimable.
+// Working and needs-attention tickets revert to idle; responding tickets
+// stay in responding so the pending /cf-respond run is retried. Called at
+// startup to recover from hard kills where workers died without cleaning
+// up. Returns the number of tickets recovered.
 func (d *DB) RecoverOrphanedTickets() (int, error) {
 	var count int
 	err := d.withTx(func(tx *sql.Tx) error {
+		now := time.Now().Unix()
 		res, err := tx.Exec(
 			`UPDATE tickets SET status = 'idle', claimed_by = NULL, last_updated = ?
-			 WHERE status IN ('in-progress', 'needs-attention')`,
-			time.Now().Unix(),
+			 WHERE status IN ('working', 'needs-attention')`,
+			now,
 		)
 		if err != nil {
 			return err
@@ -993,7 +997,19 @@ func (d *DB) RecoverOrphanedTickets() (int, error) {
 		if err != nil {
 			return err
 		}
-		count = int(n)
+		res, err = tx.Exec(
+			`UPDATE tickets SET claimed_by = NULL, last_updated = ?
+			 WHERE status = 'responding'`,
+			now,
+		)
+		if err != nil {
+			return err
+		}
+		m, err := res.RowsAffected()
+		if err != nil {
+			return err
+		}
+		count = int(n + m)
 		return nil
 	})
 	return count, err
@@ -1243,14 +1259,15 @@ func (d *DB) InsertLog(workerNumber int, message string, logfile string) error {
 	})
 }
 
-// FindInProgressTickets returns all tickets currently in the in-progress state.
+// FindInProgressTickets returns all tickets currently in an active state
+// (working or responding).
 // The caller is responsible for determining which of these are stale (e.g. by
 // checking logfile modification times).
 func (d *DB) FindInProgressTickets() ([]*models.WorkUnit, error) {
 	rows, err := d.db.Query(`
 		SELECT identifier, description, phase, status, claimed_by, last_updated
 		FROM tickets
-		WHERE status = 'in-progress'
+		WHERE status IN ('working', 'responding')
 	`)
 	if err != nil {
 		return nil, fmt.Errorf("find in-progress tickets: %w", err)

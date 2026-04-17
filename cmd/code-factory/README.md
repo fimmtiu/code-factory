@@ -1,6 +1,6 @@
 # code-factory
 
-A terminal UI application that manages a pool of Claude Code agents to automatically work through the tickets in a repository's `.code-factory/` directory. Workers claim tickets, run the appropriate agent prompt for each phase, and advance tickets through the implement → refactor → review → respond → done pipeline.
+A terminal UI application that manages a pool of Claude Code agents to automatically work through the tickets in a repository's `.code-factory/` directory. Workers claim tickets, run the appropriate agent prompt for each phase, and advance tickets through the implement → refactor → review → done pipeline. After each phase, if reviewers have filed change requests, a `/cf-respond` run is interleaved to address them before the ticket advances.
 
 ## Prerequisites
 
@@ -49,10 +49,10 @@ The TUI has four views, switched with F1–F4 or Shift-Tab / Ctrl-Tab:
 ## Worker lifecycle
 
 Each worker continuously:
-1. Claims the next available `idle` ticket from the database.
-2. Sets the ticket to `in-progress` and runs the phase-appropriate agent prompt via Claude Code ACP.
+1. Claims the next available `idle` or `responding` ticket from the database.
+2. Sets the ticket to `working` (or leaves it `responding`) and runs the appropriate agent prompt via Claude Code ACP — the phase skill for `idle` tickets, `/cf-respond` for `responding` tickets.
 3. On completion, sets the ticket to `user-review` and releases it.
-4. Waits for the user to approve via `A` before advancing to the next phase.
+4. Waits for the user to approve via `A`. If the ticket has open change requests, approval sends it back to `responding` to address them; otherwise it advances to the next phase.
 
 If an agent asks a question or requests a permission, the ticket becomes `needs-attention` and the worker pauses until the user responds with `R`.
 
@@ -87,6 +87,6 @@ Settings are read from `.code-factory/settings.json` at startup.
 | `model_implement` | `"sonnet"` | Claude model for the implementation phase |
 | `model_refactor` | `"opus"` | Claude model for the refactoring phase |
 | `model_review` | `"opus"` | Claude model for the review phase |
-| `model_respond` | `"opus"` | Claude model for the response phase |
+| `model_respond` | `"opus"` | Claude model used when responding to change requests |
 | `effort` | `"high"` | Effort level for the agent (`"low"`, `"normal"`, `"high"`, or `"max"`) |
 | `terminal_theme` | `"tan"` | Terminal colour theme (`"tan"`, `"dark"`, or `"light"`) |

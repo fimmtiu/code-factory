@@ -147,7 +147,6 @@ func buildTheme(p Palette) *Theme {
 			models.PhaseImplement: lipgloss.NewStyle().Foreground(p.PhaseImplement),
 			models.PhaseRefactor:  lipgloss.NewStyle().Foreground(p.PhaseRefactor),
 			models.PhaseReview:    lipgloss.NewStyle().Foreground(p.PhaseReview),
-			models.PhaseRespond:   lipgloss.NewStyle().Foreground(p.PhaseRespond),
 			models.PhaseBlocked:   lipgloss.NewStyle().Foreground(p.PhaseBlocked),
 			models.PhaseDone:      lipgloss.NewStyle().Foreground(p.Success),
 		},

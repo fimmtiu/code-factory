@@ -9,11 +9,19 @@ import (
 )
 
 // BuildPrompt generates the appropriate prompt for the Claude agent based on
-// the ticket's current phase. For the implement phase, it also appends context
-// from the ticket's parent project hierarchy.
+// the ticket's current status and phase. A status of "responding" runs the
+// /cf-respond skill regardless of phase; otherwise the phase drives the
+// prompt. For the implement phase, it also appends context from the ticket's
+// parent project hierarchy.
 func BuildPrompt(ticket *models.WorkUnit, database *db.DB, ticketsDir string) (string, error) {
 	identifier := ticket.Identifier
 	worktreePath := storage.TicketWorktreePathIn(ticketsDir, identifier)
+
+	if ticket.Status == models.StatusResponding {
+		env := DetectWorktreeEnv(worktreePath)
+		return env.FormatEnvBlock() +
+			fmt.Sprintf("/cf-respond on worktree `%s` for ticket `%s`", worktreePath, identifier), nil
+	}
 
 	var prompt string
 	switch ticket.Phase {
@@ -51,11 +59,6 @@ func BuildPrompt(ticket *models.WorkUnit, database *db.DB, ticketsDir string) (s
 		env := DetectWorktreeEnv(worktreePath)
 		prompt = env.FormatEnvBlock() +
 			fmt.Sprintf("/cf-review on worktree `%s` for ticket `%s`", worktreePath, identifier)
-
-	case models.PhaseRespond:
-		env := DetectWorktreeEnv(worktreePath)
-		prompt = env.FormatEnvBlock() +
-			fmt.Sprintf("/cf-respond on worktree `%s` for ticket `%s`", worktreePath, identifier)
 
 	default:
 		return "", fmt.Errorf("BuildPrompt: unsupported ticket phase %q", ticket.Phase)

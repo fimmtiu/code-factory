@@ -17,8 +17,11 @@ type WorkParams struct {
 	WorktreePath string
 	Identifier   string
 	Phase        models.TicketPhase
-	Prompt       string
-	LogfilePath  string
+	// Status is the active status the worker is running under: StatusWorking
+	// for a normal phase run, StatusResponding for a /cf-respond run.
+	Status      models.TicketStatus
+	Prompt      string
+	LogfilePath string
 }
 
 // WorkFn is the signature for the function that does the actual work on a

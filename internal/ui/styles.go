@@ -60,7 +60,6 @@ var (
 	colourPhaseImplement = lipgloss.Color("37")  // teal
 	colourPhaseRefactor  = lipgloss.Color("166") // amber (same as colourWarning)
 	colourPhaseReview    = lipgloss.Color("69")  // blue
-	colourPhaseRespond   = lipgloss.Color("135") // purple
 	colourPhaseBlocked   = lipgloss.Color("124") // dark red
 )
 
@@ -191,7 +190,6 @@ var (
 		models.PhaseImplement: lipgloss.NewStyle().Foreground(colourPhaseImplement),
 		models.PhaseRefactor:  lipgloss.NewStyle().Foreground(colourPhaseRefactor),
 		models.PhaseReview:    lipgloss.NewStyle().Foreground(colourPhaseReview),
-		models.PhaseRespond:   lipgloss.NewStyle().Foreground(colourPhaseRespond),
 		models.PhaseBlocked:   lipgloss.NewStyle().Foreground(colourPhaseBlocked),
 		models.PhaseDone:      lipgloss.NewStyle().Foreground(colourSuccess),
 	}

@@ -68,7 +68,7 @@ func TestWorkUnitJSONRoundTrip(t *testing.T) {
 		Identifier:   "my-project/fix-bug",
 		Description:  "Fix the bug in the widget",
 		Phase:        PhaseImplement,
-		Status:       StatusInProgress,
+		Status:       StatusWorking,
 		Dependencies: []string{"my-project/setup-env"},
 		LastUpdated:  now,
 		IsProject:    false,

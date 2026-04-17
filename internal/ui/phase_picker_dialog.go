@@ -27,7 +27,6 @@ var pickerPhases = []models.TicketPhase{
 	models.PhaseImplement,
 	models.PhaseRefactor,
 	models.PhaseReview,
-	models.PhaseRespond,
 }
 
 type ppFocus int

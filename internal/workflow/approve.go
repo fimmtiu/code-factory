@@ -8,12 +8,19 @@ import (
 	"github.com/fimmtiu/code-factory/internal/models"
 )
 
-// Approve advances the given ticket to its next phase. The transitions are:
+// Approve advances the given ticket to its next phase, or queues it for
+// /cf-respond if the reviewer left open change requests.
+//
+// If the ticket has any open change requests, its status is set to
+// "responding" (phase unchanged) so a worker will pick it up and run the
+// /cf-respond skill. When that finishes the worker sets the ticket back to
+// "user-review" for the next round of approval.
+//
+// Otherwise the phase advances:
 //
 //	implement → refactor
 //	refactor  → review
-//	review    → respond
-//	respond   → done (rebases branch onto parent, fast-forwards the parent,
+//	review    → done (rebases branch onto parent, fast-forwards the parent,
 //	            removes worktree, then checks recursive project completion)
 //
 // Returns an error if the ticket is not found or is in a phase that cannot be
@@ -25,13 +32,22 @@ func Approve(database *db.DB, identifier string) error {
 	}
 
 	switch phase {
+	case models.PhaseImplement, models.PhaseRefactor, models.PhaseReview:
+		crs, err := database.OpenChangeRequests(identifier)
+		if err != nil {
+			return err
+		}
+		if len(crs) > 0 {
+			return database.SetStatus(identifier, phase, models.StatusResponding)
+		}
+	}
+
+	switch phase {
 	case models.PhaseImplement:
 		return database.SetStatus(identifier, models.PhaseRefactor, models.StatusIdle)
 	case models.PhaseRefactor:
 		return database.SetStatus(identifier, models.PhaseReview, models.StatusIdle)
 	case models.PhaseReview:
-		return database.SetStatus(identifier, models.PhaseRespond, models.StatusIdle)
-	case models.PhaseRespond:
 		if err := database.SetStatus(identifier, models.PhaseDone, models.StatusIdle); err != nil {
 			return err
 		}

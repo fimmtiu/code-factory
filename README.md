@@ -8,16 +8,15 @@ Tickets live in a `.code-factory/` directory inside your repository alongside yo
 
 ## Ticket phases
 
-Each ticket moves through four phases of work:
+Each ticket moves through three phases of work:
 
 | Phase | What the agent does |
 |-------|-------------------|
 | `implement` | Writes specs first, then implements the ticket |
 | `refactor` | Refactors and cleans up the resulting code |
 | `review` | Reviews the refactored changes and makes change requests |
-| `respond` | Applies any open change requests which it deems worth doing |
 
-You approve each phase transition. When all phases are done, the ticket's branch is rebased onto its parent project's worktree (or a top-level project branch) and the parent is fast-forwarded to the rebased tip, producing linear history with no merge commit. The worktree is then removed.
+You approve each phase transition. After each phase, if any change requests are open on the ticket, a `/cf-respond` run is interleaved to apply them before the ticket can move on. When the final `review` phase is approved with no open change requests, the ticket's branch is rebased onto its parent project's worktree (or a top-level project branch) and the parent is fast-forwarded to the rebased tip, producing linear history with no merge commit. The worktree is then removed.
 
 ---
 
@@ -142,7 +141,7 @@ See each binary's README in `cmd/` for full documentation.
 
 ## Claude Code skills
 
-The `skills/` directory contains Claude Code skills that are installed to `~/.claude/skills/` by `make install`. These are used by agent workers during the refactor, review, and respond phases:
+The `skills/` directory contains Claude Code skills that are installed to `~/.claude/skills/` by `make install`. These are used by agent workers during the refactor and review phases, and by `/cf-respond` runs interleaved between phases to apply change requests:
 
 | Skill | Trigger | Purpose |
 |-------|---------|---------|

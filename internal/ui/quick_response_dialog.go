@@ -161,7 +161,10 @@ func sendResponseToWorker(wu *models.WorkUnit, database *db.DB, pool *worker.Poo
 		return respondToAgentDoneMsg{errMsg: fmt.Sprintf("response error: worker %d not found", workerNum)}
 	}
 	w.SendResponse(text)
-	_ = database.SetStatus(wu.Identifier, wu.Phase, models.StatusInProgress)
+	// The worker's ACP client restores the ticket to its true active status
+	// (working or responding) when it processes the response; setting
+	// StatusWorking here just keeps the UI snappy for the common case.
+	_ = database.SetStatus(wu.Identifier, wu.Phase, models.StatusWorking)
 	return respondToAgentDoneMsg{}
 }
 

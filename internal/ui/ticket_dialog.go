@@ -44,7 +44,6 @@ var phaseOrder = []struct {
 	{models.PhaseImplement, "Implement"},
 	{models.PhaseRefactor, "Refactor"},
 	{models.PhaseReview, "Review"},
-	{models.PhaseRespond, "Respond"},
 }
 
 // wrapLine splits a single line into display lines of at most width visual

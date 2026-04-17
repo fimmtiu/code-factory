@@ -102,7 +102,6 @@ func TestBuildThemePhaseBadgeStyles(t *testing.T) {
 		models.PhaseImplement,
 		models.PhaseRefactor,
 		models.PhaseReview,
-		models.PhaseRespond,
 		models.PhaseBlocked,
 		models.PhaseDone,
 	}

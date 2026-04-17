@@ -276,7 +276,7 @@ func TestPhasePickerDialog_View_ContainsPhases(t *testing.T) {
 	d := NewPhasePickerDialog(nil, wu)
 	view := d.View()
 
-	for _, phase := range []string{"implement", "refactor", "review", "respond"} {
+	for _, phase := range []string{"implement", "refactor", "review"} {
 		if !strings.Contains(view, phase) {
 			t.Errorf("PhasePickerDialog.View() should contain phase %q", phase)
 		}

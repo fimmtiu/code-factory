@@ -326,14 +326,14 @@ func TestFindInProgressTickets_ReturnsInProgressTickets(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Claim: %v", err)
 	}
-	if err := d.SetStatus(ta.Identifier, ta.Phase, models.StatusInProgress); err != nil {
+	if err := d.SetStatus(ta.Identifier, ta.Phase, models.StatusWorking); err != nil {
 		t.Fatalf("SetStatus: %v", err)
 	}
 	tb, err := d.Claim(2)
 	if err != nil {
 		t.Fatalf("Claim: %v", err)
 	}
-	if err := d.SetStatus(tb.Identifier, tb.Phase, models.StatusInProgress); err != nil {
+	if err := d.SetStatus(tb.Identifier, tb.Phase, models.StatusWorking); err != nil {
 		t.Fatalf("SetStatus: %v", err)
 	}
 
@@ -543,7 +543,7 @@ func TestResetTicket_ResetsStatusAndClaim(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Claim: %v", err)
 	}
-	if err := d.SetStatus(ticket.Identifier, ticket.Phase, models.StatusInProgress); err != nil {
+	if err := d.SetStatus(ticket.Identifier, ticket.Phase, models.StatusWorking); err != nil {
 		t.Fatalf("SetStatus: %v", err)
 	}
 
@@ -572,7 +572,7 @@ func TestRecoverOrphanedTickets_ResetsRunningTickets(t *testing.T) {
 
 	// Set up various states to simulate a hard kill mid-run.
 	t1, _ := d.Claim(1)
-	_ = d.SetStatus(t1.Identifier, t1.Phase, models.StatusInProgress)
+	_ = d.SetStatus(t1.Identifier, t1.Phase, models.StatusWorking)
 
 	t2, _ := d.Claim(2)
 	_ = d.SetStatus(t2.Identifier, t2.Phase, models.StatusNeedsAttention)

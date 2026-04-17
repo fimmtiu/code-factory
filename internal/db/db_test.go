@@ -297,7 +297,7 @@ func TestActionableTickets_ReturnsOnlyActionable(t *testing.T) {
 	if err := d.SetStatus("proj/t2", "implement", "user-review"); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.SetStatus("proj/t3", "implement", "in-progress"); err != nil {
+	if err := d.SetStatus("proj/t3", "implement", "working"); err != nil {
 		t.Fatal(err)
 	}
 	// t4 stays idle
@@ -329,7 +329,7 @@ func TestGetTicket_ReturnsSingleTicket(t *testing.T) {
 	if err := d.CreateTicket("proj/ticket", "A ticket", []string{"proj/dep"}, ""); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.SetStatus("proj/ticket", "implement", "in-progress"); err != nil {
+	if err := d.SetStatus("proj/ticket", "implement", "working"); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.AddChangeRequest("proj/ticket", "main.go:42", "alice", "fix this"); err != nil {
@@ -346,7 +346,7 @@ func TestGetTicket_ReturnsSingleTicket(t *testing.T) {
 	if wu.Description != "A ticket" {
 		t.Errorf("expected description 'A ticket', got %q", wu.Description)
 	}
-	if wu.Status != "in-progress" {
+	if wu.Status != "working" {
 		t.Errorf("expected status in-progress, got %q", wu.Status)
 	}
 	if wu.IsProject {

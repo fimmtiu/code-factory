@@ -11,12 +11,12 @@ func TestIsValidTicketPhase(t *testing.T) {
 		{"plan", false},
 		{"implement", true},
 		{"review", true},
-		{"respond", true},
+		{"respond", false},
 		{"refactor", true},
 		{"done", true},
 		{"", false},
 		{"open", false},
-		{"in-progress", false},
+		{"working", false},
 		{"PLAN", false},
 		{"closed", false},
 	}
@@ -36,11 +36,13 @@ func TestIsValidTicketStatus(t *testing.T) {
 	}{
 		{"idle", true},
 		{"needs-attention", true},
-		{"in-progress", true},
+		{"working", true},
+		{"responding", true},
 		{"user-review", true},
 		{"", false},
 		{"open", false},
 		{"done", false},
+		{"in-progress", false},
 		{"IDLE", false},
 	}
 
@@ -62,9 +64,6 @@ func TestTicketPhaseConstants(t *testing.T) {
 	if PhaseReview != "review" {
 		t.Errorf("PhaseReview = %q, want %q", PhaseReview, "review")
 	}
-	if PhaseRespond != "respond" {
-		t.Errorf("PhaseRespond = %q, want %q", PhaseRespond, "respond")
-	}
 	if PhaseRefactor != "refactor" {
 		t.Errorf("PhaseRefactor = %q, want %q", PhaseRefactor, "refactor")
 	}
@@ -80,8 +79,11 @@ func TestTicketStatusConstants(t *testing.T) {
 	if StatusNeedsAttention != "needs-attention" {
 		t.Errorf("StatusNeedsAttention = %q, want %q", StatusNeedsAttention, "needs-attention")
 	}
-	if StatusInProgress != "in-progress" {
-		t.Errorf("StatusInProgress = %q, want %q", StatusInProgress, "in-progress")
+	if StatusWorking != "working" {
+		t.Errorf("StatusWorking = %q, want %q", StatusWorking, "working")
+	}
+	if StatusResponding != "responding" {
+		t.Errorf("StatusResponding = %q, want %q", StatusResponding, "responding")
 	}
 	if StatusUserReview != "user-review" {
 		t.Errorf("StatusUserReview = %q, want %q", StatusUserReview, "user-review")

@@ -27,9 +27,10 @@ type acpWorkerClient struct {
 	logMu   sync.Mutex // guards logFile, partialLine, and committedLines
 
 	// db and ticket state needed for permission handling.
-	database   dbInterface
-	identifier string
-	phase      models.TicketPhase
+	database     dbInterface
+	identifier   string
+	phase        models.TicketPhase
+	activeStatus models.TicketStatus // status to restore when a permission request resolves
 
 	logCh chan<- LogMessage
 
@@ -182,7 +183,7 @@ func (c *acpWorkerClient) RequestPermission(ctx context.Context, params acp.Requ
 	case <-ctx.Done():
 		c.w.SetPendingPermission(nil)
 		c.w.Status = StatusBusy
-		_ = c.database.SetStatus(c.identifier, c.phase, models.StatusInProgress)
+		_ = c.database.SetStatus(c.identifier, c.phase, c.activeStatus)
 		return acp.RequestPermissionResponse{
 			Outcome: acp.RequestPermissionOutcome{
 				Cancelled: &acp.RequestPermissionOutcomeCancelled{},
@@ -192,7 +193,7 @@ func (c *acpWorkerClient) RequestPermission(ctx context.Context, params acp.Requ
 	case msg := <-c.w.ToWorker:
 		c.w.SetPendingPermission(nil)
 		c.w.Status = StatusBusy
-		_ = c.database.SetStatus(c.identifier, c.phase, models.StatusInProgress)
+		_ = c.database.SetStatus(c.identifier, c.phase, c.activeStatus)
 		c.logCh <- NewLogMessage(c.w.Number, fmt.Sprintf("permission response for %s: %s", c.identifier, msg.Payload))
 		c.appendOutput("\n=== USER RESPONSE ===\n")
 		for _, line := range strings.Split(msg.Payload, "\n") {
@@ -328,7 +329,7 @@ func runACP(
 
 	acpArgs := []string{"-y", "@zed-industries/claude-code-acp@latest"}
 	if config.Current != nil {
-		if model := config.Current.ModelForPhase(string(params.Phase)); model != "" {
+		if model := config.Current.ModelForWork(string(params.Status), string(params.Phase)); model != "" {
 			acpArgs = append(acpArgs, "--model", model)
 		}
 		if config.Current.Effort != "" {
@@ -373,12 +374,13 @@ func runACP(
 	}
 
 	client := &acpWorkerClient{
-		w:          w,
-		logFile:    logFile,
-		database:   database,
-		identifier: params.Identifier,
-		phase:      params.Phase,
-		logCh:      logCh,
+		w:            w,
+		logFile:      logFile,
+		database:     database,
+		identifier:   params.Identifier,
+		phase:        params.Phase,
+		activeStatus: params.Status,
+		logCh:        logCh,
 	}
 
 	conn := acp.NewClientSideConnection(client, stdin, stdout)

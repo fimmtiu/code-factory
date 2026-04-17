@@ -50,7 +50,6 @@ func TanPalette() Palette {
 		PhaseImplement: lipgloss.Color("37"),
 		PhaseRefactor:  lipgloss.Color("166"),
 		PhaseReview:    lipgloss.Color("69"),
-		PhaseRespond:   lipgloss.Color("135"),
 		PhaseBlocked:   lipgloss.Color("124"),
 
 		// Timestamp tiers (recent = dark, old = light — visible on tan bg).

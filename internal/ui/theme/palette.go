@@ -51,7 +51,6 @@ type Palette struct {
 	PhaseImplement lipgloss.Color
 	PhaseRefactor  lipgloss.Color
 	PhaseReview    lipgloss.Color
-	PhaseRespond   lipgloss.Color
 	PhaseBlocked   lipgloss.Color
 
 	// Timestamp tiers — ordered from most-recent to oldest.  Each palette

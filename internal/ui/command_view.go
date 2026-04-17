@@ -645,7 +645,7 @@ func debugPromptCmd(wu *models.WorkUnit, phase models.TicketPhase, logfilePath s
 		}
 
 		claudeCmd := "claude"
-		if model := config.Current.ModelForPhase(string(phase)); model != "" {
+		if model := config.Current.ModelForWork(string(wu.Status), string(phase)); model != "" {
 			claudeCmd += " --model " + model
 		}
 		if config.Current.Effort != "" {
@@ -687,10 +687,15 @@ func buildDebugTemplate(wu *models.WorkUnit, phase models.TicketPhase, worktreeP
 			intro:  "the /cf-review skill to review the recent changes on this ticket",
 			adjust: "either the skill or the ticket description",
 		},
-		models.PhaseRespond: {
+	}
+	// When the ticket is queued for /cf-respond (status "responding"), use the
+	// respond template regardless of phase.
+	if wu.Status == models.StatusResponding {
+		pi := phaseInfo{
 			intro:  "the /cf-respond skill to apply change requests to this ticket",
 			adjust: "either the skill or the ticket description",
-		},
+		}
+		info[phase] = pi
 	}
 	pi, ok := info[phase]
 	if !ok {

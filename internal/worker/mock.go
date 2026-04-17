@@ -122,8 +122,8 @@ func MockWorkFn(ctx context.Context, w *Worker, database dbInterface, logCh chan
 		return nil
 	case msg := <-w.ToWorker:
 		w.Status = StatusBusy
-		if err := database.SetStatus(params.Identifier, params.Phase, models.StatusInProgress); err != nil {
-			logCh <- NewLogMessage(w.Number, fmt.Sprintf("[mock] error restoring in-progress: %v", err))
+		if err := database.SetStatus(params.Identifier, params.Phase, params.Status); err != nil {
+			logCh <- NewLogMessage(w.Number, fmt.Sprintf("[mock] error restoring %s: %v", params.Status, err))
 		}
 		writeLog("\n=== USER RESPONSE ===")
 		for _, line := range strings.Split(msg.Payload, "\n") {

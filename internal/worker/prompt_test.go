@@ -140,22 +140,24 @@ func TestBuildPrompt_Review(t *testing.T) {
 	}
 }
 
-func TestBuildPrompt_Respond(t *testing.T) {
+func TestBuildPrompt_RespondingStatus(t *testing.T) {
 	d, ticketsDir := openTestDB(t)
 	createProject(t, d, "proj")
 	createTicket(t, d, "proj/ticket-1")
 
-	ticket := buildPromptTicket("proj/ticket-1", "Some description", models.PhaseRespond)
+	// Status "responding" overrides the phase and invokes /cf-respond.
+	ticket := buildPromptTicket("proj/ticket-1", "Some description", models.PhaseImplement)
+	ticket.Status = models.StatusResponding
 	prompt, err := worker.BuildPrompt(ticket, d, ticketsDir)
 	if err != nil {
 		t.Fatalf("BuildPrompt: %v", err)
 	}
 
 	if !strings.Contains(prompt, "/cf-respond") {
-		t.Error("expected /cf-respond in respond prompt")
+		t.Error("expected /cf-respond in responding-status prompt")
 	}
 	if !strings.Contains(prompt, "proj/ticket-1") {
-		t.Error("expected ticket identifier in respond prompt")
+		t.Error("expected ticket identifier in responding-status prompt")
 	}
 }
 

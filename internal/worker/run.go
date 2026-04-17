@@ -36,10 +36,24 @@ func (w *Worker) run(ctx context.Context, pollIntervalSecs int) {
 	}
 }
 
-// processTicket sets the ticket to in-progress, runs the Claude ACP subprocess,
-// transitions the ticket to user-review, and releases it.
+// processTicket transitions the claimed ticket to its active status
+// (working for a normal phase run, responding for a /cf-respond run), runs
+// the Claude ACP subprocess, transitions the ticket to user-review, and
+// releases it.
 func (w *Worker) processTicket(ctx context.Context, ticket *models.WorkUnit) {
 	identifier := ticket.Identifier
+
+	// Determine whether this is a responding run (ticket was claimed with
+	// status "responding") or a normal phase run (claimed idle).
+	isResponding := ticket.Status == models.StatusResponding
+	activeStatus := models.StatusWorking
+	logfilePhase := string(ticket.Phase)
+	displayLabel := string(ticket.Phase)
+	if isResponding {
+		activeStatus = models.StatusResponding
+		logfilePhase = "respond"
+		displayLabel = "respond"
+	}
 
 	// Create a per-task context so housekeeping can abort just this task
 	// without tearing down the entire pool.
@@ -48,10 +62,10 @@ func (w *Worker) processTicket(ctx context.Context, ticket *models.WorkUnit) {
 	defer w.setCancel(nil)
 	defer taskCancel()
 
-	w.SetCurrentTicket(string(ticket.Phase) + " " + identifier)
+	w.SetCurrentTicket(displayLabel + " " + identifier)
 	w.Status = StatusBusy
-	if err := w.database.SetStatus(identifier, ticket.Phase, models.StatusInProgress); err != nil {
-		w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("error setting in-progress on %s: %v", identifier, err))
+	if err := w.database.SetStatus(identifier, ticket.Phase, activeStatus); err != nil {
+		w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("error setting %s on %s: %v", activeStatus, identifier, err))
 		w.SetCurrentTicket("")
 		w.Status = StatusIdle
 		return
@@ -61,12 +75,16 @@ func (w *Worker) processTicket(ctx context.Context, ticket *models.WorkUnit) {
 
 	// Rebase onto the parent branch at the start of every phase so the
 	// ticket sees work from sibling tickets that have already been merged.
-	if err := w.database.RebaseTicketOnParent(identifier, ticket.Parent, ticket.ParentBranch); err != nil {
-		w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("warning: rebase failed for %s, continuing on stale base: %v", identifier, err))
+	// Skip the rebase for responding runs: the previous user review is still
+	// in-flight and we don't want to drag in sibling work mid-review.
+	if !isResponding {
+		if err := w.database.RebaseTicketOnParent(identifier, ticket.Parent, ticket.ParentBranch); err != nil {
+			w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("warning: rebase failed for %s, continuing on stale base: %v", identifier, err))
+		}
 	}
 
 	worktreePath := storage.TicketWorktreePathIn(w.ticketsDir, identifier)
-	logfilePath := NextLogfilePath(w.ticketsDir, identifier, string(ticket.Phase))
+	logfilePath := NextLogfilePath(w.ticketsDir, identifier, logfilePhase)
 
 	prompt, err := BuildPrompt(ticket, w.database, w.ticketsDir)
 	if err != nil {
@@ -80,18 +98,27 @@ func (w *Worker) processTicket(ctx context.Context, ticket *models.WorkUnit) {
 		WorktreePath: worktreePath,
 		Identifier:   identifier,
 		Phase:        ticket.Phase,
+		Status:       activeStatus,
 		Prompt:       prompt,
 		LogfilePath:  logfilePath,
 	})
 
 	if taskCtx.Err() != nil {
-		w.handleAbort(ctx, identifier, ticket.Phase)
+		w.handleAbort(ctx, identifier, ticket.Phase, isResponding)
 		return
+	}
+
+	// On error, restore the pre-active status so the ticket stays claimable
+	// (idle for normal runs, responding for a /cf-respond run — both are
+	// valid claim states).
+	resetStatus := models.StatusIdle
+	if isResponding {
+		resetStatus = models.StatusResponding
 	}
 
 	if acpErr != nil {
 		w.logCh <- NewLogMessageWithFile(w.Number, fmt.Sprintf("ACP error on %s: %v", identifier, acpErr), logfilePath)
-		if err := w.database.SetStatus(identifier, ticket.Phase, models.StatusIdle); err != nil {
+		if err := w.database.SetStatus(identifier, ticket.Phase, resetStatus); err != nil {
 			w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("error resetting %s after ACP error: %v", identifier, err))
 		}
 		w.releaseTicket(identifier)
@@ -124,9 +151,13 @@ func (w *Worker) releaseTicket(identifier string) {
 // is also cancelled (shutdown), the ticket is still ours and we reset it. If
 // only the task context was cancelled (housekeeping abort), the ticket was
 // already reset in the DB and possibly reclaimed, so we only clean up local state.
-func (w *Worker) handleAbort(poolCtx context.Context, identifier string, phase models.TicketPhase) {
+func (w *Worker) handleAbort(poolCtx context.Context, identifier string, phase models.TicketPhase, isResponding bool) {
 	if poolCtx.Err() != nil {
-		_ = w.database.SetStatus(identifier, phase, models.StatusIdle)
+		resetStatus := models.StatusIdle
+		if isResponding {
+			resetStatus = models.StatusResponding
+		}
+		_ = w.database.SetStatus(identifier, phase, resetStatus)
 		w.releaseTicket(identifier)
 	} else {
 		w.SetCurrentTicket("")

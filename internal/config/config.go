@@ -34,9 +34,10 @@ type Settings struct {
 	// "terminal". Defaults to "iterm2".
 	Terminal string `json:"terminal" default:"iterm2"`
 
-	// ModelImplement, ModelRefactor, ModelReview, and ModelRespond set the
-	// Claude model used for each ticket phase independently. Empty string uses
-	// Claude's default model for that phase.
+	// ModelImplement, ModelRefactor, and ModelReview set the Claude model used
+	// for each ticket phase. ModelRespond is used when a ticket is in the
+	// "responding" status and a worker is running the /cf-respond skill.
+	// Empty string uses Claude's default model.
 	ModelImplement string `json:"model_implement" default:"sonnet"`
 	ModelRefactor  string `json:"model_refactor" default:"opus"`
 	ModelReview    string `json:"model_review" default:"opus"`
@@ -51,9 +52,14 @@ type Settings struct {
 	TerminalTheme string `json:"terminal_theme" default:"tan"`
 }
 
-// ModelForPhase returns the configured model for the given ticket phase,
-// or an empty string if none is set (meaning use Claude's default).
-func (s *Settings) ModelForPhase(phase string) string {
+// ModelForWork returns the configured model for a work run. If status is
+// "responding", ModelRespond is returned regardless of phase (the worker is
+// running /cf-respond). Otherwise the phase selects the model. Returns an
+// empty string if none is set (meaning use Claude's default).
+func (s *Settings) ModelForWork(status, phase string) string {
+	if status == "responding" {
+		return s.ModelRespond
+	}
 	switch phase {
 	case "implement":
 		return s.ModelImplement
@@ -61,8 +67,6 @@ func (s *Settings) ModelForPhase(phase string) string {
 		return s.ModelRefactor
 	case "review":
 		return s.ModelReview
-	case "respond":
-		return s.ModelRespond
 	}
 	return ""
 }

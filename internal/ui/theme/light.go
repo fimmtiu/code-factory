@@ -53,7 +53,6 @@ func LightPalette() Palette {
 		PhaseImplement: lipgloss.Color("30"),  // teal
 		PhaseRefactor:  lipgloss.Color("130"), // dark amber
 		PhaseReview:    lipgloss.Color("62"),  // medium purple
-		PhaseRespond:   lipgloss.Color("91"),  // dark magenta
 		PhaseBlocked:   lipgloss.Color("124"), // dark red
 
 		// Timestamp tiers (recent = dark, old = light — visible on light bg).
