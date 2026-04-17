@@ -710,6 +710,9 @@ func (d *DB) mergeLock(target string) *sync.Mutex {
 // fast-forwards the parent onto the rebased tip, updates the DB, and
 // removes the worktree. If parentBranch is non-empty, it overrides the
 // default target.
+//
+// This entry point handles the ticket only; it does not cascade parent
+// projects. Workflow callers should use MarkTicketDoneCascading instead.
 func (d *DB) markTicketDone(ticketID int64, identifier string, projectID sql.NullInt64, parentBranch string) error {
 	mergeTarget := d.mergeTargetDir(parentBranch, projectID)
 
@@ -736,6 +739,221 @@ func (d *DB) markTicketDone(ticketID int64, identifier string, projectID sql.Nul
 	}
 
 	if err := d.git.RemoveWorktree(d.repoRoot, d.worktreePath(identifier), identifier); err != nil {
+		return fmt.Errorf("remove worktree: %w", err)
+	}
+	return nil
+}
+
+// completionStep represents one work unit (ticket or project) that will be
+// rebased and marked done as part of a cascading completion.
+type completionStep struct {
+	Identifier  string
+	IsProject   bool
+	WorkUnitID  int64
+	MergeTarget string
+}
+
+// MarkTicketDoneCascading transitions a ticket to "done" and cascades parent
+// projects to "done" when all of their direct children are complete. All git
+// rebases up the tree are performed before any database updates: if any rebase
+// fails (e.g. a merge conflict at the grandparent level), no work unit is
+// marked done and the user can resolve the conflict and retry. The git
+// rebases themselves are idempotent, so a retry that re-walks levels which
+// previously succeeded is safe.
+func (d *DB) MarkTicketDoneCascading(identifier string) error {
+	chain, err := d.computeCompletionChain(identifier)
+	if err != nil {
+		return err
+	}
+
+	// Acquire merge locks for every distinct merge target in the chain.
+	// The chain is bottom-up (ticket → root), giving a consistent lock
+	// ordering across concurrent callers, so we cannot deadlock.
+	seen := make(map[string]bool)
+	var held []*sync.Mutex
+	for _, step := range chain {
+		if seen[step.MergeTarget] {
+			continue
+		}
+		seen[step.MergeTarget] = true
+		mu := d.mergeLock(step.MergeTarget)
+		mu.Lock()
+		held = append(held, mu)
+	}
+	defer func() {
+		for i := len(held) - 1; i >= 0; i-- {
+			held[i].Unlock()
+		}
+	}()
+
+	// Phase 1: every rebase + fast-forward in the chain must succeed.
+	for _, step := range chain {
+		if err := d.rebaseAndFastForward(step.Identifier, step.MergeTarget); err != nil {
+			return err
+		}
+	}
+
+	// Phase 2: only now apply database updates and remove the ticket worktree.
+	return d.finalizeCompletionChain(chain)
+}
+
+// computeCompletionChain returns the ordered list of work units that will
+// transition to "done" when the given ticket is completed: the ticket itself,
+// followed by any parent projects (walking up the tree) whose remaining
+// children would all be done after the earlier steps in the chain finish.
+// The walk stops at the first parent that is already done or that would
+// still have un-done children.
+func (d *DB) computeCompletionChain(ticketIdentifier string) ([]completionStep, error) {
+	var ticketID int64
+	var ticketProjectID sql.NullInt64
+	var ticketParentBranch string
+	err := d.db.QueryRow(
+		`SELECT id, project_id, parent_branch FROM tickets WHERE identifier = ?`,
+		ticketIdentifier,
+	).Scan(&ticketID, &ticketProjectID, &ticketParentBranch)
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("ticket %q not found", ticketIdentifier)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	chain := []completionStep{{
+		Identifier:  ticketIdentifier,
+		IsProject:   false,
+		WorkUnitID:  ticketID,
+		MergeTarget: d.mergeTargetDir(ticketParentBranch, ticketProjectID),
+	}}
+
+	pending := map[string]bool{ticketIdentifier: true}
+	cur := ticketIdentifier
+	for {
+		parentID, hasParent := models.ParentIdentifierOf(cur)
+		if !hasParent {
+			break
+		}
+
+		var parentDBID int64
+		var grandparentDBID sql.NullInt64
+		var grandparentBranch, parentPhase string
+		err := d.db.QueryRow(
+			`SELECT id, project_id, parent_branch, phase FROM projects WHERE identifier = ?`,
+			parentID,
+		).Scan(&parentDBID, &grandparentDBID, &grandparentBranch, &parentPhase)
+		if err == sql.ErrNoRows {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		// If this parent is already done, no extra cascading work is needed.
+		if parentPhase == string(models.ProjectPhaseDone) {
+			break
+		}
+
+		wouldBeDone, err := d.wouldProjectBeFullyDone(parentDBID, pending)
+		if err != nil {
+			return nil, err
+		}
+		if !wouldBeDone {
+			break
+		}
+
+		chain = append(chain, completionStep{
+			Identifier:  parentID,
+			IsProject:   true,
+			WorkUnitID:  parentDBID,
+			MergeTarget: d.mergeTargetDir(grandparentBranch, grandparentDBID),
+		})
+		pending[parentID] = true
+		cur = parentID
+	}
+
+	return chain, nil
+}
+
+// wouldProjectBeFullyDone reports whether the project with the given row id
+// would have all of its direct children done if the identifiers in the
+// pending set were treated as already done. The project must have at least
+// one child to be considered done.
+func (d *DB) wouldProjectBeFullyDone(projectID int64, pending map[string]bool) (bool, error) {
+	rows, err := d.db.Query(`
+		SELECT identifier, phase FROM tickets WHERE project_id = ?
+		UNION ALL
+		SELECT identifier, phase FROM projects WHERE project_id = ?
+	`, projectID, projectID)
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+
+	total := 0
+	for rows.Next() {
+		var identifier, phase string
+		if err := rows.Scan(&identifier, &phase); err != nil {
+			return false, err
+		}
+		total++
+		if phase == "done" {
+			continue
+		}
+		if pending[identifier] {
+			continue
+		}
+		return false, nil
+	}
+	if err := rows.Err(); err != nil {
+		return false, err
+	}
+	return total > 0, nil
+}
+
+// finalizeCompletionChain applies the database updates for every work unit
+// in the chain (ticket + parent projects), unblocks dependents, and removes
+// the ticket's worktree. Called only after every rebase in the chain has
+// succeeded.
+func (d *DB) finalizeCompletionChain(chain []completionStep) error {
+	if len(chain) == 0 {
+		return nil
+	}
+
+	now := time.Now().Unix()
+	if err := d.withTx(func(tx *sql.Tx) error {
+		for _, step := range chain {
+			if step.IsProject {
+				if _, err := tx.Exec(
+					`UPDATE projects SET phase = ?, last_updated = ? WHERE id = ?`,
+					string(models.ProjectPhaseDone), now, step.WorkUnitID,
+				); err != nil {
+					return err
+				}
+			} else {
+				if _, err := tx.Exec(
+					`UPDATE tickets SET phase = ?, status = ?, claimed_by = NULL WHERE id = ?`,
+					string(models.PhaseDone), string(models.StatusIdle), step.WorkUnitID,
+				); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	}); err != nil {
+		return fmt.Errorf("finalize completion chain: %w", err)
+	}
+
+	for _, step := range chain {
+		unitType := workUnitTypeTicket
+		if step.IsProject {
+			unitType = workUnitTypeProject
+		}
+		if err := d.unblockDependents(unitType, step.WorkUnitID); err != nil {
+			return fmt.Errorf("unblock dependents for %s: %w", step.Identifier, err)
+		}
+	}
+
+	ticketStep := chain[0]
+	if err := d.git.RemoveWorktree(d.repoRoot, d.worktreePath(ticketStep.Identifier), ticketStep.Identifier); err != nil {
 		return fmt.Errorf("remove worktree: %w", err)
 	}
 	return nil

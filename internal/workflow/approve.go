@@ -20,8 +20,10 @@ import (
 //
 //	implement → refactor
 //	refactor  → review
-//	review    → done (rebases branch onto parent, fast-forwards the parent,
-//	            removes worktree, then checks recursive project completion)
+//	review    → done (rebases the ticket up the project tree; only marked
+//	            done if every rebase up to the root succeeds, so a conflict
+//	            at any level leaves the ticket re-approvable after the user
+//	            resolves it)
 //
 // Returns an error if the ticket is not found or is in a phase that cannot be
 // approved (blocked, done).
@@ -48,36 +50,8 @@ func Approve(database *db.DB, identifier string) error {
 	case models.PhaseRefactor:
 		return database.SetStatus(identifier, models.PhaseReview, models.StatusIdle)
 	case models.PhaseReview:
-		if err := database.SetStatus(identifier, models.PhaseDone, models.StatusIdle); err != nil {
-			return err
-		}
-		return markParentProjectsDone(database, identifier)
+		return database.MarkTicketDoneCascading(identifier)
 	default:
 		return fmt.Errorf("ticket %q is in phase %q which cannot be approved", identifier, phase)
 	}
-}
-
-// markParentProjectsDone walks up the project hierarchy from the given
-// identifier, marking each project as done when all its direct children are
-// done.
-func markParentProjectsDone(database *db.DB, identifier string) error {
-	parentID, hasParent := models.ParentIdentifierOf(identifier)
-	if !hasParent {
-		return nil
-	}
-
-	allDone, err := database.AllChildrenDone(parentID)
-	if err != nil {
-		return err
-	}
-	if !allDone {
-		return nil
-	}
-
-	if err := database.SetProjectPhase(parentID, models.ProjectPhaseDone); err != nil {
-		return err
-	}
-
-	// Recurse up the tree.
-	return markParentProjectsDone(database, parentID)
 }

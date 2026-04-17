@@ -1,6 +1,7 @@
 package workflow_test
 
 import (
+	"errors"
 	"fmt"
 	"testing"
 
@@ -12,15 +13,23 @@ import (
 
 // openTestDB creates a temporary in-memory-like DB for testing.
 func openTestDB(t *testing.T) *db.DB {
+	d, _ := openTestDBWithGit(t)
+	return d
+}
+
+// openTestDBWithGit returns the DB and the FakeGitClient driving it, so tests
+// can manipulate the fake's behaviour (e.g. inject rebase failures).
+func openTestDBWithGit(t *testing.T) (*db.DB, *gitutil.FakeGitClient) {
 	t.Helper()
 	dir := t.TempDir()
 	d, err := db.Open(dir, dir)
 	if err != nil {
 		t.Fatalf("db.Open: %v", err)
 	}
-	d.SetGitClient(&gitutil.FakeGitClient{})
+	git := &gitutil.FakeGitClient{}
+	d.SetGitClient(git)
 	t.Cleanup(func() { d.Close() })
-	return d
+	return d, git
 }
 
 // ticketPhase returns the current phase of a ticket, failing the test if not found.
@@ -381,4 +390,134 @@ func strconvAtoi(t *testing.T, s string) (int64, error) {
 		t.Fatalf("parse id %q: %v", s, err)
 	}
 	return n, nil
+}
+
+// ── Cascading-failure tests ──────────────────────────────────────────────────
+
+// TestApprove_GrandparentRebaseFailureLeavesTicketAtReview verifies the fix
+// for the cascading-completion bug: when the ticket-level rebase succeeds but
+// a parent rebase further up the tree fails, neither the ticket nor any
+// project may be marked done. The user must be able to fix the conflict and
+// re-approve.
+func TestApprove_GrandparentRebaseFailureLeavesTicketAtReview(t *testing.T) {
+	d, git := openTestDBWithGit(t)
+
+	// grandparent / parent / t1 — completing t1 would cascade both projects.
+	for _, id := range []string{"grandparent", "grandparent/parent"} {
+		if err := d.CreateProject(id, "A project", nil, ""); err != nil {
+			t.Fatalf("CreateProject %q: %v", id, err)
+		}
+	}
+	if err := d.CreateTicket("grandparent/parent/t1", "A ticket", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.SetStatus("grandparent/parent/t1", models.PhaseReview, models.StatusIdle); err != nil {
+		t.Fatal(err)
+	}
+
+	// Fail only the second rebase in the cascade (parent → grandparent),
+	// letting the ticket's own rebase succeed.
+	conflictErr := errors.New("simulated parent->grandparent conflict")
+	calls := 0
+	git.RebaseErrFunc = func(_, _ string) error {
+		calls++
+		if calls == 2 {
+			return conflictErr
+		}
+		return nil
+	}
+
+	if err := workflow.Approve(d, "grandparent/parent/t1"); err == nil {
+		t.Fatal("expected Approve to fail when parent rebase conflicts")
+	}
+
+	// Ticket must still be at review, neither done nor advanced.
+	if got := ticketPhase(t, d, "grandparent/parent/t1"); got != models.PhaseReview {
+		t.Errorf("ticket phase: expected %q, got %q", models.PhaseReview, got)
+	}
+	// Neither project may be marked done while the cascade is incomplete.
+	if got := projectPhase(t, d, "grandparent/parent"); got == models.ProjectPhaseDone {
+		t.Errorf("parent project should not be done after partial failure")
+	}
+	if got := projectPhase(t, d, "grandparent"); got == models.ProjectPhaseDone {
+		t.Errorf("grandparent project should not be done after partial failure")
+	}
+}
+
+// TestApprove_RetryAfterParentConflictSucceeds verifies that, once the user
+// resolves the conflict that caused the cascade to fail, re-approving the
+// ticket completes the whole chain successfully — i.e. earlier rebases are
+// safely retried without breaking anything.
+func TestApprove_RetryAfterParentConflictSucceeds(t *testing.T) {
+	d, git := openTestDBWithGit(t)
+
+	for _, id := range []string{"grandparent", "grandparent/parent"} {
+		if err := d.CreateProject(id, "A project", nil, ""); err != nil {
+			t.Fatalf("CreateProject %q: %v", id, err)
+		}
+	}
+	if err := d.CreateTicket("grandparent/parent/t1", "A ticket", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.SetStatus("grandparent/parent/t1", models.PhaseReview, models.StatusIdle); err != nil {
+		t.Fatal(err)
+	}
+
+	conflictErr := errors.New("simulated parent->grandparent conflict")
+	calls := 0
+	git.RebaseErrFunc = func(_, _ string) error {
+		calls++
+		if calls == 2 {
+			return conflictErr
+		}
+		return nil
+	}
+	if err := workflow.Approve(d, "grandparent/parent/t1"); err == nil {
+		t.Fatal("setup: expected first Approve to fail")
+	}
+
+	// User "fixes" the conflict — clear the failure injection.
+	git.RebaseErrFunc = nil
+
+	if err := workflow.Approve(d, "grandparent/parent/t1"); err != nil {
+		t.Fatalf("retry Approve: %v", err)
+	}
+
+	if got := ticketPhase(t, d, "grandparent/parent/t1"); got != models.PhaseDone {
+		t.Errorf("ticket phase: expected %q, got %q", models.PhaseDone, got)
+	}
+	if got := projectPhase(t, d, "grandparent/parent"); got != models.ProjectPhaseDone {
+		t.Errorf("parent phase: expected %q, got %q", models.ProjectPhaseDone, got)
+	}
+	if got := projectPhase(t, d, "grandparent"); got != models.ProjectPhaseDone {
+		t.Errorf("grandparent phase: expected %q, got %q", models.ProjectPhaseDone, got)
+	}
+}
+
+// TestApprove_TicketRebaseFailureLeavesTicketAtReview verifies the simpler
+// case: when the ticket's own rebase onto its parent fails, the ticket stays
+// at review and no parent is touched.
+func TestApprove_TicketRebaseFailureLeavesTicketAtReview(t *testing.T) {
+	d, git := openTestDBWithGit(t)
+	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj/t1", "A ticket", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.SetStatus("proj/t1", models.PhaseReview, models.StatusIdle); err != nil {
+		t.Fatal(err)
+	}
+
+	git.RebaseErr = errors.New("simulated ticket conflict")
+
+	if err := workflow.Approve(d, "proj/t1"); err == nil {
+		t.Fatal("expected Approve to fail when ticket rebase conflicts")
+	}
+	if got := ticketPhase(t, d, "proj/t1"); got != models.PhaseReview {
+		t.Errorf("ticket phase: expected %q, got %q", models.PhaseReview, got)
+	}
+	if got := projectPhase(t, d, "proj"); got == models.ProjectPhaseDone {
+		t.Errorf("project should not be done after ticket rebase failure")
+	}
 }
