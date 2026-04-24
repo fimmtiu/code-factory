@@ -874,9 +874,9 @@ func (v DiffView) KeyBindings() []KeyBinding {
 func (v DiffView) HintPairs() []string {
 	if v.viewer != nil {
 		if v.viewer.lineSelectMode {
-			return []string{"↑/↓", "move", "PgUp/Dn", "page", "R", "change request", "C", "collapse/expand", "Esc", "exit select", "Tab", "back"}
+			return []string{"↑/↓", "move", "PgUp/Dn", "page", "</>", "top/bottom", "R", "change request", "C", "collapse/expand", "Esc", "exit select", "Tab", "back"}
 		}
-		return []string{"↑/↓", "scroll", "PgUp/Dn", "page", "Enter", "select lines", "C", "collapse/expand", "Tab/Esc", "back"}
+		return []string{"↑/↓", "scroll", "PgUp/Dn", "page", "</>", "top/bottom", "Enter", "select lines", "C", "collapse/expand", "Tab/Esc", "back"}
 	}
 	return []string{"↑/↓", "navigate", "PgUp/Dn", "page", "Shift+↑/↓", "extend range", "T", "open terminal", "E", "open editor", "Tab", "view diff"}
 }

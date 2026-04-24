@@ -396,6 +396,13 @@ func (m *DiffViewerModel) handleKey(msg tea.KeyMsg) tea.Cmd {
 	case "pgdown", " ":
 		m.clearFrozenFileIdx()
 		m.scrollDown(m.paneHeight)
+	case "<":
+		m.clearFrozenFileIdx()
+		m.offset = 0
+	case ">":
+		m.clearFrozenFileIdx()
+		m.offset = m.totalLines()
+		m.clampScroll()
 	case "enter":
 		m.enterLineSelect()
 	case "c":
@@ -417,6 +424,10 @@ func (m *DiffViewerModel) handleLineSelectKey(msg tea.KeyMsg) tea.Cmd {
 		m.moveSelection(m.paneHeight, -1)
 	case "pgdown", " ":
 		m.moveSelection(m.paneHeight, 1)
+	case "<":
+		m.moveSelection(len(m.lineMeta), -1)
+	case ">":
+		m.moveSelection(len(m.lineMeta), 1)
 	case "esc":
 		m.exitLineSelect()
 	case "c":
@@ -545,6 +556,7 @@ func (m *DiffViewerModel) KeyBindings() []KeyBinding {
 		return []KeyBinding{
 			{Key: "↑/↓", Description: "Move selection"},
 			{Key: "b/Space", Description: "Page up/down"},
+			{Key: "</>", Description: "Jump to top/bottom"},
 			{Key: "R", Description: "Create change request"},
 			{Key: "c", Description: "Collapse/expand file"},
 			{Key: "C", Description: "Collapse/expand all"},
@@ -557,6 +569,7 @@ func (m *DiffViewerModel) KeyBindings() []KeyBinding {
 	return []KeyBinding{
 		{Key: "↑/↓", Description: "Scroll"},
 		{Key: "b/Space", Description: "Page up/down"},
+		{Key: "</>", Description: "Jump to top/bottom"},
 		{Key: "Enter", Description: "Select lines"},
 		{Key: "c", Description: "Collapse/expand file"},
 		{Key: "C", Description: "Collapse/expand all"},
