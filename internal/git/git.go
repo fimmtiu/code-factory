@@ -73,10 +73,15 @@ func FirstNonMergeAncestor(worktreePath, commitHash string) (string, error) {
 
 // FetchShowStat returns the commit message followed by the --stat file list
 // for the given commit. For the uncommitted pseudo-commit, it returns
-// git diff --stat instead.
+// git diff --stat prefixed with a blank line so the preview pane treats its
+// first line the same as a commit subject (which it bolds).
 func FetchShowStat(worktreePath, commitHash string) (string, error) {
 	if commitHash == UncommittedHash {
-		return Output(worktreePath, "diff", "--stat")
+		out, err := Output(worktreePath, "diff", "--stat")
+		if err != nil {
+			return "", err
+		}
+		return "\n" + out, nil
 	}
 	return Output(worktreePath, "show", "--stat", "--format=%B", commitHash)
 }
