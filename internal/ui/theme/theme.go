@@ -88,6 +88,8 @@ type Theme struct {
 	CommitHashStyle     lipgloss.Style
 	DiffLabelBold       lipgloss.Style
 	DiffErrorStyle      lipgloss.Style
+	DiffStatAddStyle    lipgloss.Style
+	DiffStatRemoveStyle lipgloss.Style
 
 	// ── Diff renderer ───────────────────────────────────────────────────
 	DiffHunkHeaderStyle lipgloss.Style

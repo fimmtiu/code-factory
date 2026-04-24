@@ -186,9 +186,11 @@ func buildTheme(p Palette) *Theme {
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(p.BorderBlue).
 			BorderBottom(false),
-		CommitHashStyle: lipgloss.NewStyle().Bold(true).Foreground(p.Muted),
-		DiffLabelBold:   lipgloss.NewStyle().Bold(true),
-		DiffErrorStyle:  lipgloss.NewStyle().Foreground(p.Danger),
+		CommitHashStyle:     lipgloss.NewStyle().Bold(true).Foreground(p.Muted),
+		DiffLabelBold:       lipgloss.NewStyle().Bold(true),
+		DiffErrorStyle:      lipgloss.NewStyle().Foreground(p.Danger),
+		DiffStatAddStyle:    lipgloss.NewStyle().Foreground(p.Success),
+		DiffStatRemoveStyle: lipgloss.NewStyle().Foreground(p.Danger),
 
 		// ── Diff renderer ───────────────────────────────────────────
 		DiffHunkHeaderStyle: lipgloss.NewStyle().Background(p.DiffHunkHeader),

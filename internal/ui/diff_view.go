@@ -779,21 +779,78 @@ func (v DiffView) renderRightPane() string {
 	}
 	h := v.commitListHeight()
 
-	content := v.statOutput
-	if content == "" {
-		content = theme.Current().EmptyStateStyle.Render("(no preview)")
+	if v.statOutput == "" {
+		content := theme.Current().EmptyStateStyle.Render("(no preview)")
+		return theme.Current().ViewPaneStyle.Width(w).Height(h).Render(clipLines(content, h))
 	}
 
-	// Strip leading spaces (git --stat indents each line) and word-wrap
-	// to fit the pane width. Trimming avoids a first-line indent mismatch
-	// caused by lipgloss stripping leading whitespace from the first line.
-	var wrapped []string
-	for _, line := range strings.Split(content, "\n") {
-		wrapped = append(wrapped, wrapLine(strings.TrimLeft(line, " "), w)...)
-	}
-	content = strings.Join(wrapped, "\n")
-
+	content := renderStatPane(v.statOutput, w)
 	return theme.Current().ViewPaneStyle.Width(w).Height(h).Render(clipLines(content, h))
+}
+
+// renderStatPane styles the git show --stat output for display in the preview
+// pane: the commit subject (first line) is bolded, and '+'/'-' characters in
+// stat lines are tinted green/red the way `git` colorizes them in a terminal.
+//
+// Lines are trimmed of leading indent (git --stat indents file rows) before
+// being wrapped to the pane width.
+func renderStatPane(content string, width int) string {
+	lines := strings.Split(content, "\n")
+	var out []string
+	th := theme.Current()
+	for i, line := range lines {
+		trimmed := strings.TrimLeft(line, " ")
+		pieces := wrapLine(trimmed, width)
+		switch {
+		case i == 0:
+			for j, p := range pieces {
+				pieces[j] = th.DiffLabelBold.Render(p)
+			}
+		case isStatLine(trimmed):
+			for j, p := range pieces {
+				pieces[j] = colorizeStatPlusMinus(p, th)
+			}
+		}
+		out = append(out, pieces...)
+	}
+	return strings.Join(out, "\n")
+}
+
+// isStatLine reports whether a line from `git show --stat` output belongs to
+// the stat section (file rows like "foo.go | 5 ++---" or the summary line
+// "1 file changed, 3 insertions(+), 2 deletions(-)").
+func isStatLine(line string) bool {
+	if strings.Contains(line, "|") && (strings.ContainsAny(line, "+-") || strings.Contains(line, "Bin")) {
+		return true
+	}
+	return strings.Contains(line, "file changed") || strings.Contains(line, "files changed")
+}
+
+// colorizeStatPlusMinus returns line with runs of '+' tinted green and runs
+// of '-' tinted red, matching terminal `git status`/`git diff --stat` output.
+func colorizeStatPlusMinus(line string, th *theme.Theme) string {
+	var b strings.Builder
+	runes := []rune(line)
+	for i := 0; i < len(runes); {
+		c := runes[i]
+		if c == '+' || c == '-' {
+			j := i + 1
+			for j < len(runes) && runes[j] == c {
+				j++
+			}
+			run := string(runes[i:j])
+			if c == '+' {
+				b.WriteString(th.DiffStatAddStyle.Render(run))
+			} else {
+				b.WriteString(th.DiffStatRemoveStyle.Render(run))
+			}
+			i = j
+			continue
+		}
+		b.WriteRune(c)
+		i++
+	}
+	return b.String()
 }
 
 // ── KeyBindings ──────────────────────────────────────────────────────────────
