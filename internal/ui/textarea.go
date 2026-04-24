@@ -57,6 +57,26 @@ func (t TextArea) Value() string {
 // mirror their own focus state here so a blurred TextArea shows no cursor.
 func (t *TextArea) SetFocused(f bool) { t.focused = f }
 
+// SetValue replaces the text area content with the given string.
+// The cursor is placed at the end of the content.
+func (t *TextArea) SetValue(s string) {
+	if s == "" {
+		t.lines = [][]rune{{}}
+		t.row = 0
+		t.col = 0
+		t.offset = 0
+		return
+	}
+	parts := strings.Split(s, "\n")
+	t.lines = make([][]rune, len(parts))
+	for i, p := range parts {
+		t.lines[i] = []rune(p)
+	}
+	t.row = len(t.lines) - 1
+	t.col = len(t.lines[t.row])
+	t.scrollToCursor()
+}
+
 // SetSize updates the dimensions of the text area.
 func (t *TextArea) SetSize(width, height int) {
 	t.width = width

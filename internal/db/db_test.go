@@ -859,3 +859,64 @@ func TestRebaseTicketOnParent_FallsBackToParentIdentifier(t *testing.T) {
 		t.Errorf("expected rebase onto %q, got %q", "proj", git.RebaseTargets[0])
 	}
 }
+
+// ===== UpdateChangeRequestDescription =====
+
+func TestUpdateChangeRequestDescription_AcceptsStringID(t *testing.T) {
+	d, _, _ := openTestDB(t)
+	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj/ticket", "A ticket", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.AddChangeRequest("proj/ticket", "main.go:10", "alice", "original"); err != nil {
+		t.Fatal(err)
+	}
+
+	crs, err := d.OpenChangeRequests("proj/ticket")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(crs) != 1 {
+		t.Fatalf("expected 1 CR, got %d", len(crs))
+	}
+
+	// Use the string ID from the model directly.
+	if err := d.UpdateChangeRequestDescription(crs[0].ID, "updated"); err != nil {
+		t.Fatalf("UpdateChangeRequestDescription: %v", err)
+	}
+
+	wu, err := d.GetTicket("proj/ticket")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(wu.ChangeRequests) != 1 {
+		t.Fatalf("expected 1 CR, got %d", len(wu.ChangeRequests))
+	}
+	if wu.ChangeRequests[0].Description != "updated" {
+		t.Errorf("expected description %q, got %q", "updated", wu.ChangeRequests[0].Description)
+	}
+}
+
+func TestUpdateChangeRequestDescription_InvalidID(t *testing.T) {
+	d, _, _ := openTestDB(t)
+	err := d.UpdateChangeRequestDescription("not-a-number", "desc")
+	if err == nil {
+		t.Fatal("expected error for non-numeric ID, got nil")
+	}
+	if !strings.Contains(err.Error(), "invalid change request id") {
+		t.Errorf("expected error mentioning invalid ID, got: %v", err)
+	}
+}
+
+func TestUpdateChangeRequestDescription_NotFound(t *testing.T) {
+	d, _, _ := openTestDB(t)
+	err := d.UpdateChangeRequestDescription("99999", "desc")
+	if err == nil {
+		t.Fatal("expected error for nonexistent CR, got nil")
+	}
+	if !strings.Contains(err.Error(), "not found") {
+		t.Errorf("expected 'not found' error, got: %v", err)
+	}
+}

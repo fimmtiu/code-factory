@@ -1440,10 +1440,16 @@ func (d *DB) OpenChangeRequests(identifier string) ([]models.ChangeRequest, erro
 }
 
 // UpdateChangeRequestDescription updates the description of the change request with the given id.
-func (d *DB) UpdateChangeRequestDescription(id int64, description string) error {
+// The id is accepted as a string to match models.ChangeRequest.ID; the conversion
+// to the underlying integer primary key is handled internally.
+func (d *DB) UpdateChangeRequestDescription(id string, description string) error {
+	numID, err := strconv.ParseInt(id, 10, 64)
+	if err != nil {
+		return fmt.Errorf("invalid change request id %q: %w", id, err)
+	}
 	return d.withTx(func(tx *sql.Tx) error {
 		res, err := tx.Exec(
-			`UPDATE change_requests SET description = ? WHERE id = ?`, description, id,
+			`UPDATE change_requests SET description = ? WHERE id = ?`, description, numID,
 		)
 		if err != nil {
 			return err
@@ -1453,7 +1459,7 @@ func (d *DB) UpdateChangeRequestDescription(id int64, description string) error 
 			return err
 		}
 		if n == 0 {
-			return fmt.Errorf("change request %d not found", id)
+			return fmt.Errorf("change request %d not found", numID)
 		}
 		return nil
 	})

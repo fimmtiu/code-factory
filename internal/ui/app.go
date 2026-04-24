@@ -62,7 +62,7 @@ func NewModel(pool *worker.Pool, database *db.DB, waitSecs int) Model {
 			ViewCommand: NewCommandView(database, pool, waitSecs),
 			ViewWorker:  NewWorkerView(pool),
 			ViewLog:     NewLogView(database),
-			ViewDiff:    NewDiffView(),
+			ViewDiff:    NewDiffView(database),
 		},
 	}
 }
@@ -173,15 +173,28 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.dialog = NewPhasePickerDialog(m.db, msg.wu)
 		return m, nil
 
-	case openChangeRequestDialogMsg:
-		m.dialog = NewChangeRequestDialog(m.db, msg.identifier, msg.fileName, msg.lineNum, msg.context, msg.worktreePath, m.width)
+	case openEditChangeRequestDialogMsg:
+		m.dialog = NewEditChangeRequestDialog(m.db, msg.location, msg.existingCR, m.width)
 		return m, nil
 
-	case crCreatedMsg:
-		if msg.errMsg != "" {
-			return m, ShowNotification("CR failed: " + msg.errMsg)
+	case openViewChangeRequestDialogMsg:
+		m.dialog = NewViewChangeRequestDialog(m.db, msg.cr, msg.identifier, msg.worktreePath, m.width)
+		return m, nil
+
+	case crSavedMsg:
+		var notif tea.Cmd
+		switch {
+		case msg.errMsg != "":
+			notif = ShowNotification("CR failed: " + msg.errMsg)
+		case msg.edited:
+			notif = ShowNotification("Change request updated")
+		default:
+			notif = ShowNotification("Change request created")
 		}
-		return m, ShowNotification("Change request created")
+		// Forward to DiffView so its crMap (and any active viewer) can refresh.
+		updated, cmd := m.views[ViewDiff].Update(msg)
+		m.views[ViewDiff] = updated.(viewModel)
+		return m, tea.Batch(notif, cmd)
 
 	case openQuickResponseMsg:
 		// If the worker has a structured permission request pending, show the

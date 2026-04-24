@@ -9,13 +9,14 @@ import (
 
 	"github.com/fimmtiu/code-factory/internal/db"
 	"github.com/fimmtiu/code-factory/internal/git"
+	"github.com/fimmtiu/code-factory/internal/models"
 	"github.com/fimmtiu/code-factory/internal/ui/theme"
 )
 
 // ── Messages ────────────────────────────────────────────────────────────────
 
-// openChangeRequestDialogMsg asks the root model to open the CR dialog.
-type openChangeRequestDialogMsg struct {
+// crLocation groups the code-location fields needed to create or edit a change request.
+type crLocation struct {
 	identifier   string
 	fileName     string
 	lineNum      int
@@ -23,9 +24,16 @@ type openChangeRequestDialogMsg struct {
 	worktreePath string
 }
 
-// crCreatedMsg is the result of running cf-tickets create-cr.
-type crCreatedMsg struct {
+// openEditChangeRequestDialogMsg asks the root model to open the CR dialog.
+type openEditChangeRequestDialogMsg struct {
+	location   crLocation
+	existingCR *models.ChangeRequest
+}
+
+// crSavedMsg is sent after a change request is created or updated.
+type crSavedMsg struct {
 	errMsg string
+	edited bool // true when an existing CR was updated, false when a new CR was created
 }
 
 // ── Focus ───────────────────────────────────────────────────────────────────
@@ -39,17 +47,14 @@ const (
 	crFocusCount // sentinel for modular arithmetic
 )
 
-// ── ChangeRequestDialog ─────────────────────────────────────────────────────
+// ── EditChangeRequestDialog ─────────────────────────────────────────────────
 
-// ChangeRequestDialog is the modal shown when the user presses R on a selected
+// EditChangeRequestDialog is the modal shown when the user presses R on a selected
 // diff line. It collects a description and creates a change request via the database.
-type ChangeRequestDialog struct {
-	database     *db.DB
-	identifier   string
-	fileName     string
-	lineNum      int
-	context      string
-	worktreePath string
+type EditChangeRequestDialog struct {
+	database   *db.DB
+	location   crLocation
+	existingCR *models.ChangeRequest
 
 	textArea TextArea
 	focused  crDialogFocus
@@ -58,32 +63,27 @@ type ChangeRequestDialog struct {
 	width int
 }
 
-// NewChangeRequestDialog creates a ChangeRequestDialog for the given file location.
-func NewChangeRequestDialog(database *db.DB, identifier, fileName string, lineNum int, context, worktreePath string, width int) ChangeRequestDialog {
-	dialogPad := theme.Current().DialogBoxStyle.GetHorizontalFrameSize()
-	inputPad := theme.Current().QuickResponseInputStyle.GetHorizontalFrameSize()
-	textWidth := width - dialogPad - inputPad
-	if textWidth < 20 {
-		textWidth = 20
+// NewEditChangeRequestDialog creates an EditChangeRequestDialog for the given file location.
+// If existingCR is non-nil, the dialog operates in edit mode with the description pre-populated.
+func NewEditChangeRequestDialog(database *db.DB, loc crLocation, existingCR *models.ChangeRequest, width int) EditChangeRequestDialog {
+	d := EditChangeRequestDialog{
+		database:   database,
+		location:   loc,
+		existingCR: existingCR,
+		focused:    crFocusTextArea,
+		width:      width,
 	}
-	d := ChangeRequestDialog{
-		database:     database,
-		identifier:   identifier,
-		fileName:     fileName,
-		lineNum:      lineNum,
-		context:      context,
-		worktreePath: worktreePath,
-		textArea:     NewTextArea(textWidth, 5),
-		focused:      crFocusTextArea,
-		width:        width,
+	d.textArea = NewTextArea(d.textAreaWidth(), 5)
+	if existingCR != nil {
+		d.textArea.SetValue(existingCR.Description)
 	}
 	d.textArea.SetFocused(true)
 	return d
 }
 
-func (d ChangeRequestDialog) Init() tea.Cmd { return nil }
+func (d EditChangeRequestDialog) Init() tea.Cmd { return nil }
 
-func (d ChangeRequestDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (d EditChangeRequestDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		// Escape always dismisses.
@@ -121,21 +121,40 @@ func (d ChangeRequestDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return d, nil
 }
 
-func (d ChangeRequestDialog) submit() (tea.Model, tea.Cmd) {
+func (d EditChangeRequestDialog) submit() (tea.Model, tea.Cmd) {
 	description := strings.TrimSpace(d.textArea.Value())
 	if description == "" {
 		d.errMsg = "Description cannot be empty"
 		return d, nil
 	}
 
-	codeLocation := fmt.Sprintf("%s:%d", d.fileName, d.lineNum)
+	if d.existingCR != nil {
+		database := d.database
+		id := d.existingCR.ID
+		return d, tea.Batch(
+			dismissDialogCmd(),
+			updateCRDescriptionCmd(database, id, description),
+		)
+	}
+
+	codeLocation := fmt.Sprintf("%s:%d", d.location.fileName, d.location.lineNum)
 	database := d.database
-	identifier := d.identifier
-	worktreePath := d.worktreePath
+	identifier := d.location.identifier
+	worktreePath := d.location.worktreePath
 	return d, tea.Batch(
 		dismissDialogCmd(),
 		createCRCmd(database, identifier, codeLocation, description, worktreePath),
 	)
+}
+
+// updateCRDescriptionCmd returns a command that updates an existing CR's description.
+func updateCRDescriptionCmd(database *db.DB, id string, description string) tea.Cmd {
+	return func() tea.Msg {
+		if err := database.UpdateChangeRequestDescription(id, description); err != nil {
+			return crSavedMsg{errMsg: fmt.Sprintf("update-cr: %s", err)}
+		}
+		return crSavedMsg{edited: true}
+	}
 }
 
 // createCRCmd returns a command that creates a change request via the database.
@@ -147,25 +166,36 @@ func createCRCmd(database *db.DB, identifier, codeLocation, description, worktre
 		}
 
 		if err := database.AddChangeRequest(identifier, codeLocation, author, description); err != nil {
-			return crCreatedMsg{errMsg: fmt.Sprintf("create-cr: %s", err)}
+			return crSavedMsg{errMsg: fmt.Sprintf("create-cr: %s", err)}
 		}
-		return crCreatedMsg{}
+		return crSavedMsg{}
 	}
 }
 
-func (d ChangeRequestDialog) View() string {
+func (d EditChangeRequestDialog) View() string {
 	var sb strings.Builder
 
-	sb.WriteString(theme.Current().DialogTitleStyle.Render("New Change Request"))
+	title := "New Change Request"
+	if d.existingCR != nil {
+		title = "Edit Change Request"
+	}
+	sb.WriteString(theme.Current().DialogTitleStyle.Render(title))
 	sb.WriteString("\n")
 
 	// File and line info.
-	sb.WriteString(theme.Current().DetailLabelStyle.Render(fmt.Sprintf("%s:%d", d.fileName, d.lineNum)))
-	sb.WriteString("\n\n")
+	sb.WriteString(theme.Current().DetailLabelStyle.Render(fmt.Sprintf("%s:%d", d.location.fileName, d.location.lineNum)))
+	sb.WriteString("\n")
+
+	// Status line (edit mode only).
+	if d.existingCR != nil {
+		sb.WriteString(theme.Current().DetailLabelStyle.Render("Status:") + " " + d.existingCR.Status)
+		sb.WriteString("\n")
+	}
+	sb.WriteString("\n")
 
 	// Code context.
 	taWidth := d.textAreaWidth()
-	for _, line := range strings.Split(d.context, "\n") {
+	for _, line := range strings.Split(d.location.context, "\n") {
 		sb.WriteString(theme.Current().QuickResponseOutputStyle.Render(truncateLine(strings.TrimRight(line, " \t"), taWidth)))
 		sb.WriteString("\n")
 	}
@@ -201,7 +231,7 @@ func (d ChangeRequestDialog) View() string {
 }
 
 // textAreaWidth returns the inner width available for the text area content.
-func (d ChangeRequestDialog) textAreaWidth() int {
+func (d EditChangeRequestDialog) textAreaWidth() int {
 	dialogPad := theme.Current().DialogBoxStyle.GetHorizontalFrameSize()
 	inputPad := theme.Current().QuickResponseInputStyle.GetHorizontalFrameSize()
 	w := d.width - dialogPad - inputPad

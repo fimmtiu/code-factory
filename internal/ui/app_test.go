@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/fimmtiu/code-factory/internal/models"
 )
 
 func TestNewModel_HasFiveViews(t *testing.T) {
@@ -162,5 +164,76 @@ func TestOpenDiffViewMsg_ReturnsFetchCmd(t *testing.T) {
 	// We can't inspect the exact cmd, but we can verify it's not nil.
 	if cmd == nil {
 		t.Error("openDiffViewMsg should return a non-nil cmd to fetch commits")
+	}
+}
+
+// ── openViewChangeRequestDialogMsg tests ─────────────────────────────────────
+
+// TestOpenViewChangeRequestDialogMsg_CreatesDialog verifies that the root model
+// creates a ViewChangeRequestDialog when receiving openViewChangeRequestDialogMsg.
+func TestOpenViewChangeRequestDialogMsg_CreatesDialog(t *testing.T) {
+	m := NewModel(nil, nil, 5)
+	m.width = 120
+	m.height = 40
+
+	cr := models.ChangeRequest{
+		CodeLocation: "main.go:42",
+		Description:  "Please fix this",
+		Author:       "alice",
+		Status:       "Open",
+	}
+
+	updated, cmd := m.Update(openViewChangeRequestDialogMsg{
+		cr:           cr,
+		identifier:   "proj/ticket",
+		worktreePath: "/tmp/worktree",
+	})
+	model := updated.(Model)
+	if model.dialog == nil {
+		t.Fatal("expected dialog to be set after openViewChangeRequestDialogMsg")
+	}
+	if _, ok := model.dialog.(*ViewChangeRequestDialog); !ok {
+		t.Errorf("dialog is %T, want *ViewChangeRequestDialog", model.dialog)
+	}
+	if cmd != nil {
+		t.Error("expected nil cmd from openViewChangeRequestDialogMsg")
+	}
+}
+
+// TestOpenViewChangeRequestDialogMsg_DialogHasCRData verifies the dialog
+// contains the correct CR data.
+func TestOpenViewChangeRequestDialogMsg_DialogHasCRData(t *testing.T) {
+	m := NewModel(nil, nil, 5)
+	m.width = 120
+	m.height = 40
+
+	cr := models.ChangeRequest{
+		CodeLocation: "main.go:42",
+		Description:  "Please fix this",
+		Author:       "alice",
+		Status:       "Open",
+	}
+
+	updated, _ := m.Update(openViewChangeRequestDialogMsg{
+		cr:           cr,
+		identifier:   "proj/ticket",
+		worktreePath: "/tmp/worktree",
+	})
+	model := updated.(Model)
+	d, ok := model.dialog.(*ViewChangeRequestDialog)
+	if !ok {
+		t.Fatal("dialog is not a *ViewChangeRequestDialog")
+	}
+	if d.cr.CodeLocation != "main.go:42" {
+		t.Errorf("dialog cr.CodeLocation = %q, want %q", d.cr.CodeLocation, "main.go:42")
+	}
+	if d.cr.Description != "Please fix this" {
+		t.Errorf("dialog cr.Description = %q, want %q", d.cr.Description, "Please fix this")
+	}
+	if d.identifier != "proj/ticket" {
+		t.Errorf("dialog identifier = %q, want %q", d.identifier, "proj/ticket")
+	}
+	if d.worktreePath != "/tmp/worktree" {
+		t.Errorf("dialog worktreePath = %q, want %q", d.worktreePath, "/tmp/worktree")
 	}
 }
