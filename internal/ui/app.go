@@ -168,13 +168,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case crSavedMsg:
-		if msg.errMsg != "" {
-			return m, ShowNotification("CR failed: " + msg.errMsg)
+		var notif tea.Cmd
+		switch {
+		case msg.errMsg != "":
+			notif = ShowNotification("CR failed: " + msg.errMsg)
+		case msg.edited:
+			notif = ShowNotification("Change request updated")
+		default:
+			notif = ShowNotification("Change request created")
 		}
-		if msg.edited {
-			return m, ShowNotification("Change request updated")
-		}
-		return m, ShowNotification("Change request created")
+		// Forward to DiffView so its crMap (and any active viewer) can refresh.
+		updated, cmd := m.views[ViewDiff].Update(msg)
+		m.views[ViewDiff] = updated.(viewModel)
+		return m, tea.Batch(notif, cmd)
 
 	case openQuickResponseMsg:
 		// If the worker has a structured permission request pending, show the

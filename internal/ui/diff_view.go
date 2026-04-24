@@ -496,7 +496,19 @@ func (v DiffView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case crMapLoadedMsg:
 		v.crMap = msg.crMap
+		if v.viewer != nil {
+			v.viewer.crMap = msg.crMap
+			v.viewer.rerender()
+		}
 		return v, nil
+
+	case crSavedMsg:
+		// A CR was created or edited elsewhere. Refresh the cached crMap
+		// so the diff viewer shows/updates its emoji indicators.
+		if msg.errMsg != "" || v.database == nil || v.identifier == "" {
+			return v, nil
+		}
+		return v, fetchCRMapCmd(v.database, v.identifier)
 
 	case diffShowStatMsg:
 		v.statHash = msg.hash
