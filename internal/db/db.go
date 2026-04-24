@@ -311,6 +311,27 @@ func resolveDependencyID(tx *sql.Tx, identifier string) (int, int64, error) {
 	return 0, 0, fmt.Errorf("work unit %q not found", identifier)
 }
 
+// allDependenciesDone reports whether every identifier in deps refers to a
+// work unit whose phase is "done". A project's phase is set to "done" by
+// MarkTicketDoneCascading once all of its children are complete, so this also
+// covers the "project with all subprojects/tickets done" case.
+func allDependenciesDone(tx *sql.Tx, deps []string) (bool, error) {
+	for _, dep := range deps {
+		var phase string
+		err := tx.QueryRow(`SELECT phase FROM tickets WHERE identifier = ?`, dep).Scan(&phase)
+		if err == sql.ErrNoRows {
+			err = tx.QueryRow(`SELECT phase FROM projects WHERE identifier = ?`, dep).Scan(&phase)
+		}
+		if err != nil {
+			return false, fmt.Errorf("look up dependency %q: %w", dep, err)
+		}
+		if phase != string(models.PhaseDone) {
+			return false, nil
+		}
+	}
+	return true, nil
+}
+
 // Status returns all work units (projects and tickets) with their dependencies
 // and change requests populated.
 func (d *DB) Status() ([]*models.WorkUnit, error) {
@@ -562,7 +583,13 @@ func (d *DB) CreateTicket(identifier, description string, deps []string, parentB
 	if err := d.withTx(func(tx *sql.Tx) error {
 		phase := models.PhaseImplement
 		if len(deps) > 0 {
-			phase = models.PhaseBlocked
+			allDone, err := allDependenciesDone(tx, deps)
+			if err != nil {
+				return err
+			}
+			if !allDone {
+				phase = models.PhaseBlocked
+			}
 		}
 
 		var projectID sql.NullInt64

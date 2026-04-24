@@ -19,6 +19,7 @@ type TerminalProfile struct {
 var TerminalProfiles = map[string]TerminalProfile{
 	"iterm2":   {BundleID: "com.googlecode.iterm2", OpenCommand: "open -a iTerm ."},
 	"terminal": {BundleID: "com.apple.Terminal", OpenCommand: "open -a Terminal ."},
+	"cmux":     {BundleID: "com.cmuxterm.app", OpenCommand: "open -a cmux ."},
 }
 
 // ValidateTerminal returns an error if name is not a supported terminal.

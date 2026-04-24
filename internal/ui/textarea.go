@@ -10,12 +10,13 @@ import (
 // TextArea is a reusable multi-line text input widget with word wrapping,
 // cursor navigation, and standard editing operations.
 type TextArea struct {
-	lines  [][]rune // logical lines (Enter creates new lines)
-	row    int      // cursor logical line index
-	col    int      // cursor column within logical line
-	width  int      // character width for wrapping/display
-	height int      // visible height in visual lines
-	offset int      // scroll offset in visual lines
+	lines   [][]rune // logical lines (Enter creates new lines)
+	row     int      // cursor logical line index
+	col     int      // cursor column within logical line
+	width   int      // character width for wrapping/display
+	height  int      // visible height in visual lines
+	offset  int      // scroll offset in visual lines
+	focused bool     // when false, View() omits the cursor block
 }
 
 // textSegment represents one visual line within a word-wrapped logical line.
@@ -51,6 +52,10 @@ func (t TextArea) Value() string {
 	}
 	return sb.String()
 }
+
+// SetFocused controls whether View() renders the cursor block. Callers should
+// mirror their own focus state here so a blurred TextArea shows no cursor.
+func (t *TextArea) SetFocused(f bool) { t.focused = f }
 
 // SetSize updates the dimensions of the text area.
 func (t *TextArea) SetSize(width, height int) {
@@ -119,7 +124,7 @@ func (t TextArea) View() string {
 		text := string(t.lines[wl.logRow][wl.startCol:wl.endCol])
 		visLen := wl.endCol - wl.startCol
 
-		if i == cursorVisRow {
+		if t.focused && i == cursorVisRow {
 			runes := []rune(text)
 			if cursorVisCol < len(runes) {
 				sb.WriteString(string(runes[:cursorVisCol]))

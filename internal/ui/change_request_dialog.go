@@ -66,7 +66,7 @@ func NewChangeRequestDialog(database *db.DB, identifier, fileName string, lineNu
 	if textWidth < 20 {
 		textWidth = 20
 	}
-	return ChangeRequestDialog{
+	d := ChangeRequestDialog{
 		database:     database,
 		identifier:   identifier,
 		fileName:     fileName,
@@ -77,6 +77,8 @@ func NewChangeRequestDialog(database *db.DB, identifier, fileName string, lineNu
 		focused:      crFocusTextArea,
 		width:        width,
 	}
+	d.textArea.SetFocused(true)
+	return d
 }
 
 func (d ChangeRequestDialog) Init() tea.Cmd { return nil }
@@ -93,11 +95,13 @@ func (d ChangeRequestDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.String() == "tab" {
 			d.errMsg = ""
 			d.focused = (d.focused + 1) % crFocusCount
+			d.textArea.SetFocused(d.focused == crFocusTextArea)
 			return d, nil
 		}
 		if msg.String() == "shift+tab" {
 			d.errMsg = ""
 			d.focused = (d.focused + crFocusCount - 1) % crFocusCount
+			d.textArea.SetFocused(d.focused == crFocusTextArea)
 			return d, nil
 		}
 

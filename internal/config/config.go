@@ -31,7 +31,7 @@ type Settings struct {
 	Editor string `json:"editor" default:"cursor"`
 
 	// Terminal is the name of the terminal to use. Supported values: "iterm2",
-	// "terminal". Defaults to "iterm2".
+	// "terminal", "cmux". Defaults to "iterm2".
 	Terminal string `json:"terminal" default:"iterm2"`
 
 	// ModelImplement, ModelRefactor, and ModelReview set the Claude model used

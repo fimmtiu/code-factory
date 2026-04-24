@@ -155,6 +155,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.dialog = NewTicketDialog(m.db, msg.wu, m.width, m.height)
 		return m, nil
 
+	case openNewTicketDialogMsg:
+		m.dialog = NewAddTicketDialog(m.db, msg.parent, msg.units, m.width)
+		return m, nil
+
+	case ticketCreatedMsg:
+		cmds := []tea.Cmd{ticketCreatedNotificationCmd(msg)}
+		// Refresh the Projects view so the new ticket appears.
+		updated, cmd := m.views[ViewProject].Update(projectRefreshMsg{})
+		m.views[ViewProject] = updated.(viewModel)
+		if cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+		return m, tea.Batch(cmds...)
+
 	case openPhasePickerMsg:
 		m.dialog = NewPhasePickerDialog(m.db, msg.wu)
 		return m, nil

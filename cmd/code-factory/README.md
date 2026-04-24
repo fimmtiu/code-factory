@@ -6,7 +6,7 @@ A terminal UI application that manages a pool of Claude Code agents to automatic
 
 - Run `cf-tickets init` in the repository first to create `.code-factory/`.
 - Set `editor` in `.code-factory/settings.json` to `"cursor"` or `"vscode"` (default: `"cursor"`).
-- Set `terminal` in `.code-factory/settings.json` to `"iterm2"` or `"terminal"` (default: `"iterm2"`).
+- Set `terminal` in `.code-factory/settings.json` to `"iterm2"`, `"terminal"`, or `"cmux"` (default: `"iterm2"`).
 
 ## Usage
 
@@ -83,7 +83,7 @@ Settings are read from `.code-factory/settings.json` at startup.
 |---------|---------|-------------|
 | `stale_threshold_minutes` | `30` | Minutes before an in-progress ticket is considered abandoned |
 | `editor` | `"cursor"` | Editor to open worktrees in (`"cursor"` or `"vscode"`) |
-| `terminal` | `"iterm2"` | Terminal emulator for opening worktrees and notifications (`"iterm2"` or `"terminal"`) |
+| `terminal` | `"iterm2"` | Terminal emulator for opening worktrees and notifications (`"iterm2"`, `"terminal"`, or `"cmux"`) |
 | `model_implement` | `"sonnet"` | Claude model for the implementation phase |
 | `model_refactor` | `"opus"` | Claude model for the refactoring phase |
 | `model_review` | `"opus"` | Claude model for the review phase |

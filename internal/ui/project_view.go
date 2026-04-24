@@ -376,6 +376,8 @@ func (v ProjectView) updateTreeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return v.openDiffView()
 	case "p", "P":
 		return v.openPhasePicker()
+	case "n", "N":
+		return v.openNewTicketDialog()
 	case "/":
 		v.filtering = true
 		return v, nil
@@ -426,6 +428,36 @@ func (v ProjectView) openTicketDialog() (tea.Model, tea.Cmd) {
 		return v, nil
 	}
 	return v, func() tea.Msg { return openTicketDialogMsg{wu: wu} }
+}
+
+func (v ProjectView) openNewTicketDialog() (tea.Model, tea.Cmd) {
+	nodes := v.filteredTreeNodes()
+	if len(nodes) == 0 {
+		return v, nil
+	}
+	wu := nodes[v.treeSelected].wu
+
+	// For a project row, create under that project. For a ticket row, create
+	// a sibling under the same parent project.
+	parent := wu
+	if !wu.IsProject {
+		if wu.Parent == "" {
+			return v, nil
+		}
+		parent = nil
+		for _, u := range v.units {
+			if u.Identifier == wu.Parent {
+				parent = u
+				break
+			}
+		}
+		if parent == nil {
+			return v, nil
+		}
+	}
+
+	units := v.units
+	return v, func() tea.Msg { return openNewTicketDialogMsg{parent: parent, units: units} }
 }
 
 func (v ProjectView) openPhasePicker() (tea.Model, tea.Cmd) {
@@ -899,6 +931,7 @@ func (v ProjectView) KeyBindings() []KeyBinding {
 		{Key: "E", Description: "Edit work unit description"},
 		{Key: "G", Description: "View diff"},
 		{Key: "P", Description: "Set phase (idle tickets only)"},
+		{Key: "N", Description: "Add new ticket"},
 		{Key: "/", Description: "Filter tree by substring"},
 	}
 }

@@ -567,6 +567,60 @@ func TestCreateTicket_DefaultParentBranch(t *testing.T) {
 	}
 }
 
+func TestCreateTicket_ImplementWhenAllDependenciesDone(t *testing.T) {
+	d, _, _ := openTestDB(t)
+	if err := d.CreateProject("proj", "P", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	// Another project used as a completed dependency.
+	if err := d.CreateProject("donedep", "Done dep", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj/a", "a", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	// Mark both dependencies as done.
+	if err := d.SetProjectPhase("donedep", string(models.ProjectPhaseDone)); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.SetStatus("proj/a", models.PhaseDone, models.StatusIdle); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := d.CreateTicket("proj/b", "b", []string{"proj/a", "donedep"}, ""); err != nil {
+		t.Fatal(err)
+	}
+	u := findUnit(t, d, "proj/b")
+	if u.Phase != models.PhaseImplement {
+		t.Errorf("phase = %s, want implement (all deps done)", u.Phase)
+	}
+}
+
+func TestCreateTicket_BlockedWhenSomeDependenciesOpen(t *testing.T) {
+	d, _, _ := openTestDB(t)
+	if err := d.CreateProject("proj", "P", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj/a", "a", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj/b", "b", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	// Only one dep is done.
+	if err := d.SetStatus("proj/a", models.PhaseDone, models.StatusIdle); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := d.CreateTicket("proj/c", "c", []string{"proj/a", "proj/b"}, ""); err != nil {
+		t.Fatal(err)
+	}
+	u := findUnit(t, d, "proj/c")
+	if u.Phase != models.PhaseBlocked {
+		t.Errorf("phase = %s, want blocked (one dep still open)", u.Phase)
+	}
+}
+
 func TestGetTicket_IncludesParentBranch(t *testing.T) {
 	d, _, _ := openTestDB(t)
 	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
