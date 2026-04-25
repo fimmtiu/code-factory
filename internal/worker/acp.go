@@ -147,7 +147,24 @@ func (c *acpWorkerClient) SessionUpdate(_ context.Context, params acp.SessionNot
 //  2. Marks the ticket as needs-attention.
 //  3. Sends a MsgPermissionRequest to the main goroutine.
 //  4. Blocks until the main goroutine sends back a MsgResponse.
+//
+// Parallel tool calls within a single agent turn can call this concurrently
+// on the same worker. The permSem serializes them so the second call waits
+// until the first has been answered: only one prompt is on screen at a time
+// and only one goroutine is selecting on ToWorker for any given response.
 func (c *acpWorkerClient) RequestPermission(ctx context.Context, params acp.RequestPermissionRequest) (acp.RequestPermissionResponse, error) {
+	cancelled := acp.RequestPermissionResponse{
+		Outcome: acp.RequestPermissionOutcome{
+			Cancelled: &acp.RequestPermissionOutcomeCancelled{},
+		},
+	}
+	select {
+	case c.w.permSem <- struct{}{}:
+		defer func() { <-c.w.permSem }()
+	case <-ctx.Done():
+		return cancelled, nil
+	}
+
 	title := ""
 	if params.ToolCall.Title != nil {
 		title = *params.ToolCall.Title
@@ -184,11 +201,7 @@ func (c *acpWorkerClient) RequestPermission(ctx context.Context, params acp.Requ
 		c.w.SetPendingPermission(nil)
 		c.w.Status = StatusBusy
 		_ = c.database.SetStatus(c.identifier, c.phase, c.activeStatus)
-		return acp.RequestPermissionResponse{
-			Outcome: acp.RequestPermissionOutcome{
-				Cancelled: &acp.RequestPermissionOutcomeCancelled{},
-			},
-		}, nil
+		return cancelled, nil
 
 	case msg := <-c.w.ToWorker:
 		c.w.SetPendingPermission(nil)
@@ -221,11 +234,7 @@ func (c *acpWorkerClient) RequestPermission(ctx context.Context, params acp.Requ
 				Outcome: acp.NewRequestPermissionOutcomeSelected(params.Options[0].OptionId),
 			}, nil
 		}
-		return acp.RequestPermissionResponse{
-			Outcome: acp.RequestPermissionOutcome{
-				Cancelled: &acp.RequestPermissionOutcomeCancelled{},
-			},
-		}, nil
+		return cancelled, nil
 	}
 }
 

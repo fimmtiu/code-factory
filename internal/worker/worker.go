@@ -67,6 +67,13 @@ type Worker struct {
 	// user response, or nil if none is pending. Protected by mu.
 	pendingPermission *PendingPermissionRequest
 
+	// permSem serializes RequestPermission calls so two parallel tool uses
+	// cannot both stash a pending permission (overwriting each other) or
+	// race for the same response on ToWorker. Capacity 1 — acquire by
+	// sending, release by receiving — used inside a select so callers can
+	// also bail on context cancellation while waiting.
+	permSem chan struct{}
+
 	// cancelWork cancels the per-task context, aborting the current subprocess.
 	// nil when the worker is idle. Protected by mu.
 	cancelWork context.CancelFunc
@@ -95,6 +102,7 @@ func NewWorker(number int) *Worker {
 		Status:     StatusIdle,
 		Paused:     false,
 		ToWorker:   make(chan MainToWorkerMessage, workerChannelBuffer),
+		permSem:    make(chan struct{}, 1),
 		LastOutput: []string{},
 	}
 }
