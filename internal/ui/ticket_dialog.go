@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -44,6 +45,90 @@ var phaseOrder = []struct {
 	{models.PhaseImplement, "Implement"},
 	{models.PhaseRefactor, "Refactor"},
 	{models.PhaseReview, "Review"},
+}
+
+// discoverLogEntries returns the ticket's log files ordered by creation time,
+// with each respond.log re-labeled as "<Parent Phase> (Respond)" so it appears
+// directly after the phase log it followed.
+func discoverLogEntries(wu *models.WorkUnit) []tdLogEntry {
+	repoRoot, err := storage.FindRepoRoot(".")
+	if err != nil {
+		return nil
+	}
+	ticketsDir := storage.TicketsDirPath(repoRoot)
+
+	type rawLog struct {
+		label     string
+		phase     models.TicketPhase
+		path      string
+		mtime     time.Time
+		isRespond bool
+	}
+
+	var raws []rawLog
+	collect := func(phase models.TicketPhase, label string, isRespond bool) {
+		paths := worker.AllLogfilePaths(ticketsDir, wu.Identifier, string(phase))
+		for i, path := range paths {
+			entryLabel := label
+			if !isRespond && len(paths) > 1 {
+				entryLabel = fmt.Sprintf("%s %d", label, i+1)
+			}
+			var mtime time.Time
+			if info, err := os.Stat(path); err == nil {
+				mtime = info.ModTime()
+			}
+			raws = append(raws, rawLog{
+				label:     entryLabel,
+				phase:     phase,
+				path:      path,
+				mtime:     mtime,
+				isRespond: isRespond,
+			})
+		}
+	}
+
+	for _, p := range phaseOrder {
+		collect(p.phase, p.label, false)
+	}
+	collect(models.TicketPhase("respond"), "", true)
+
+	sort.SliceStable(raws, func(i, j int) bool { return raws[i].mtime.Before(raws[j].mtime) })
+
+	var (
+		logs           []tdLogEntry
+		lastPhaseLabel string
+		lastPhase      = wu.Phase
+		respondCount   int
+	)
+	for _, r := range raws {
+		var label string
+		var phase models.TicketPhase
+		if r.isRespond {
+			respondCount++
+			suffix := "(Respond)"
+			if respondCount > 1 {
+				suffix = fmt.Sprintf("(Respond %d)", respondCount)
+			}
+			if lastPhaseLabel == "" {
+				label = suffix
+			} else {
+				label = lastPhaseLabel + " " + suffix
+			}
+			phase = lastPhase
+		} else {
+			label = r.label
+			phase = r.phase
+			lastPhaseLabel = r.label
+			lastPhase = r.phase
+			respondCount = 0
+		}
+		var lines []string
+		if data, err := os.ReadFile(r.path); err == nil {
+			lines = strings.Split(string(data), "\n")
+		}
+		logs = append(logs, tdLogEntry{label: label, phase: phase, path: r.path, lines: lines})
+	}
+	return logs
 }
 
 // wrapLine splits a single line into display lines of at most width visual
@@ -146,26 +231,7 @@ func NewTicketDialog(database *db.DB, wu *models.WorkUnit, width, height int) *T
 	copy(crs, wu.ChangeRequests)
 	sort.Slice(crs, func(i, j int) bool { return crs[i].Date.After(crs[j].Date) })
 
-	// Discover logfiles. Multiple runs for the same phase are numbered:
-	// "Implement 1", "Implement 2", etc.
-	var logs []tdLogEntry
-	if repoRoot, err := storage.FindRepoRoot("."); err == nil {
-		ticketsDir := storage.TicketsDirPath(repoRoot)
-		for _, p := range phaseOrder {
-			paths := worker.AllLogfilePaths(ticketsDir, wu.Identifier, string(p.phase))
-			for i, path := range paths {
-				label := p.label
-				if len(paths) > 1 {
-					label = fmt.Sprintf("%s %d", p.label, i+1)
-				}
-				var lines []string
-				if data, err := os.ReadFile(path); err == nil {
-					lines = strings.Split(string(data), "\n")
-				}
-				logs = append(logs, tdLogEntry{label: label, phase: p.phase, path: path, lines: lines})
-			}
-		}
-	}
+	logs := discoverLogEntries(wu)
 
 	worktree, _ := storage.WorktreePathForIdentifier(wu.Identifier)
 
