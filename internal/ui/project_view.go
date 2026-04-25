@@ -179,19 +179,20 @@ func buildTree(units []*models.WorkUnit) []treeNode {
 	return result
 }
 
-// treeLabel returns the display label for a tree node row.
-// isLast is true when the node is a project or the last child of its parent,
-// which causes a └── connector to be used instead of ├──.
-func treeLabel(node treeNode, isLast bool) string {
+// treeLabel returns the display label for a tree node row, split into the
+// indentation/connector prefix and the work unit name. isLast is true when the
+// node is a project or the last child of its parent, which causes a └──
+// connector to be used instead of ├──.
+func treeLabel(node treeNode, isLast bool) (prefix, name string) {
+	name = node.wu.Identifier
 	if node.depth == 0 {
-		return node.wu.Identifier
+		return "", name
 	}
-	prefix := strings.Repeat("    ", node.depth-1)
 	connector := "├── "
 	if isLast {
 		connector = "└── "
 	}
-	return prefix + connector + node.wu.Identifier
+	return strings.Repeat("    ", node.depth-1) + connector, name
 }
 
 // ── Filter ────────────────────────────────────────────────────────────────────
@@ -740,7 +741,7 @@ func (v ProjectView) renderTreeContentFor(nodes []treeNode) string {
 // renderTreeRow renders a single row in the tree pane, including the
 // identifier label, phase badge (for tickets), and styling.
 func (v ProjectView) renderTreeRow(node treeNode, idx int, isLast bool, w int) string {
-	label := treeLabel(node, isLast)
+	prefix, name := treeLabel(node, isLast)
 
 	// Build phase badge for tickets only.
 	badge := ""
@@ -764,24 +765,54 @@ func (v ProjectView) renderTreeRow(node treeNode, idx int, isLast bool, w int) s
 		}
 	}
 
-	// Truncate label to fit identifier width.
-	if lipgloss.Width(label) > identW {
-		runes := []rune(label)
-		if identW > 1 {
-			label = string(runes[:identW-1]) + "…"
+	// Truncate label to fit identifier width, splitting truncation between the
+	// prefix and the name so the tree connector is preserved when possible.
+	prefixW := lipgloss.Width(prefix)
+	if prefixW >= identW {
+		runes := []rune(prefix)
+		if identW > 0 {
+			prefix = string(runes[:identW])
 		} else {
-			label = string(runes[:identW])
+			prefix = ""
+		}
+		name = ""
+	} else {
+		nameBudget := identW - prefixW
+		if lipgloss.Width(name) > nameBudget {
+			runes := []rune(name)
+			if nameBudget > 1 {
+				name = string(runes[:nameBudget-1]) + "…"
+			} else {
+				name = string(runes[:nameBudget])
+			}
 		}
 	}
 
-	baseStyle := v.treeNodeStyle(node, idx)
+	nameStyle := v.treeNodeStyle(node, idx)
+	// The prefix carries indentation and tree-drawing characters; only apply
+	// the selection highlight (a background fill) to it. Foreground-only
+	// styles like the done-state underline must not extend across the
+	// whitespace.
+	prefixStyle := lipgloss.NewStyle()
+	if idx == v.treeSelected {
+		prefixStyle = theme.Current().TreeSelectedStyle
+	}
+
+	styledLabel := prefixStyle.Render(prefix) + nameStyle.Render(name)
 
 	if badge == "" {
-		return baseStyle.Width(w).Render(label)
+		padLen := w - lipgloss.Width(styledLabel)
+		if padLen < 0 {
+			padLen = 0
+		}
+		pad := strings.Repeat(" ", padLen)
+		if idx == v.treeSelected {
+			pad = theme.Current().TreeSelectedStyle.Render(pad)
+		}
+		return styledLabel + pad
 	}
 
 	// Ticket row: render identifier portion, pad to fill, append badge.
-	styledLabel := baseStyle.Render(label)
 	padLen := w - lipgloss.Width(styledLabel) - badgeWidth
 	if padLen < 1 {
 		padLen = 1
