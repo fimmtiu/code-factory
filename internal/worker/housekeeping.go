@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/fimmtiu/code-factory/internal/db"
+	"github.com/fimmtiu/code-factory/internal/models"
 )
 
 // housekeepingInterval is how often the housekeeping goroutine wakes up to
@@ -46,7 +47,15 @@ func releaseStaleTickets(pool *Pool, database *db.DB, logCh chan<- LogMessage, t
 	}
 	now := time.Now()
 	for _, ticket := range tickets {
-		logfile := LatestLogfilePath(ticketsDir, ticket.Identifier, string(ticket.Phase))
+		// During a /cf-respond run the ticket's phase is still 'review' (or
+		// whichever phase was active), but the active log is respond.log.
+		// Use that so we don't incorrectly flag a working respond run as
+		// stale just because the prior phase log is old.
+		logfilePhase := string(ticket.Phase)
+		if ticket.Status == models.StatusResponding {
+			logfilePhase = "respond"
+		}
+		logfile := LatestLogfilePath(ticketsDir, ticket.Identifier, logfilePhase)
 		if logfile == "" {
 			// No logfile for this phase yet (the worker may have just started
 			// and not created the file). Fall back to the DB timestamp.

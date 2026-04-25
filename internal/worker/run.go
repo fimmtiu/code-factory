@@ -127,8 +127,23 @@ func (w *Worker) processTicket(ctx context.Context, ticket *models.WorkUnit) {
 	}
 
 	w.logCh <- NewLogMessageWithFile(w.Number, fmt.Sprintf("completed processing ticket %s", identifier), logfilePath)
-	if err := w.database.SetStatus(identifier, ticket.Phase, models.StatusUserReview); err != nil {
-		w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("error setting user-review on %s: %v", identifier, err))
+
+	// A respond run can be cut off (turn/token limit) before all CRs are
+	// addressed. If any CRs are still open, leave the ticket in 'responding'
+	// so a worker re-claims it and continues, instead of advancing to
+	// user-review and letting review re-flag the same comments.
+	nextStatus := models.StatusUserReview
+	if isResponding {
+		open, err := w.database.OpenChangeRequests(identifier)
+		if err != nil {
+			w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("error checking open change requests on %s: %v", identifier, err))
+		} else if len(open) > 0 {
+			nextStatus = models.StatusResponding
+			w.logCh <- NewLogMessageWithFile(w.Number, fmt.Sprintf("%d change requests still open on %s; re-queuing for respond", len(open), identifier), logfilePath)
+		}
+	}
+	if err := w.database.SetStatus(identifier, ticket.Phase, nextStatus); err != nil {
+		w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("error setting %s on %s: %v", nextStatus, identifier, err))
 	}
 	w.releaseTicket(identifier)
 	w.Status = StatusIdle
