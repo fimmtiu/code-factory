@@ -272,6 +272,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+tab":
 			m.activeView = prevView(m.activeView)
 			return m, m.activateViewCmd()
+
+		case "esc":
+			// Esc on the Diffs commit list returns to Commands. The diff
+			// viewer itself owns esc when it's open, so only intercept
+			// here when no viewer is active.
+			if m.activeView == ViewDiff {
+				if dv, ok := m.views[ViewDiff].(DiffView); ok && dv.viewer == nil {
+					m.activeView = ViewCommand
+					return m, m.activateViewCmd()
+				}
+			}
 		}
 
 		// Pass remaining keys to the active view.
