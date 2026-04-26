@@ -415,6 +415,8 @@ func (v ProjectView) updateDetailKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return v.openEditor()
 	case "g", "G":
 		return v.openDiffView()
+	case "p", "P":
+		return v.openPhasePicker()
 	}
 	return v, nil
 }
