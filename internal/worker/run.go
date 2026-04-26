@@ -63,6 +63,8 @@ func (w *Worker) processTicket(ctx context.Context, ticket *models.WorkUnit) {
 	defer taskCancel()
 
 	w.SetCurrentTicket(displayLabel + " " + identifier)
+	w.SetActiveTicketStatus(activeStatus)
+	defer w.SetActiveTicketStatus("")
 	w.Status = StatusBusy
 	if err := w.database.SetStatus(identifier, ticket.Phase, activeStatus); err != nil {
 		w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("error setting %s on %s: %v", activeStatus, identifier, err))

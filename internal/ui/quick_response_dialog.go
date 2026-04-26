@@ -160,11 +160,16 @@ func sendResponseToWorker(wu *models.WorkUnit, database *db.DB, pool *worker.Poo
 	if w == nil {
 		return respondToAgentDoneMsg{errMsg: fmt.Sprintf("response error: worker %d not found", workerNum)}
 	}
+	// Mirror the worker's true active status (working for normal phase
+	// runs, responding for /cf-respond runs) so housekeeping doesn't see
+	// a respond run with status=working and check the wrong logfile when
+	// deciding whether to abort the worker for staleness.
+	activeStatus := w.ActiveTicketStatus()
+	if activeStatus == "" {
+		activeStatus = models.StatusWorking
+	}
 	w.SendResponse(text)
-	// The worker's ACP client restores the ticket to its true active status
-	// (working or responding) when it processes the response; setting
-	// StatusWorking here just keeps the UI snappy for the common case.
-	_ = database.SetStatus(wu.Identifier, wu.Phase, models.StatusWorking)
+	_ = database.SetStatus(wu.Identifier, wu.Phase, activeStatus)
 	return respondToAgentDoneMsg{}
 }
 

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/fimmtiu/code-factory/internal/db"
+	"github.com/fimmtiu/code-factory/internal/models"
 )
 
 // workerChannelBuffer is the buffer size for the worker communication channels.
@@ -66,6 +67,12 @@ type Worker struct {
 	// pendingPermission holds the in-flight permission request waiting for a
 	// user response, or nil if none is pending. Protected by mu.
 	pendingPermission *PendingPermissionRequest
+
+	// activeTicketStatus is the ticket status the worker should restore the
+	// ticket to when an interactive event resolves (e.g. a permission
+	// response). StatusWorking for normal phase runs, StatusResponding for
+	// /cf-respond runs, empty when the worker is idle. Protected by mu.
+	activeTicketStatus models.TicketStatus
 
 	// permSem serializes RequestPermission calls so two parallel tool uses
 	// cannot both stash a pending permission (overwriting each other) or
@@ -183,6 +190,23 @@ func (w *Worker) SetPendingPermission(req *PendingPermissionRequest) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.pendingPermission = req
+}
+
+// ActiveTicketStatus returns the ticket status the worker is currently
+// running under (StatusWorking or StatusResponding), or empty if idle.
+// Safe for concurrent access from the UI goroutine.
+func (w *Worker) ActiveTicketStatus() models.TicketStatus {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	return w.activeTicketStatus
+}
+
+// SetActiveTicketStatus records the ticket status this worker is running
+// under. Pass empty to clear when the worker goes idle.
+func (w *Worker) SetActiveTicketStatus(s models.TicketStatus) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.activeTicketStatus = s
 }
 
 // AbortWork cancels the worker's current subprocess, if any. This is called
