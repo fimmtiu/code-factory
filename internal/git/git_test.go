@@ -236,14 +236,16 @@ func TestHasUncommittedChanges(t *testing.T) {
 func TestHasUncommittedChanges_UntrackedFile(t *testing.T) {
 	wt := setupTestRepo(t)
 
-	// Add an untracked file.
+	// Add an untracked file. Untracked files don't count: `git diff`
+	// won't include them, so the "Uncommitted changes" pseudo-commit
+	// would render as empty if it were offered.
 	os.WriteFile(filepath.Join(wt, "untracked.txt"), []byte("new\n"), 0644)
 
 	has, err := HasUncommittedChanges(wt)
 	if err != nil {
 		t.Fatalf("HasUncommittedChanges: %v", err)
 	}
-	if !has {
-		t.Error("expected uncommitted changes with untracked file")
+	if has {
+		t.Error("untracked-only worktree should not report uncommitted changes")
 	}
 }

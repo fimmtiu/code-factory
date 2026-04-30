@@ -101,12 +101,20 @@ func FetchDiff(worktreePath string, startCommit, endCommit CommitEntry) (string,
 	return Output(worktreePath, "diff", startCommit.Hash+"^.."+endCommit.Hash)
 }
 
-// HasUncommittedChanges returns true if the worktree has any modified, staged,
-// or untracked files.
+// HasUncommittedChanges reports whether `git diff` would produce output —
+// i.e. there are unstaged modifications to tracked files. This intentionally
+// matches FetchDiff/FetchShowStat (both of which call plain `git diff`), so
+// the "Uncommitted changes" pseudo-commit is only offered when selecting it
+// would actually render content. Untracked files and staged-only changes do
+// not count.
 func HasUncommittedChanges(worktreePath string) (bool, error) {
-	out, err := Output(worktreePath, "status", "--porcelain")
-	if err != nil {
-		return false, err
+	cmd := exec.Command("git", "-C", worktreePath, "diff", "--quiet")
+	err := cmd.Run()
+	if err == nil {
+		return false, nil
 	}
-	return out != "", nil
+	if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
+		return true, nil
+	}
+	return false, err
 }

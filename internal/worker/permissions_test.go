@@ -35,9 +35,9 @@ func TestAllowListMatches(t *testing.T) {
 	al := loadAllowList(dir)
 
 	cases := []struct {
-		name  string
-		raw   map[string]any
-		want  bool
+		name string
+		raw  map[string]any
+		want bool
 	}{
 		{"bash wildcard", map[string]any{"command": "ls -la /tmp"}, true},
 		{"bash wildcard bare", map[string]any{"command": "ls "}, true},
