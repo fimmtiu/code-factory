@@ -32,6 +32,12 @@ type acpWorkerClient struct {
 	phase        models.TicketPhase
 	activeStatus models.TicketStatus // status to restore when a permission request resolves
 
+	// allow holds compiled rules from the worktree's .claude/settings*.json.
+	// When a permission request matches, we auto-approve without prompting,
+	// since the claude-code-acp wrapper bounces every tool call through
+	// canUseTool regardless of the underlying CLI's allowlist.
+	allow *allowList
+
 	logCh chan<- LogMessage
 
 	// partialLine accumulates streaming text until a newline arrives.
@@ -168,6 +174,26 @@ func (c *acpWorkerClient) RequestPermission(ctx context.Context, params acp.Requ
 	title := ""
 	if params.ToolCall.Title != nil {
 		title = *params.ToolCall.Title
+	}
+
+	// Short-circuit when the tool call matches a project allow rule. The
+	// underlying CLI is meant to honor the allowlist before calling
+	// canUseTool, but the claude-code-acp wrapper bounces everything through
+	// requestPermission anyway, so we re-check rules here.
+	if c.allow.matches(params.ToolCall) {
+		c.appendOutput(fmt.Sprintf("\n=== AUTO-ALLOW (rule match) ===\n%s\n\n", title))
+		for _, o := range params.Options {
+			if o.Kind == acp.PermissionOptionKindAllowOnce {
+				return acp.RequestPermissionResponse{
+					Outcome: acp.NewRequestPermissionOutcomeSelected(o.OptionId),
+				}, nil
+			}
+		}
+		if len(params.Options) > 0 {
+			return acp.RequestPermissionResponse{
+				Outcome: acp.NewRequestPermissionOutcomeSelected(params.Options[0].OptionId),
+			}, nil
+		}
 	}
 
 	// Build structured options for the TUI and a text summary for the logfile.
@@ -389,6 +415,7 @@ func runACP(
 		identifier:   params.Identifier,
 		phase:        params.Phase,
 		activeStatus: params.Status,
+		allow:        loadAllowList(params.WorktreePath),
 		logCh:        logCh,
 	}
 
