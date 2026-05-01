@@ -3,8 +3,10 @@ package worker
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
+	"github.com/fimmtiu/code-factory/internal/git"
 	"github.com/fimmtiu/code-factory/internal/models"
 	"github.com/fimmtiu/code-factory/internal/storage"
 )
@@ -92,6 +94,20 @@ func (w *Worker) processTicket(ctx context.Context, ticket *models.WorkUnit) {
 	worktreePath := storage.TicketWorktreePathIn(w.ticketsDir, identifier)
 	logfilePath := NextLogfilePath(w.ticketsDir, identifier, logfilePhase)
 
+	// For a fresh refactor run, capture HEAD so we can later tell whether
+	// the agent actually committed anything. An empty refactor (no
+	// "refactor:" commits added) skips user-review and advances directly
+	// to the review phase.
+	var preRefactorHEAD string
+	if !isResponding && ticket.Phase == models.PhaseRefactor {
+		head, err := git.Output(worktreePath, "rev-parse", "HEAD")
+		if err != nil {
+			w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("warning: could not capture pre-refactor HEAD on %s: %v; will route to user-review", identifier, err))
+		} else {
+			preRefactorHEAD = head
+		}
+	}
+
 	prompt, err := BuildPrompt(ticket, w.database, w.ticketsDir)
 	if err != nil {
 		w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("error building prompt for %s: %v", identifier, err))
@@ -138,6 +154,7 @@ func (w *Worker) processTicket(ctx context.Context, ticket *models.WorkUnit) {
 	// addressed. If any CRs are still open, leave the ticket in 'responding'
 	// so a worker re-claims it and continues, instead of advancing to
 	// user-review and letting review re-flag the same comments.
+	nextPhase := ticket.Phase
 	nextStatus := models.StatusUserReview
 	if isResponding {
 		open, err := w.database.OpenChangeRequests(identifier)
@@ -147,12 +164,41 @@ func (w *Worker) processTicket(ctx context.Context, ticket *models.WorkUnit) {
 			nextStatus = models.StatusResponding
 			w.logCh <- NewLogMessageWithFile(w.Number, fmt.Sprintf("%d change requests still open on %s; re-queuing for respond", len(open), identifier), logfilePath)
 		}
+	} else if ticket.Phase == models.PhaseRefactor && preRefactorHEAD != "" {
+		// An empty refactor produced no work for a human to review.
+		// Auto-approve: advance the phase to review without stopping at
+		// user-review.
+		added, err := refactorCommitsAdded(worktreePath, preRefactorHEAD)
+		if err != nil {
+			w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("warning: could not check refactor commits on %s: %v; routing to user-review", identifier, err))
+		} else if !added {
+			nextPhase = models.PhaseReview
+			nextStatus = models.StatusIdle
+			w.logCh <- NewLogMessageWithFile(w.Number, fmt.Sprintf("refactor on %s added no new commits; advancing to review", identifier), logfilePath)
+		}
 	}
-	if err := w.database.SetStatus(identifier, ticket.Phase, nextStatus); err != nil {
+	if err := w.database.SetStatus(identifier, nextPhase, nextStatus); err != nil {
 		w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("error setting %s on %s: %v", nextStatus, identifier, err))
 	}
 	w.releaseTicket(identifier)
 	w.Status = StatusIdle
+}
+
+// refactorCommitsAdded reports whether any commit reachable from HEAD but
+// not from preHEAD has a subject beginning with "refactor:". The refactor
+// agent always uses that prefix, so its absence means the run produced no
+// new work.
+func refactorCommitsAdded(worktreePath, preHEAD string) (bool, error) {
+	out, err := git.Output(worktreePath, "log", preHEAD+"..HEAD", "--format=%s")
+	if err != nil {
+		return false, err
+	}
+	for _, line := range strings.Split(out, "\n") {
+		if strings.HasPrefix(line, "refactor:") {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // releaseTicket clears the claim on a ticket, clears display state, and
