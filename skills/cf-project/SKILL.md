@@ -32,15 +32,38 @@ Terminology for the `cf-tickets` system:
    - Check whether it exists: `git branch --list <branch-name>`
    - If it does NOT exist, create it from the current HEAD: `git branch <branch-name>`
 
-   Store the answer for use in Step 7 below. If the user accepts the default (empty response), leave `parent_branch` unset.
+   Store the answer for use in Step 9 below. If the user accepts the default (empty response), leave `parent_branch` unset.
 
 2. Read the user-provided specification for the work to be done
-3. Choose a **top-level project name**: a short, descriptive kebab-case identifier that captures what the specification is trying to accomplish (e.g., `task-priority`, `auth-overhaul`, `csv-export`). Shorter is better — this name is prepended to every descendant identifier. Aim for 2–3 words / under 20 characters.
-4. Divide the work into logical pieces, each with a short identifier (preferably less than 30 characters, following the identifier rules above). Each of these will become a subproject of the top-level project.
-5. **Extract shared infrastructure.** Review the subprojects from Step 4 and identify any types, packages, utility functions, or helper code that two or more subprojects will need to create. If multiple subprojects describe creating or using the same type, function, or package that does not yet exist, that shared code must be extracted into a dedicated ticket (or subproject) that the others depend on. Do NOT leave shared code unowned — if a ticket's description says "use X" and no dependency creates X, one of two things will happen: the implementing agent invents X itself, or two agents invent it independently and the merge conflicts.
-6. Collect all clarifying questions across all projects and present them to the user in a single batch (see "How to ask clarifying questions" below). Wait for answers before proceeding. If nothing is ambiguous, skip this step.
-7. Determine the dependencies between projects
-8. Create the **top-level project** first. Its description should be a brief overview of the entire specification — what is being built and why. It has no dependencies. If the user specified a target branch in Step 1, include `"parent_branch"` in the JSON.
+3. **Survey existing utilities in the repo.** Build a written "utility inventory" you will refer back to in Steps 6 and 7. Without this, you will repeatedly assume helpers don't exist and end up with multiple tickets independently inventing the same `exec.go` / `http.go` / `retry.go`.
+   - List the top-level utility roots that exist (any of `internal/`, `pkg/`, `lib/`, `util/`, `common/`, `tools/`).
+   - For each subdirectory under those roots, note its purpose by reading the package doc comment (e.g. `head -n 30 <pkg>/*.go` and look at the `// Package x ...` line, or read the `README.md` if one is present).
+   - Record a one-line summary per package: identifier, what it provides, exported entry points the planner is most likely to reuse.
+   - Also note conventions visible at the repo root: language, build tool, test layout. The decomposition will inherit them.
+
+   This step is a fact-finding pass. Don't decide anything yet — just know what already exists.
+4. Choose a **top-level project name**: a short, descriptive kebab-case identifier that captures what the specification is trying to accomplish (e.g., `task-priority`, `auth-overhaul`, `csv-export`). Shorter is better — this name is prepended to every descendant identifier. Aim for 2–3 words / under 20 characters.
+5. Divide the work into logical pieces, each with a short identifier (preferably less than 30 characters, following the identifier rules above). Each of these will become a subproject of the top-level project.
+6. **Extract shared infrastructure.** Walk the checklist below. For each entry, answer (a) does the repo already have it? (use the inventory from Step 3) and (b) does any ticket from Step 5 need it? If (a) is no and (b) is yes, the shared code MUST become its own ticket (or subproject) that the relevant downstream tickets depend on. If (a) is yes, every ticket that uses it MUST reference the existing package by name in its description (e.g. "use `internal/cmdexec` to run shell commands") so the implementing agent doesn't reinvent it.
+
+   Common shared-infrastructure patterns to check, in order:
+
+   - **Command / process runner** — any ticket shells out to an external command (`git`, `bundle`, `npm`, `make`, `docker`, etc.).
+   - **HTTP / API client** — any ticket makes outbound HTTP calls or talks to a third-party API.
+   - **Retry / backoff helper** — any ticket has to tolerate a flaky network or filesystem operation.
+   - **Error types & wrapping** — multiple tickets surface the same error category (e.g. "command failed", "fetch failed").
+   - **Config / settings loader** — multiple tickets read or write the same configuration source.
+   - **Logging / output wrapper** — multiple tickets need consistent stdout/stderr/JSON-log formatting.
+   - **File / directory / atomic-write helpers** — multiple tickets do path manipulation, atomic file replacement, or recursive copy/walk.
+   - **Parsing / serialisation** — multiple tickets parse the same format (JSON, YAML, TOML, INI, a domain DSL, gemspecs, package.json, etc.).
+   - **Domain model types** — multiple tickets define the same struct, interface, or enum (e.g. `Package`, `Version`, `Dependency`).
+   - **Test helpers / fixtures** — multiple tickets need the same test scaffolding (fake-command runners, golden files, table-driven harnesses).
+
+   Do NOT hand the same shared pattern to two unrelated tickets and trust them to converge. They will each invent their own version, in different files, and the merge will be unrecoverable. When in doubt, extract.
+
+7. Collect all clarifying questions across all projects and present them to the user in a single batch (see "How to ask clarifying questions" below). Wait for answers before proceeding. If nothing is ambiguous, skip this step.
+8. Determine the dependencies between projects
+9. Create the **top-level project** first. Its description should be a brief overview of the entire specification — what is being built and why. It has no dependencies. If the user specified a target branch in Step 1, include `"parent_branch"` in the JSON.
   ```bash
   cf-tickets create-project <top-level-name> <<'TICKET_JSON'
   {
@@ -50,9 +73,9 @@ Terminology for the `cf-tickets` system:
   TICKET_JSON
   ```
   Omit the `"parent_branch"` field entirely if the user accepted the default.
-9. For each subproject, in dependency order (parents and dependencies first):
-  9a. Generate a structured PRD, guided by the user's answers from Step 6
-  9b. Create the subproject by piping a JSON description into `cf-tickets create-project`. The identifier MUST include the full path from the top-level project down to this subproject. A subproject can live directly under the top-level project or nested under another subproject:
+10. For each subproject, in dependency order (parents and dependencies first):
+  10a. Generate a structured PRD, guided by the user's answers from Step 7
+  10b. Create the subproject by piping a JSON description into `cf-tickets create-project`. The identifier MUST include the full path from the top-level project down to this subproject. A subproject can live directly under the top-level project or nested under another subproject:
   ```bash
   # Direct child of the top-level project:
   cf-tickets create-project <top-level-name>/<subproject> <<'TICKET_JSON'
@@ -79,7 +102,7 @@ Terminology for the `cf-tickets` system:
   }
   ```
   Omit `dependencies` or pass `[]` if the subproject has none.
-  9c. For each user story in the PRD, create a ticket. Derive the ticket identifier from the user story title, not its number. The ticket identifier is the parent subproject's full identifier plus the ticket name. Examples:
+  10c. For each user story in the PRD, create a ticket. Derive the ticket identifier from the user story title, not its number. The ticket identifier is the parent subproject's full identifier plus the ticket name. Examples:
   - Story "US-001: Add priority field" in subproject `task-priority/models` → ticket `task-priority/models/add-priority-field`
   - Story "US-002: Validate input" in nested subproject `task-priority/api/validation` → ticket `task-priority/api/validation/validate-input`
   ```bash
@@ -97,7 +120,7 @@ Terminology for the `cf-tickets` system:
   TICKET_JSON
   ```
 
-10. **Cross-validate write scopes.** Review every ticket and project you just created. For each pair of sibling work units (work units that do NOT have a dependency relationship between them), verify their `write_scope` entries do not overlap. If they do, fix the decomposition before finishing: either add a dependency or extract a shared ticket. **An empty `write_scope` on a ticket that creates or modifies files is a bug** — fill it in before checking for overlaps. This is the last step — do not skip it.
+11. **Cross-validate write scopes.** Review every ticket and project you just created. For each pair of sibling work units (work units that do NOT have a dependency relationship between them), verify their `write_scope` entries do not overlap. If they do, fix the decomposition before finishing: either add a dependency or extract a shared ticket. **An empty `write_scope` on a ticket that creates or modifies files is a bug** — fill it in before checking for overlaps. This is the last step — do not skip it.
 
 **Important:** Do NOT start implementing. Your job ends when all projects and tickets have been created with `cf-tickets` and write scopes have been cross-validated. Do not write any code, modify any source files, or begin work on any ticket.
 
@@ -105,7 +128,7 @@ Terminology for the `cf-tickets` system:
 
 ## How to divide the project
 
-Each subproject should either describe an individual feature of the proposed change or lay necessary groundwork for implementing future features. Each output PRD must be small enough that it's easily read and worked on in a single context window. All subprojects and tickets live under the top-level project created in Step 8.
+Each subproject should either describe an individual feature of the proposed change or lay necessary groundwork for implementing future features. Each output PRD must be small enough that it's easily read and worked on in a single context window. All subprojects and tickets live under the top-level project created in Step 9.
 
 ### Preventing duplicate code and merge conflicts
 
@@ -116,7 +139,7 @@ Every ticket and subproject must declare a non-empty **write scope** (`write_sco
 
 When in doubt, prefer extraction. A small "utility" ticket that two others depend on is far cheaper than a merge conflict.
 
-**Watch for implicit shared code.** If two tickets both say "use X" or "import X" and X does not exist yet, someone must create it. If no ticket in their dependency chain creates X, each implementing agent will invent it independently — producing an add/add merge conflict. During Step 5, look for these patterns: shared type definitions, utility packages, common interfaces, and helper functions referenced by multiple tickets.
+**Watch for implicit shared code.** If two tickets both say "use X" or "import X" and X does not exist yet, someone must create it. If no ticket in their dependency chain creates X, each implementing agent will invent it independently — producing an add/add merge conflict. The Step 6 checklist (command runner, HTTP client, retry/backoff, error types, config loader, logging wrapper, file/path helpers, parsing, domain types, test helpers) is what catches these — work it patiently. The Step 3 inventory tells you which ones already exist; the rest are decisions you have to make explicit before tickets are created.
 
 If a subproject encompasses a very broad, general feature, you may break it into further nested subprojects with their own short descriptive names and PRDs. For example, if the top-level project is `task-priority` and the subproject `api` is too broad, you could create `task-priority/api/routes` and `task-priority/api/validation` as children of `task-priority/api`. There are no hard limits on nesting below the top-level project, but if you've gone deeper than three levels of nesting (including the top-level project) then something is wrong and you're probably making the projects too fine-grained.
 
