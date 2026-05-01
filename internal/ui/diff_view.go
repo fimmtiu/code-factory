@@ -969,4 +969,4 @@ func (v DiffView) HintPairs() []string {
 	return []string{"↑/↓", "navigate", "PgUp/Dn", "page", "Shift+↑/↓", "extend range", "T", "open terminal", "E", "open editor", "Tab", "view diff"}
 }
 
-func (v DiffView) Label() string { return "F5:Diffs" }
+func (v DiffView) Label() string { return "F4:Diffs" }

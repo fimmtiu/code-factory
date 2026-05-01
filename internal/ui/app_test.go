@@ -25,17 +25,17 @@ func TestNewModel_ViewDiffIsDiffView(t *testing.T) {
 	}
 }
 
-func TestF5SwitchesToDiffsView(t *testing.T) {
+func TestF4SwitchesToDiffsView(t *testing.T) {
 	m := NewModel(nil, nil, 5)
 	m.width = 120
 	m.height = 40
 	// Ensure we start on a different view.
 	m.activeView = ViewProject
 
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyF5})
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyF4})
 	model := updated.(Model)
 	if model.activeView != ViewDiff {
-		t.Errorf("after F5, activeView = %d, want %d (ViewDiff)", model.activeView, ViewDiff)
+		t.Errorf("after F4, activeView = %d, want %d (ViewDiff)", model.activeView, ViewDiff)
 	}
 }
 

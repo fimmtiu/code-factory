@@ -498,4 +498,4 @@ func (v LogView) KeyBindings() []KeyBinding {
 	}
 }
 
-func (v LogView) Label() string { return "F4:Log" }
+func (v LogView) Label() string { return "F5:Log" }

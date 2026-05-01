@@ -32,12 +32,12 @@ const (
 	ViewProject ViewID = iota
 	ViewCommand
 	ViewWorker
-	ViewLog
 	ViewDiff
+	ViewLog
 )
 
 // viewCount is the total number of views; used for tab cycling.
-const viewCount = ViewDiff + 1
+const viewCount = ViewLog + 1
 
 // viewModel is the interface that each view sub-model must satisfy.
 type viewModel interface {
@@ -74,7 +74,7 @@ func truncateLine(s string, maxWidth int) string {
 	return string(runes[:maxWidth])
 }
 
-// nextView returns the next view in the cycle (project → command → worker → log → diffs → project).
+// nextView returns the next view in the cycle (project → command → worker → diffs → log → project).
 func nextView(current ViewID) ViewID {
 	return (current + 1) % viewCount
 }

@@ -108,8 +108,8 @@ The TUI has five views (switch with F1–F5 or Shift+Tab):
 - **F1: Projects** — Hierarchical tree of all work units, with a status pane and detail view. Press Enter on a ticket to see its change requests and logfiles.
 - **F2: Commands** — Actionable tickets waiting for your input (`needs-attention`) or review (`user-review`). Press A to approve, R to respond to an agent question, D to open a debug prompt.
 - **F3: Workers** — Live view of each agent worker: what it's doing, and a log of its work.
-- **F4: Log** — Timestamped history of all worker actions with access to raw agent logfiles.
-- **F5: Diffs** — Allows you to interactively look through a ticket's commit history and examine the code that's being generated.
+- **F4: Diffs** — Allows you to interactively look through a ticket's commit history and examine the code that's being generated.
+- **F5: Log** — Timestamped history of all worker actions with access to raw agent logfiles.
 
 Here are some screenshots, though the terminal UI is in flux and these will be out of date quickly.
 

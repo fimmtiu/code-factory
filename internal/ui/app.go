@@ -259,11 +259,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.activeView = ViewWorker
 			return m, nil
 		case "f4":
-			m.activeView = ViewLog
-			return m, func() tea.Msg { return logActivatedMsg{} }
-		case "f5":
 			m.activeView = ViewDiff
 			return m, nil
+		case "f5":
+			m.activeView = ViewLog
+			return m, func() tea.Msg { return logActivatedMsg{} }
 
 		case "shift+tab":
 			m.activeView = nextView(m.activeView)

@@ -26,14 +26,15 @@ Must be run from inside a git repository containing a `.code-factory/` directory
 
 ## Views
 
-The TUI has four views, switched with F1–F4 or Shift-Tab / Ctrl-Tab:
+The TUI has five views, switched with F1–F5 or Shift-Tab / Ctrl-Tab:
 
 | Key | View | Description |
 |-----|------|-------------|
 | F1 | Projects | Hierarchical tree of all projects and tickets with a status pane and detail pane |
 | F2 | Commands | Actionable tickets (`needs-attention` and `user-review`), with controls to respond, approve, and debug |
 | F3 | Workers | Real-time view of each worker's status and recent agent output |
-| F4 | Log | Timestamped log of all worker actions, with access to raw logfiles |
+| F4 | Diffs | Interactive view of a ticket's commit history with a diff viewer |
+| F5 | Log | Timestamped log of all worker actions, with access to raw logfiles |
 
 ## Key bindings (Commands view)
 
