@@ -41,6 +41,10 @@ func (w *Worker) run(ctx context.Context, pollIntervalSecs int) {
 // the Claude ACP subprocess, transitions the ticket to user-review, and
 // releases it.
 func (w *Worker) processTicket(ctx context.Context, ticket *models.WorkUnit) {
+	if ticket.Phase == models.PhaseMerging {
+		w.processMerging(ctx, ticket)
+		return
+	}
 	identifier := ticket.Identifier
 
 	// Determine whether this is a responding run (ticket was claimed with

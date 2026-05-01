@@ -173,6 +173,14 @@ func (v CommandView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return openMergeConflictDialogMsg{worktreePath: mergeErr.WorktreePath, branch: mergeErr.Branch}
 				})
 			}
+			var messyErr *workflow.MessyWorktreeError
+			if errors.As(msg.err, &messyErr) {
+				v.errorMsg = ""
+				return v, tea.Batch(
+					v.fetchCmd(),
+					ShowNotification(fmt.Sprintf("Messy worktree for %s, not merging", messyErr.Identifier)),
+				)
+			}
 			v.errorMsg = fmt.Sprintf("approve error: %s", msg.err)
 			return v, v.fetchCmd()
 		}

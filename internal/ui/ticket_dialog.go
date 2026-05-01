@@ -45,6 +45,7 @@ var phaseOrder = []struct {
 	{models.PhaseImplement, "Implement"},
 	{models.PhaseRefactor, "Refactor"},
 	{models.PhaseReview, "Review"},
+	{models.PhaseMerging, "Merging"},
 }
 
 // discoverLogEntries returns the ticket's log files ordered by creation time,

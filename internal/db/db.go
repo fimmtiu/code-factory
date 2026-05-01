@@ -2,7 +2,9 @@
 package db
 
 import (
+	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,6 +15,7 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 
+	"github.com/fimmtiu/code-factory/internal/git"
 	"github.com/fimmtiu/code-factory/internal/gitutil"
 	"github.com/fimmtiu/code-factory/internal/models"
 	"github.com/fimmtiu/code-factory/internal/storage"
@@ -38,6 +41,20 @@ func (e *MergeConflictError) Error() string {
 
 func (e *MergeConflictError) Unwrap() error {
 	return e.Err
+}
+
+// MergeUnresolvedError is returned by MergeChain when a rebase conflict
+// could not be resolved by the onConflict callback (the worktree is still
+// dirty after the callback returned, or the retry rebase failed). The
+// caller should typically transition the ticket to user-review and notify
+// the user.
+type MergeUnresolvedError struct {
+	Identifier   string
+	WorktreePath string
+}
+
+func (e *MergeUnresolvedError) Error() string {
+	return fmt.Sprintf("merge conflict on %s remains unresolved (worktree %s)", e.Identifier, e.WorktreePath)
 }
 
 // DB provides read/write access to the tickets SQLite database.
@@ -788,6 +805,27 @@ type completionStep struct {
 // rebases themselves are idempotent, so a retry that re-walks levels which
 // previously succeeded is safe.
 func (d *DB) MarkTicketDoneCascading(identifier string) error {
+	return d.MergeChain(context.Background(), identifier, nil)
+}
+
+// MergeChain runs the cascading rebase that turns a ticket and its
+// fully-completed parent projects into "done". On a rebase/fast-forward
+// conflict, onConflict is invoked with the path of the worktree holding
+// the in-progress state (this may be the ticket's own worktree or a
+// parent's). After onConflict returns, the worktree is rechecked; if it
+// is clean the cascade resumes from the same step (the rebase is
+// idempotent, so a no-op retry is fine if the agent already ran
+// `git rebase --continue` to completion). If the worktree is still dirty
+// or the retry rebase fails, MergeUnresolvedError is returned and no
+// work unit is finalized.
+//
+// onConflict may be nil, in which case any conflict surfaces directly as
+// the underlying *MergeConflictError (matching MarkTicketDoneCascading's
+// pre-merging-phase behaviour).
+//
+// On success every work unit in the chain is finalized: marked done in
+// the DB, dependents unblocked, and the ticket worktree removed.
+func (d *DB) MergeChain(ctx context.Context, identifier string, onConflict func(stepIdentifier, worktreePath string) error) error {
 	chain, err := d.computeCompletionChain(identifier)
 	if err != nil {
 		return err
@@ -815,8 +853,35 @@ func (d *DB) MarkTicketDoneCascading(identifier string) error {
 
 	// Phase 1: every rebase + fast-forward in the chain must succeed.
 	for _, step := range chain {
-		if err := d.rebaseAndFastForward(step.Identifier, step.MergeTarget); err != nil {
-			return err
+		if err := d.rebaseAndFastForward(step.Identifier, step.MergeTarget); err == nil {
+			continue
+		} else {
+			if onConflict == nil {
+				return err
+			}
+			var conflictErr *MergeConflictError
+			if !errors.As(err, &conflictErr) {
+				return err
+			}
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			if cbErr := onConflict(step.Identifier, conflictErr.WorktreePath); cbErr != nil {
+				return cbErr
+			}
+			clean, cleanErr := git.IsWorktreeClean(conflictErr.WorktreePath)
+			if cleanErr != nil {
+				return cleanErr
+			}
+			if !clean {
+				return &MergeUnresolvedError{Identifier: step.Identifier, WorktreePath: conflictErr.WorktreePath}
+			}
+			// Retry now that the agent has (we hope) completed the rebase.
+			// rebaseAndFastForward is idempotent: a no-op rebase plus a
+			// no-op fast-forward when the target is already at the tip.
+			if err := d.rebaseAndFastForward(step.Identifier, step.MergeTarget); err != nil {
+				return &MergeUnresolvedError{Identifier: step.Identifier, WorktreePath: conflictErr.WorktreePath}
+			}
 		}
 	}
 

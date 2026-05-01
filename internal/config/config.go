@@ -37,11 +37,13 @@ type Settings struct {
 	// ModelImplement, ModelRefactor, and ModelReview set the Claude model used
 	// for each ticket phase. ModelRespond is used when a ticket is in the
 	// "responding" status and a worker is running the /cf-respond skill.
-	// Empty string uses Claude's default model.
+	// ModelMerge is used during the merging phase when the agent is invoked
+	// to resolve rebase conflicts. Empty string uses Claude's default model.
 	ModelImplement string `json:"model_implement" default:"sonnet"`
 	ModelRefactor  string `json:"model_refactor" default:"opus"`
 	ModelReview    string `json:"model_review" default:"opus"`
 	ModelRespond   string `json:"model_respond" default:"opus"`
+	ModelMerge     string `json:"model_merge" default:"opus"`
 
 	// Effort is the effort level passed to Claude (e.g. "low", "normal",
 	// "high"). Empty string uses Claude's default.
@@ -67,6 +69,8 @@ func (s *Settings) ModelForWork(status, phase string) string {
 		return s.ModelRefactor
 	case "review":
 		return s.ModelReview
+	case "merging":
+		return s.ModelMerge
 	}
 	return ""
 }

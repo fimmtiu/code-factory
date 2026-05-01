@@ -7,6 +7,7 @@ const (
 	PhaseImplement TicketPhase = "implement"
 	PhaseReview    TicketPhase = "review"
 	PhaseRefactor  TicketPhase = "refactor"
+	PhaseMerging   TicketPhase = "merging"
 	PhaseDone      TicketPhase = "done"
 )
 
@@ -22,7 +23,7 @@ const (
 
 func IsValidTicketPhase(s string) bool {
 	switch TicketPhase(s) {
-	case PhaseBlocked, PhaseImplement, PhaseReview, PhaseRefactor, PhaseDone:
+	case PhaseBlocked, PhaseImplement, PhaseReview, PhaseRefactor, PhaseMerging, PhaseDone:
 		return true
 	}
 	return false

@@ -118,7 +118,7 @@ func TestApprove_RefactorToReview(t *testing.T) {
 	}
 }
 
-func TestApprove_ReviewToDone(t *testing.T) {
+func TestApprove_ReviewToMerging(t *testing.T) {
 	d := openTestDB(t)
 	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
 		t.Fatal(err)
@@ -130,12 +130,25 @@ func TestApprove_ReviewToDone(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Approving review hands the ticket off to a worker via merging/idle;
+	// the actual rebase + done transition is done by the worker calling
+	// MergeChain. The tests below exercise MergeChain directly to drive
+	// the cascade since there is no real worker pool here.
 	if err := workflow.Approve(d, "proj/t1"); err != nil {
 		t.Fatalf("Approve: %v", err)
 	}
+	if got := ticketPhase(t, d, "proj/t1"); got != models.PhaseMerging {
+		t.Errorf("expected phase %q, got %q", models.PhaseMerging, got)
+	}
+	if got := ticketStatus(t, d, "proj/t1"); got != models.StatusIdle {
+		t.Errorf("expected status %q, got %q", models.StatusIdle, got)
+	}
 
+	if err := d.MarkTicketDoneCascading("proj/t1"); err != nil {
+		t.Fatalf("MarkTicketDoneCascading: %v", err)
+	}
 	if got := ticketPhase(t, d, "proj/t1"); got != models.PhaseDone {
-		t.Errorf("expected phase %q, got %q", models.PhaseDone, got)
+		t.Errorf("expected phase %q after merge, got %q", models.PhaseDone, got)
 	}
 }
 
@@ -259,9 +272,12 @@ func TestApprove_DoneReturnsError(t *testing.T) {
 	if err := d.SetStatus("proj/t1", models.PhaseReview, models.StatusIdle); err != nil {
 		t.Fatal(err)
 	}
-	// Mark done first.
+	// Approve hands off to merging; drive the merge to done as a worker would.
 	if err := workflow.Approve(d, "proj/t1"); err != nil {
 		t.Fatalf("first Approve: %v", err)
+	}
+	if err := d.MarkTicketDoneCascading("proj/t1"); err != nil {
+		t.Fatalf("MarkTicketDoneCascading: %v", err)
 	}
 
 	// Try to approve again.
@@ -296,6 +312,9 @@ func TestApprove_SingleTicketMarkesProjectDone(t *testing.T) {
 	if err := workflow.Approve(d, "proj/t1"); err != nil {
 		t.Fatalf("Approve: %v", err)
 	}
+	if err := d.MarkTicketDoneCascading("proj/t1"); err != nil {
+		t.Fatalf("MarkTicketDoneCascading: %v", err)
+	}
 
 	if got := projectPhase(t, d, "proj"); got != models.ProjectPhaseDone {
 		t.Errorf("expected project phase %q, got %q", models.ProjectPhaseDone, got)
@@ -329,10 +348,7 @@ func TestApprove_NotAllTicketsDone_ProjectRemainsOpen(t *testing.T) {
 }
 
 func TestApprove_NestedProjectCompletion(t *testing.T) {
-	// Structure:
-	//   grandparent
-	//     parent
-	//       t1
+	// Structure: grandparent / parent / t1.
 	d := openTestDB(t)
 	for _, id := range []string{"grandparent", "grandparent/parent"} {
 		if err := d.CreateProject(id, "A project", nil, ""); err != nil {
@@ -349,8 +365,10 @@ func TestApprove_NestedProjectCompletion(t *testing.T) {
 	if err := workflow.Approve(d, "grandparent/parent/t1"); err != nil {
 		t.Fatalf("Approve: %v", err)
 	}
+	if err := d.MarkTicketDoneCascading("grandparent/parent/t1"); err != nil {
+		t.Fatalf("MarkTicketDoneCascading: %v", err)
+	}
 
-	// Both parent and grandparent should be done.
 	if got := projectPhase(t, d, "grandparent/parent"); got != models.ProjectPhaseDone {
 		t.Errorf("parent phase: expected %q, got %q", models.ProjectPhaseDone, got)
 	}
@@ -394,12 +412,13 @@ func strconvAtoi(t *testing.T, s string) (int64, error) {
 
 // ── Cascading-failure tests ──────────────────────────────────────────────────
 
-// TestApprove_GrandparentRebaseFailureLeavesTicketAtReview verifies the fix
-// for the cascading-completion bug: when the ticket-level rebase succeeds but
-// a parent rebase further up the tree fails, neither the ticket nor any
-// project may be marked done. The user must be able to fix the conflict and
-// re-approve.
-func TestApprove_GrandparentRebaseFailureLeavesTicketAtReview(t *testing.T) {
+// TestMergeChain_GrandparentRebaseFailureLeavesNoneDone verifies the fix
+// for the cascading-completion bug: when the ticket-level rebase succeeds
+// but a parent rebase further up the tree fails, neither the ticket nor
+// any project may be marked done. With the merging phase the ticket sits
+// at merging/idle until the user (or agent) fixes the conflict and the
+// cascade is retried.
+func TestMergeChain_GrandparentRebaseFailureLeavesNoneDone(t *testing.T) {
 	d, git := openTestDBWithGit(t)
 
 	// grandparent / parent / t1 — completing t1 would cascade both projects.
@@ -427,15 +446,20 @@ func TestApprove_GrandparentRebaseFailureLeavesTicketAtReview(t *testing.T) {
 		return nil
 	}
 
-	if err := workflow.Approve(d, "grandparent/parent/t1"); err == nil {
-		t.Fatal("expected Approve to fail when parent rebase conflicts")
+	// Approve hands off to merging.
+	if err := workflow.Approve(d, "grandparent/parent/t1"); err != nil {
+		t.Fatalf("Approve: %v", err)
+	}
+	// MergeChain (simulating the worker run) should fail at the parent step.
+	if err := d.MarkTicketDoneCascading("grandparent/parent/t1"); err == nil {
+		t.Fatal("expected MergeChain to fail when parent rebase conflicts")
 	}
 
-	// Ticket must still be at review, neither done nor advanced.
-	if got := ticketPhase(t, d, "grandparent/parent/t1"); got != models.PhaseReview {
-		t.Errorf("ticket phase: expected %q, got %q", models.PhaseReview, got)
+	// Ticket must remain at merging/idle (no further transition by the
+	// chain itself; the worker is what would set it to user-review).
+	if got := ticketPhase(t, d, "grandparent/parent/t1"); got != models.PhaseMerging {
+		t.Errorf("ticket phase: expected %q, got %q", models.PhaseMerging, got)
 	}
-	// Neither project may be marked done while the cascade is incomplete.
 	if got := projectPhase(t, d, "grandparent/parent"); got == models.ProjectPhaseDone {
 		t.Errorf("parent project should not be done after partial failure")
 	}
@@ -444,11 +468,11 @@ func TestApprove_GrandparentRebaseFailureLeavesTicketAtReview(t *testing.T) {
 	}
 }
 
-// TestApprove_RetryAfterParentConflictSucceeds verifies that, once the user
-// resolves the conflict that caused the cascade to fail, re-approving the
-// ticket completes the whole chain successfully — i.e. earlier rebases are
-// safely retried without breaking anything.
-func TestApprove_RetryAfterParentConflictSucceeds(t *testing.T) {
+// TestMergeChain_RetryAfterParentConflictSucceeds verifies that, once the
+// conflict that caused the cascade to fail is gone, re-running the chain
+// completes everything — i.e. earlier rebases are safely retried without
+// breaking anything.
+func TestMergeChain_RetryAfterParentConflictSucceeds(t *testing.T) {
 	d, git := openTestDBWithGit(t)
 
 	for _, id := range []string{"grandparent", "grandparent/parent"} {
@@ -472,15 +496,18 @@ func TestApprove_RetryAfterParentConflictSucceeds(t *testing.T) {
 		}
 		return nil
 	}
-	if err := workflow.Approve(d, "grandparent/parent/t1"); err == nil {
-		t.Fatal("setup: expected first Approve to fail")
+	if err := workflow.Approve(d, "grandparent/parent/t1"); err != nil {
+		t.Fatalf("Approve: %v", err)
+	}
+	if err := d.MarkTicketDoneCascading("grandparent/parent/t1"); err == nil {
+		t.Fatal("setup: expected first MergeChain to fail")
 	}
 
 	// User "fixes" the conflict — clear the failure injection.
 	git.RebaseErrFunc = nil
 
-	if err := workflow.Approve(d, "grandparent/parent/t1"); err != nil {
-		t.Fatalf("retry Approve: %v", err)
+	if err := d.MarkTicketDoneCascading("grandparent/parent/t1"); err != nil {
+		t.Fatalf("retry MergeChain: %v", err)
 	}
 
 	if got := ticketPhase(t, d, "grandparent/parent/t1"); got != models.PhaseDone {
@@ -494,10 +521,10 @@ func TestApprove_RetryAfterParentConflictSucceeds(t *testing.T) {
 	}
 }
 
-// TestApprove_TicketRebaseFailureLeavesTicketAtReview verifies the simpler
-// case: when the ticket's own rebase onto its parent fails, the ticket stays
-// at review and no parent is touched.
-func TestApprove_TicketRebaseFailureLeavesTicketAtReview(t *testing.T) {
+// TestMergeChain_TicketRebaseFailureLeavesTicketAtMerging verifies the
+// simpler case: when the ticket's own rebase onto its parent fails,
+// MergeChain returns an error and no work unit is finalized.
+func TestMergeChain_TicketRebaseFailureLeavesTicketAtMerging(t *testing.T) {
 	d, git := openTestDBWithGit(t)
 	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
 		t.Fatal(err)
@@ -511,11 +538,14 @@ func TestApprove_TicketRebaseFailureLeavesTicketAtReview(t *testing.T) {
 
 	git.RebaseErr = errors.New("simulated ticket conflict")
 
-	if err := workflow.Approve(d, "proj/t1"); err == nil {
-		t.Fatal("expected Approve to fail when ticket rebase conflicts")
+	if err := workflow.Approve(d, "proj/t1"); err != nil {
+		t.Fatalf("Approve: %v", err)
 	}
-	if got := ticketPhase(t, d, "proj/t1"); got != models.PhaseReview {
-		t.Errorf("ticket phase: expected %q, got %q", models.PhaseReview, got)
+	if err := d.MarkTicketDoneCascading("proj/t1"); err == nil {
+		t.Fatal("expected MergeChain to fail when ticket rebase conflicts")
+	}
+	if got := ticketPhase(t, d, "proj/t1"); got != models.PhaseMerging {
+		t.Errorf("ticket phase: expected %q, got %q", models.PhaseMerging, got)
 	}
 	if got := projectPhase(t, d, "proj"); got == models.ProjectPhaseDone {
 		t.Errorf("project should not be done after ticket rebase failure")

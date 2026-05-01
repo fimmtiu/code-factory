@@ -101,6 +101,21 @@ func FetchDiff(worktreePath string, startCommit, endCommit CommitEntry) (string,
 	return Output(worktreePath, "diff", startCommit.Hash+"^.."+endCommit.Hash)
 }
 
+// IsWorktreeClean reports whether the worktree at worktreePath has no
+// pending state of any kind: no unstaged changes, no staged changes, no
+// untracked files, no unmerged entries, no in-progress rebase or merge
+// that would leave files dirty. Implemented as `git status --porcelain`
+// returning empty output. Used by the merging phase to decide whether a
+// rebase can safely (re)run after an agent has attempted to resolve
+// conflicts.
+func IsWorktreeClean(worktreePath string) (bool, error) {
+	out, err := Output(worktreePath, "status", "--porcelain")
+	if err != nil {
+		return false, err
+	}
+	return out == "", nil
+}
+
 // HasUncommittedChanges reports whether `git diff` would produce output —
 // i.e. there are unstaged modifications to tracked files. This intentionally
 // matches FetchDiff/FetchShowStat (both of which call plain `git diff`), so
