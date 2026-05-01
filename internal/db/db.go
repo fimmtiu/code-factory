@@ -1263,12 +1263,19 @@ func (d *DB) Release(identifier string) error {
 	})
 }
 
-// ResetTicket atomically clears the claim and resets the status to idle.
-// Used by housekeeping for stale tickets where the worker is presumed dead.
+// ResetTicket atomically clears the claim so the ticket is reclaimable.
+// Working/needs-attention tickets revert to idle; responding tickets stay
+// responding so the pending /cf-respond run is retried instead of falling
+// back to the prior phase. Used by housekeeping for stale tickets where the
+// worker is presumed dead.
 func (d *DB) ResetTicket(identifier string) error {
 	return d.withTx(func(tx *sql.Tx) error {
 		res, err := tx.Exec(
-			`UPDATE tickets SET status = 'idle', claimed_by = NULL, last_updated = ? WHERE identifier = ?`,
+			`UPDATE tickets
+			 SET status = CASE WHEN status = 'responding' THEN 'responding' ELSE 'idle' END,
+			     claimed_by = NULL,
+			     last_updated = ?
+			 WHERE identifier = ?`,
 			time.Now().Unix(), identifier,
 		)
 		if err != nil {

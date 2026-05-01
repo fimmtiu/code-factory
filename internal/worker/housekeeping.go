@@ -47,6 +47,14 @@ func releaseStaleTickets(pool *Pool, database *db.DB, logCh chan<- LogMessage, t
 	}
 	now := time.Now()
 	for _, ticket := range tickets {
+		// A ticket with no claim is just sitting in the queue waiting for a
+		// free worker (most often a 'responding' ticket the user approved
+		// while every worker was busy). There is no stuck subprocess to
+		// abort, and the next free worker will pick it up — staleness only
+		// applies to tickets a worker has actually grabbed.
+		if ticket.ClaimedBy == "" {
+			continue
+		}
 		// During a /cf-respond run the ticket's phase is still 'review' (or
 		// whichever phase was active), but the active log is respond.log.
 		// Use that so we don't incorrectly flag a working respond run as
@@ -67,11 +75,9 @@ func releaseStaleTickets(pool *Pool, database *db.DB, logCh chan<- LogMessage, t
 		}
 
 		// Abort the owning worker's subprocess before resetting the DB.
-		if ticket.ClaimedBy != "" {
-			if num, err := strconv.Atoi(ticket.ClaimedBy); err == nil {
-				if w := pool.GetWorker(num); w != nil {
-					w.AbortWork()
-				}
+		if num, err := strconv.Atoi(ticket.ClaimedBy); err == nil {
+			if w := pool.GetWorker(num); w != nil {
+				w.AbortWork()
 			}
 		}
 

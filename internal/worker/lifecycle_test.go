@@ -3,6 +3,7 @@ package worker_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -559,6 +560,94 @@ func TestResetTicket_ResetsStatusAndClaim(t *testing.T) {
 	}
 	if reclaimed.Identifier != "proj/stuck" {
 		t.Errorf("expected to reclaim proj/stuck, got %q", reclaimed.Identifier)
+	}
+}
+
+func TestReleaseStaleTickets_SkipsUnclaimedRespondingTicket(t *testing.T) {
+	d, ticketsDir := openTestDB(t)
+	createProject(t, d, "proj")
+	createTicket(t, d, "proj/queued")
+
+	// Approved ticket waiting for a free worker — status responding,
+	// no claim. A leftover respond.log from a previous cycle would make
+	// the staleness check fire, so we drop one in to mirror production.
+	if err := d.SetStatus("proj/queued", models.PhaseReview, models.StatusResponding); err != nil {
+		t.Fatalf("SetStatus: %v", err)
+	}
+	staleLog := filepath.Join(ticketsDir, "proj", "queued", "respond.log")
+	if err := os.MkdirAll(filepath.Dir(staleLog), 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(staleLog, []byte("old"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	old := time.Now().Add(-1 * time.Hour)
+	if err := os.Chtimes(staleLog, old, old); err != nil {
+		t.Fatalf("Chtimes: %v", err)
+	}
+
+	pool := worker.NewPool(1, 1)
+	logCh := make(chan worker.LogMessage, 16)
+	worker.ReleaseStaleTickets(pool, d, logCh, ticketsDir)
+
+	// Drain the channel — we should not see a "released stale" message
+	// for an unclaimed ticket.
+	for {
+		select {
+		case msg := <-logCh:
+			if strings.Contains(msg.Message, "released stale ticket proj/queued") {
+				t.Fatalf("housekeeping released an unclaimed responding ticket: %q", msg.Message)
+			}
+		default:
+			goto checkStatus
+		}
+	}
+checkStatus:
+	units, err := d.Status()
+	if err != nil {
+		t.Fatalf("Status: %v", err)
+	}
+	for _, u := range units {
+		if u.Identifier == "proj/queued" && u.Status != models.StatusResponding {
+			t.Errorf("status = %q, want responding", u.Status)
+		}
+	}
+}
+
+func TestResetTicket_PreservesRespondingStatus(t *testing.T) {
+	d, _ := openTestDB(t)
+	createProject(t, d, "proj")
+	createTicket(t, d, "proj/has-crs")
+
+	// Simulate an approved ticket waiting for a worker to run /cf-respond.
+	if err := d.SetStatus("proj/has-crs", models.PhaseReview, models.StatusResponding); err != nil {
+		t.Fatalf("SetStatus: %v", err)
+	}
+
+	if err := d.ResetTicket("proj/has-crs"); err != nil {
+		t.Fatalf("ResetTicket: %v", err)
+	}
+
+	// Status must stay 'responding' so the next claim runs /cf-respond, not
+	// the prior phase. Reset to 'idle' would silently re-run review.
+	units, err := d.Status()
+	if err != nil {
+		t.Fatalf("Status: %v", err)
+	}
+	var found bool
+	for _, u := range units {
+		if u.Identifier == "proj/has-crs" {
+			found = true
+			if u.Status != models.StatusResponding {
+				t.Errorf("status = %q, want responding", u.Status)
+			}
+			if u.Phase != models.PhaseReview {
+				t.Errorf("phase = %q, want review", u.Phase)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("ticket not found")
 	}
 }
 
