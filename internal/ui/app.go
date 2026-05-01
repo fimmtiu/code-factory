@@ -249,19 +249,34 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.dialog = NewHelpDialog(m.views[m.activeView].KeyBindings())
 			return m, nil
 
-		case "f1":
+		case "f1", "1":
+			if msg.String() == "1" && m.activeViewIsFiltering() {
+				break
+			}
 			m.activeView = ViewProject
 			return m, nil
-		case "f2":
+		case "f2", "2":
+			if msg.String() == "2" && m.activeViewIsFiltering() {
+				break
+			}
 			m.activeView = ViewCommand
 			return m, nil
-		case "f3":
+		case "f3", "3":
+			if msg.String() == "3" && m.activeViewIsFiltering() {
+				break
+			}
 			m.activeView = ViewWorker
 			return m, nil
-		case "f4":
+		case "f4", "4":
+			if msg.String() == "4" && m.activeViewIsFiltering() {
+				break
+			}
 			m.activeView = ViewDiff
 			return m, nil
-		case "f5":
+		case "f5", "5":
+			if msg.String() == "5" && m.activeViewIsFiltering() {
+				break
+			}
 			m.activeView = ViewLog
 			return m, func() tea.Msg { return logActivatedMsg{} }
 
@@ -455,6 +470,24 @@ func (m Model) renderHeader() string {
 		}
 	}
 	return theme.Current().HeaderStyle.Render(strings.Join(tabs, "  "))
+}
+
+// activeViewIsFiltering reports whether the active view is currently
+// accepting characters into a filter input (Projects or Log). Used to
+// suppress the 1–5 view-switch shortcuts when a digit should land in the
+// filter instead.
+func (m Model) activeViewIsFiltering() bool {
+	switch m.activeView {
+	case ViewProject:
+		if pv, ok := m.views[ViewProject].(ProjectView); ok {
+			return pv.filtering
+		}
+	case ViewLog:
+		if lv, ok := m.views[ViewLog].(LogView); ok {
+			return lv.filtering
+		}
+	}
+	return false
 }
 
 // activateViewCmd returns a command that sends an activation message for the
