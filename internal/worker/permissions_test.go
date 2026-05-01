@@ -9,7 +9,17 @@ import (
 	acp "github.com/coder/acp-go-sdk"
 )
 
+// restoreHome puts $HOME back to prev when the deferring test ends, so a
+// per-test override never leaks into a subsequent test.
+func restoreHome(prev string) {
+	_ = os.Setenv("HOME", prev)
+}
+
 func TestAllowListMatches(t *testing.T) {
+	// Isolate from the test runner's real home so user-global rules don't
+	// bleed into the worktree-only assertions below.
+	defer restoreHome(os.Getenv("HOME"))
+	os.Setenv("HOME", t.TempDir())
 	dir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(dir, ".claude"), 0o755); err != nil {
 		t.Fatal(err)
@@ -78,9 +88,70 @@ func TestAllowListMatches(t *testing.T) {
 }
 
 func TestAllowListMissingFiles(t *testing.T) {
+	// Point HOME at a fresh empty dir so the user-global settings.json
+	// doesn't bleed real rules from the test runner's home directory.
+	defer restoreHome(os.Getenv("HOME"))
+	os.Setenv("HOME", t.TempDir())
 	dir := t.TempDir()
 	al := loadAllowList(dir)
 	if got := al.matches(acp.RequestPermissionToolCall{RawInput: map[string]any{"command": "ls"}}); got {
 		t.Errorf("empty allowList should not match anything; got true")
+	}
+}
+
+// TestAllowListMergesUserHomeAndWorktree verifies that rules from both
+// $HOME/.claude/settings.json and the worktree's .claude/settings.json are
+// loaded. Without this, a user's home-level allowlist was ignored and every
+// worktree had to repeat the same rules.
+func TestAllowListMergesUserHomeAndWorktree(t *testing.T) {
+	defer restoreHome(os.Getenv("HOME"))
+	home := t.TempDir()
+	os.Setenv("HOME", home)
+	if err := os.MkdirAll(filepath.Join(home, ".claude"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	homeSettings := `{
+	  "permissions": {
+	    "allow": ["Bash(rm -f /tmp/*)"]
+	  }
+	}`
+	if err := os.WriteFile(filepath.Join(home, ".claude", "settings.json"), []byte(homeSettings), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	worktree := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(worktree, ".claude"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	worktreeSettings := `{
+	  "permissions": {
+	    "allow": ["Bash(make test)"]
+	  }
+	}`
+	if err := os.WriteFile(filepath.Join(worktree, ".claude", "settings.json"), []byte(worktreeSettings), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	al := loadAllowList(worktree)
+
+	cases := []struct {
+		name string
+		cmd  string
+		want bool
+	}{
+		{"home rule matches", "rm -f /tmp/cf-review-blah.txt", true},
+		{"worktree rule matches", "make test", true},
+		{"unknown command rejected", "rm -rf /", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rawJSON, _ := json.Marshal(map[string]any{"command": tc.cmd})
+			var raw any
+			_ = json.Unmarshal(rawJSON, &raw)
+			got := al.matches(acp.RequestPermissionToolCall{RawInput: raw})
+			if got != tc.want {
+				t.Errorf("matches(%q) = %v, want %v", tc.cmd, got, tc.want)
+			}
+		})
 	}
 }

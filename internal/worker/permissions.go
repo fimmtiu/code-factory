@@ -33,14 +33,25 @@ type pathRule struct {
 	matcher *regexp.Regexp
 }
 
-// loadAllowList reads .claude/settings.json and .claude/settings.local.json
-// from worktree and builds a matcher. Missing or malformed files are
+// loadAllowList reads Claude Code permission rules from the user's
+// $HOME/.claude/settings.json plus the worktree's .claude/settings.json
+// and .claude/settings.local.json, in that order, and builds a matcher.
+// The user-global file is read first so that worktree-local rules can
+// extend (but not override) it; in practice both append to the same
+// list since allow rules don't conflict. Missing or malformed files are
 // silently ignored: a partially-loaded allowList is still useful, and a
 // completely empty one falls through to the normal prompt path.
 func loadAllowList(worktree string) *allowList {
 	al := &allowList{worktree: worktree}
+	var paths []string
+	if home, err := os.UserHomeDir(); err == nil && home != "" {
+		paths = append(paths, filepath.Join(home, ".claude", "settings.json"))
+	}
 	for _, name := range []string{"settings.json", "settings.local.json"} {
-		data, err := os.ReadFile(filepath.Join(worktree, ".claude", name))
+		paths = append(paths, filepath.Join(worktree, ".claude", name))
+	}
+	for _, path := range paths {
+		data, err := os.ReadFile(path)
 		if err != nil {
 			continue
 		}
