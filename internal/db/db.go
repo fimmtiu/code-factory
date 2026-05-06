@@ -808,6 +808,14 @@ func (d *DB) MarkTicketDoneCascading(identifier string) error {
 	return d.MergeChain(context.Background(), identifier, nil)
 }
 
+// mergeChainMaxConflictAttempts caps how many times MergeChain will hand a
+// step back to onConflict before giving up. A pass can legitimately surface
+// a fresh conflict in a different worktree (e.g. resolving a fast-forward
+// conflict in a parent worktree advances the parent's tip and exposes new
+// content conflicts when the child rebase is retried), so a single pass is
+// not enough.
+const mergeChainMaxConflictAttempts = 3
+
 // MergeChain runs the cascading rebase that turns a ticket and its
 // fully-completed parent projects into "done". On a rebase/fast-forward
 // conflict, onConflict is invoked with the path of the worktree holding
@@ -815,9 +823,13 @@ func (d *DB) MarkTicketDoneCascading(identifier string) error {
 // parent's). After onConflict returns, the worktree is rechecked; if it
 // is clean the cascade resumes from the same step (the rebase is
 // idempotent, so a no-op retry is fine if the agent already ran
-// `git rebase --continue` to completion). If the worktree is still dirty
-// or the retry rebase fails, MergeUnresolvedError is returned and no
-// work unit is finalized.
+// `git rebase --continue` to completion). The retry can itself produce a
+// fresh conflict — possibly in a different worktree — so onConflict is
+// re-invoked with the new conflict, up to mergeChainMaxConflictAttempts
+// times. If the worktree is still dirty after onConflict returns, or the
+// attempt budget is exhausted, MergeUnresolvedError is returned (carrying
+// the worktree of the unresolved conflict, not the original) and no work
+// unit is finalized.
 //
 // onConflict may be nil, in which case any conflict surfaces directly as
 // the underlying *MergeConflictError (matching MarkTicketDoneCascading's
@@ -853,18 +865,28 @@ func (d *DB) MergeChain(ctx context.Context, identifier string, onConflict func(
 
 	// Phase 1: every rebase + fast-forward in the chain must succeed.
 	for _, step := range chain {
-		if err := d.rebaseAndFastForward(step.Identifier, step.MergeTarget); err == nil {
+		err := d.rebaseAndFastForward(step.Identifier, step.MergeTarget)
+		if err == nil {
 			continue
-		} else {
-			if onConflict == nil {
-				return err
-			}
+		}
+		if onConflict == nil {
+			return err
+		}
+
+		// Hand the conflict to the agent, then retry rebaseAndFastForward.
+		// A retry can surface a *new* conflict (different worktree, fresh
+		// content), so re-engage the agent on whatever conflict the retry
+		// produces, bounded by mergeChainMaxConflictAttempts.
+		for attempt := 0; ; attempt++ {
 			var conflictErr *MergeConflictError
 			if !errors.As(err, &conflictErr) {
 				return err
 			}
 			if ctx.Err() != nil {
 				return ctx.Err()
+			}
+			if attempt >= mergeChainMaxConflictAttempts {
+				return &MergeUnresolvedError{Identifier: step.Identifier, WorktreePath: conflictErr.WorktreePath}
 			}
 			if cbErr := onConflict(step.Identifier, conflictErr.WorktreePath); cbErr != nil {
 				return cbErr
@@ -876,11 +898,11 @@ func (d *DB) MergeChain(ctx context.Context, identifier string, onConflict func(
 			if !clean {
 				return &MergeUnresolvedError{Identifier: step.Identifier, WorktreePath: conflictErr.WorktreePath}
 			}
-			// Retry now that the agent has (we hope) completed the rebase.
 			// rebaseAndFastForward is idempotent: a no-op rebase plus a
 			// no-op fast-forward when the target is already at the tip.
-			if err := d.rebaseAndFastForward(step.Identifier, step.MergeTarget); err != nil {
-				return &MergeUnresolvedError{Identifier: step.Identifier, WorktreePath: conflictErr.WorktreePath}
+			err = d.rebaseAndFastForward(step.Identifier, step.MergeTarget)
+			if err == nil {
+				break
 			}
 		}
 	}
