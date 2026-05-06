@@ -2,12 +2,17 @@ package db
 
 import "github.com/fimmtiu/code-factory/internal/models"
 
-// ProjectContext holds the identifier and description of a project in the
-// hierarchy above a ticket.
-type ProjectContext struct {
+// WorkUnitSummary holds the identifier and description of a work unit
+// (ticket, subproject, or ancestor project). Used for both sibling lookups
+// and ancestor-context lookups.
+type WorkUnitSummary struct {
 	Identifier  string
 	Description string
 }
+
+// ProjectContext is an alias retained for readability in call sites that
+// deal specifically with ancestor project context.
+type ProjectContext = WorkUnitSummary
 
 // GetProjectContext returns the project identifier and description for the
 // ticket's parent, grandparent, etc., walking up the tree from the immediate

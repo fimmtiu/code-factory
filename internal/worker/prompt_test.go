@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/fimmtiu/code-factory/internal/db"
 	"github.com/fimmtiu/code-factory/internal/models"
 	"github.com/fimmtiu/code-factory/internal/worker"
 )
@@ -168,5 +169,86 @@ func TestBuildPrompt_UnsupportedPhase(t *testing.T) {
 	_, err := worker.BuildPrompt(ticket, d, ticketsDir)
 	if err == nil {
 		t.Error("expected error for unsupported phase, got nil")
+	}
+}
+
+// ===== BuildMergingPrompt =====
+
+func TestBuildMergingPrompt_IncludesTicketDescription(t *testing.T) {
+	ticket := buildPromptTicket("proj/t1", "Add rate-limiting middleware", models.PhaseMerging)
+	prompt := worker.BuildMergingPrompt(ticket, nil, nil)
+
+	if !strings.Contains(prompt, "Add rate-limiting middleware") {
+		t.Error("expected prompt to contain ticket description")
+	}
+	if !strings.Contains(prompt, "proj/t1") {
+		t.Error("expected prompt to contain ticket identifier")
+	}
+}
+
+func TestBuildMergingPrompt_IncludesSiblingDescriptions(t *testing.T) {
+	ticket := buildPromptTicket("proj/t1", "Add rate-limiting middleware", models.PhaseMerging)
+	siblings := []db.WorkUnitSummary{
+		{Identifier: "proj/t2", Description: "Refactor the request pipeline"},
+		{Identifier: "proj/t3", Description: "Add caching layer"},
+	}
+	prompt := worker.BuildMergingPrompt(ticket, siblings, nil)
+
+	if !strings.Contains(prompt, "Refactor the request pipeline") {
+		t.Error("expected prompt to contain sibling t2 description")
+	}
+	if !strings.Contains(prompt, "Add caching layer") {
+		t.Error("expected prompt to contain sibling t3 description")
+	}
+	if !strings.Contains(prompt, "proj/t2") {
+		t.Error("expected prompt to contain sibling t2 identifier")
+	}
+	if !strings.Contains(prompt, "proj/t3") {
+		t.Error("expected prompt to contain sibling t3 identifier")
+	}
+}
+
+func TestBuildMergingPrompt_IncludesParentContext(t *testing.T) {
+	ticket := buildPromptTicket("proj/t1", "Add rate-limiting", models.PhaseMerging)
+	contexts := []db.ProjectContext{
+		{Identifier: "proj", Description: "Build a web server with auth and rate limiting"},
+	}
+	prompt := worker.BuildMergingPrompt(ticket, nil, contexts)
+
+	if !strings.Contains(prompt, "Build a web server with auth and rate limiting") {
+		t.Error("expected prompt to contain parent project description")
+	}
+}
+
+func TestBuildMergingPrompt_ContainsRebaseInstructions(t *testing.T) {
+	ticket := buildPromptTicket("proj/t1", "A ticket", models.PhaseMerging)
+	prompt := worker.BuildMergingPrompt(ticket, nil, nil)
+
+	if !strings.Contains(prompt, "rebase") {
+		t.Error("expected prompt to contain rebase instructions")
+	}
+	if !strings.Contains(prompt, "linting and tests") {
+		t.Error("expected prompt to contain linting/test requirement")
+	}
+}
+
+func TestBuildMergingPrompt_NoSiblingsStillWorks(t *testing.T) {
+	ticket := buildPromptTicket("proj/only", "The only ticket", models.PhaseMerging)
+	prompt := worker.BuildMergingPrompt(ticket, nil, nil)
+
+	if !strings.Contains(prompt, "The only ticket") {
+		t.Error("expected prompt to contain ticket description even without siblings")
+	}
+	if strings.Contains(prompt, "Sibling") {
+		t.Error("expected no sibling section when there are no siblings")
+	}
+}
+
+func TestBuildMergingPrompt_TopLevelTicket(t *testing.T) {
+	ticket := buildPromptTicket("standalone", "A standalone ticket", models.PhaseMerging)
+	prompt := worker.BuildMergingPrompt(ticket, nil, nil)
+
+	if !strings.Contains(prompt, "A standalone ticket") {
+		t.Error("expected prompt to contain ticket description")
 	}
 }

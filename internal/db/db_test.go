@@ -1168,3 +1168,122 @@ func TestStackedTickets_NotifyWorkAvailableOnUnblock(t *testing.T) {
 		t.Error("expected onWorkAvailable notification when stacked ticket is unblocked")
 	}
 }
+
+// ===== GetSiblingDescriptions =====
+
+func TestGetSiblingDescriptions_ReturnsSiblingTickets(t *testing.T) {
+	d, _, _ := openTestDB(t)
+	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj/t1", "Add rate-limiting middleware", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj/t2", "Refactor request pipeline", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj/t3", "Add caching layer", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	siblings, err := d.GetSiblingDescriptions("proj/t1")
+	if err != nil {
+		t.Fatalf("GetSiblingDescriptions: %v", err)
+	}
+
+	if len(siblings) != 2 {
+		t.Fatalf("expected 2 siblings, got %d", len(siblings))
+	}
+
+	// Collect identifiers and descriptions.
+	found := map[string]string{}
+	for _, s := range siblings {
+		found[s.Identifier] = s.Description
+	}
+
+	if found["proj/t2"] != "Refactor request pipeline" {
+		t.Errorf("expected proj/t2 description, got %q", found["proj/t2"])
+	}
+	if found["proj/t3"] != "Add caching layer" {
+		t.Errorf("expected proj/t3 description, got %q", found["proj/t3"])
+	}
+	if _, ok := found["proj/t1"]; ok {
+		t.Error("expected the queried ticket to be excluded from siblings")
+	}
+}
+
+func TestGetSiblingDescriptions_IncludesSiblingSubprojects(t *testing.T) {
+	d, _, _ := openTestDB(t)
+	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateProject("proj/sub", "A subproject that refactors core", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj/t1", "Add a feature", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	siblings, err := d.GetSiblingDescriptions("proj/t1")
+	if err != nil {
+		t.Fatalf("GetSiblingDescriptions: %v", err)
+	}
+
+	if len(siblings) != 1 {
+		t.Fatalf("expected 1 sibling (the subproject), got %d", len(siblings))
+	}
+	if siblings[0].Identifier != "proj/sub" {
+		t.Errorf("expected identifier proj/sub, got %q", siblings[0].Identifier)
+	}
+	if siblings[0].Description != "A subproject that refactors core" {
+		t.Errorf("expected subproject description, got %q", siblings[0].Description)
+	}
+}
+
+func TestGetSiblingDescriptions_NoParentReturnsEmpty(t *testing.T) {
+	d, _, _ := openTestDB(t)
+	// A top-level ticket has no parent project; siblings are meaningless.
+	if err := d.CreateTicket("standalone", "A standalone ticket", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	siblings, err := d.GetSiblingDescriptions("standalone")
+	if err != nil {
+		t.Fatalf("GetSiblingDescriptions: %v", err)
+	}
+	if len(siblings) != 0 {
+		t.Errorf("expected 0 siblings for top-level ticket, got %d", len(siblings))
+	}
+}
+
+func TestGetSiblingDescriptions_MissingParentProjectReturnsEmpty(t *testing.T) {
+	d, _, _ := openTestDB(t)
+	// Query an identifier whose parent project doesn't exist in the DB.
+	// This exercises the sql.ErrNoRows path — should return nil, nil rather
+	// than an error.
+	siblings, err := d.GetSiblingDescriptions("nonexistent-proj/t1")
+	if err != nil {
+		t.Fatalf("expected nil error for missing parent project, got: %v", err)
+	}
+	if len(siblings) != 0 {
+		t.Errorf("expected 0 siblings for missing parent, got %d", len(siblings))
+	}
+}
+
+func TestGetSiblingDescriptions_OnlyChildReturnsEmpty(t *testing.T) {
+	d, _, _ := openTestDB(t)
+	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj/only", "The only ticket", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	siblings, err := d.GetSiblingDescriptions("proj/only")
+	if err != nil {
+		t.Fatalf("GetSiblingDescriptions: %v", err)
+	}
+	if len(siblings) != 0 {
+		t.Errorf("expected 0 siblings for only child, got %d", len(siblings))
+	}
+}

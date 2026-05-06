@@ -2,6 +2,7 @@ package worker
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/fimmtiu/code-factory/internal/db"
 	"github.com/fimmtiu/code-factory/internal/models"
@@ -65,4 +66,38 @@ func BuildPrompt(ticket *models.WorkUnit, database *db.DB, ticketsDir string) (s
 	}
 
 	return prompt, nil
+}
+
+// BuildMergingPrompt constructs an intent-aware prompt for the merging agent.
+// It includes the ticket's own description (what it was trying to do), the
+// descriptions of sibling tickets/subprojects under the same parent (whose
+// merged commits are the likely source of the conflict), and parent project
+// context. This gives the agent enough semantic context to resolve conflicts
+// intelligently instead of staring at raw conflict markers.
+//
+// The caller is responsible for fetching siblings and contexts from the
+// database; this function is pure string formatting.
+func BuildMergingPrompt(ticket *models.WorkUnit, siblings []db.WorkUnitSummary, contexts []db.ProjectContext) string {
+	var b strings.Builder
+
+	b.WriteString("Complete this rebase, fixing the current conflict and any further conflicts that arise when applying remaining commits. ")
+	b.WriteString("You must run linting and tests before committing.\n\n")
+
+	b.WriteString(fmt.Sprintf("### This ticket: `%s`\n\n%s\n", ticket.Identifier, ticket.Description))
+
+	if len(siblings) > 0 {
+		b.WriteString("\n### Sibling tickets whose changes may conflict\n")
+		for _, s := range siblings {
+			b.WriteString(fmt.Sprintf("\n**`%s`**: %s\n", s.Identifier, s.Description))
+		}
+	}
+
+	for _, ctx := range contexts {
+		b.WriteString(fmt.Sprintf(
+			"\n### Additional context from project `%s`\n\n%s\n",
+			ctx.Identifier, ctx.Description,
+		))
+	}
+
+	return b.String()
 }

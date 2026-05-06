@@ -9,13 +9,6 @@ import (
 	"github.com/fimmtiu/code-factory/internal/models"
 )
 
-// mergingPrompt is sent to the Claude agent when MergeChain hits a rebase
-// conflict. The agent runs in the worktree of the failing step (which may be
-// the ticket's own worktree or a parent project's) and is expected to drive
-// the rebase to completion via `git rebase --continue` after fixing each
-// conflict.
-const mergingPrompt = "Complete this rebase, fixing the current conflict and any further conflicts that arise when applying remaining commits. You must run linting and tests before committing."
-
 // processMerging runs the cascading rebase for a ticket in PhaseMerging.
 // On clean success the ticket (and any parent projects whose children have
 // all completed) are marked done and their worktrees removed. If a rebase
@@ -46,6 +39,22 @@ func (w *Worker) processMerging(ctx context.Context, ticket *models.WorkUnit) {
 
 	logfilePath := NextLogfilePath(w.ticketsDir, identifier, string(models.PhaseMerging))
 
+	siblings, err := w.database.GetSiblingDescriptions(identifier)
+	if err != nil {
+		w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("error fetching sibling descriptions for %s: %v", identifier, err))
+		w.releaseTicket(identifier)
+		w.Status = StatusIdle
+		return
+	}
+	contexts, err := w.database.GetProjectContext(identifier)
+	if err != nil {
+		w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("error fetching project context for %s: %v", identifier, err))
+		w.releaseTicket(identifier)
+		w.Status = StatusIdle
+		return
+	}
+	prompt := BuildMergingPrompt(ticket, siblings, contexts)
+
 	onConflict := func(stepIdentifier, stepWorktree string) error {
 		w.logCh <- NewLogMessageWithFile(w.Number, fmt.Sprintf("merge conflict on %s; running agent in %s", stepIdentifier, stepWorktree), logfilePath)
 		return w.workFn(taskCtx, w, w.database, w.logCh, WorkParams{
@@ -53,7 +62,7 @@ func (w *Worker) processMerging(ctx context.Context, ticket *models.WorkUnit) {
 			Identifier:   identifier,
 			Phase:        models.PhaseMerging,
 			Status:       activeStatus,
-			Prompt:       mergingPrompt,
+			Prompt:       prompt,
 			LogfilePath:  logfilePath,
 		})
 	}
