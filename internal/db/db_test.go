@@ -1,8 +1,10 @@
 package db_test
 
 import (
+	"context"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -914,6 +916,122 @@ func TestRebaseTicketOnParent_FallsBackToParentIdentifier(t *testing.T) {
 }
 
 // ===== UpdateChangeRequestDescription =====
+
+// ===== Rerere across cascade =====
+
+// assertRerereEnabled checks that EnableRerere was called with the given
+// worktree path. It fails the test with a descriptive message if not found.
+func assertRerereEnabled(t *testing.T, git *gitutil.FakeGitClient, want string) {
+	t.Helper()
+	for _, dir := range git.RereresEnabled {
+		if dir == want {
+			return
+		}
+	}
+	t.Errorf("expected EnableRerere on %q, got %v", want, git.RereresEnabled)
+}
+
+func TestMergeChain_EnablesRerereOnWorktrees(t *testing.T) {
+	d, ticketsDir, git := openTestDB(t)
+
+	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj/ticket", "A ticket", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	git.RereresEnabled = nil
+
+	if err := d.MarkTicketDoneCascading("proj/ticket"); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(git.RereresEnabled) == 0 {
+		t.Fatal("expected EnableRerere to be called")
+	}
+	assertRerereEnabled(t, git, filepath.Join(ticketsDir, "proj", "ticket", "worktree"))
+}
+
+func TestMergeChain_EnablesRerereOnEachCascadeStep(t *testing.T) {
+	d, ticketsDir, git := openTestDB(t)
+
+	if err := d.CreateProject("grand", "Grandparent", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateProject("grand/parent", "Parent", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("grand/parent/t1", "Only ticket", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	git.RereresEnabled = nil
+
+	if err := d.MarkTicketDoneCascading("grand/parent/t1"); err != nil {
+		t.Fatal(err)
+	}
+
+	// Cascade has 3 steps: ticket → parent → grandparent.
+	// EnableRerere should be called on the worktree for each step.
+	if len(git.RereresEnabled) < 3 {
+		t.Fatalf("expected at least 3 EnableRerere calls for cascade, got %d: %v",
+			len(git.RereresEnabled), git.RereresEnabled)
+	}
+
+	assertRerereEnabled(t, git, filepath.Join(ticketsDir, "grand", "parent", "t1", "worktree"))
+	assertRerereEnabled(t, git, filepath.Join(ticketsDir, "grand", "parent", "worktree"))
+	assertRerereEnabled(t, git, filepath.Join(ticketsDir, "grand", "worktree"))
+}
+
+func TestMergeChain_EnablesRerereOnConflictWorktree(t *testing.T) {
+	d, ticketsDir, git := openTestDB(t)
+
+	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj/ticket", "A ticket", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	// MergeChain calls git.IsWorktreeClean (a real git command) on the
+	// conflict worktree after onConflict returns. Initialise a bare git
+	// repo at the worktree path so `git status` succeeds.
+	worktreeDir := filepath.Join(ticketsDir, "proj", "ticket", "worktree")
+	if err := os.MkdirAll(worktreeDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := exec.Command("git", "init", worktreeDir).CombinedOutput(); err != nil {
+		t.Fatalf("git init worktree: %v\n%s", err, out)
+	}
+
+	// Make the first rebase fail, then succeed on retry.
+	callCount := 0
+	git.RebaseErrFunc = func(worktreeDir, ontoBranch string) error {
+		callCount++
+		if callCount == 1 {
+			return errors.New("conflict")
+		}
+		return nil
+	}
+	git.RereresEnabled = nil
+
+	conflictSeen := false
+	onConflict := func(stepIdentifier, worktreePath string) error {
+		conflictSeen = true
+		return nil
+	}
+
+	if err := d.MergeChain(context.Background(), "proj/ticket", onConflict); err != nil {
+		t.Fatalf("MergeChain: %v", err)
+	}
+
+	if !conflictSeen {
+		t.Fatal("expected onConflict to be called")
+	}
+
+	// EnableRerere should have been called on the child worktree
+	// (before the rebase, so its resolution is recorded for later).
+	assertRerereEnabled(t, git, filepath.Join(ticketsDir, "proj", "ticket", "worktree"))
+}
 
 func TestUpdateChangeRequestDescription_AcceptsStringID(t *testing.T) {
 	d, _, _ := openTestDB(t)

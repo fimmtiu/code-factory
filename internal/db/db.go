@@ -753,6 +753,15 @@ func (d *DB) rebaseAndFastForward(identifier, mergeTarget string) error {
 		}
 	}
 
+	// Enable rerere so that conflict resolutions are recorded in the
+	// shared rr-cache. When a sibling or parent rebase encounters the
+	// same conflict, git replays the recorded resolution automatically.
+	// Since linked worktrees share the parent repo's git config and
+	// rr-cache, enabling rerere on any worktree enables it for all
+	// worktrees in the same repository. Errors are non-fatal: rerere is
+	// an optimisation, not a correctness requirement.
+	_ = d.git.EnableRerere(childWorktree)
+
 	if err := d.git.RebaseOnto(childWorktree, targetBranch); err != nil {
 		return &MergeConflictError{WorktreePath: childWorktree, Branch: identifier, Err: err}
 	}

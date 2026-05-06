@@ -19,6 +19,10 @@ func initTestRepo(t *testing.T) string {
 		{"git", "init", dir},
 		{"git", "-C", dir, "config", "user.email", "test@test.com"},
 		{"git", "-C", dir, "config", "user.name", "Test"},
+		// Override any global merge.conflictStyle so tests are hermetic.
+		// diff3 style includes commit-specific hashes in conflict markers
+		// which breaks rerere fingerprint matching across branches.
+		{"git", "-C", dir, "config", "merge.conflictStyle", "merge"},
 	}
 	for _, args := range cmds {
 		out, err := exec.Command(args[0], args[1:]...).CombinedOutput()
@@ -386,6 +390,182 @@ func TestSquashSinceMergeBase_SingleCommitNoOp(t *testing.T) {
 	}
 	if got := revParse(t, dir, "HEAD"); got != tipBefore {
 		t.Errorf("expected single-commit branch to be unchanged, but HEAD moved from %s to %s", tipBefore, got)
+	}
+}
+
+func TestEnableRerere(t *testing.T) {
+	dir := initTestRepo(t)
+	client := gitutil.NewRealGitClient()
+
+	// EnableRerere should set rerere.enabled=true and rerere.autoUpdate=true.
+	if err := client.EnableRerere(dir); err != nil {
+		t.Fatalf("EnableRerere: %v", err)
+	}
+
+	out, err := exec.Command("git", "-C", dir, "config", "rerere.enabled").Output()
+	if err != nil {
+		t.Fatalf("git config rerere.enabled: %v", err)
+	}
+	if got := strings.TrimSpace(string(out)); got != "true" {
+		t.Errorf("expected rerere.enabled=true, got %q", got)
+	}
+
+	out, err = exec.Command("git", "-C", dir, "config", "rerere.autoUpdate").Output()
+	if err != nil {
+		t.Fatalf("git config rerere.autoUpdate: %v", err)
+	}
+	if got := strings.TrimSpace(string(out)); got != "true" {
+		t.Errorf("expected rerere.autoUpdate=true, got %q", got)
+	}
+}
+
+func TestEnableRerere_Idempotent(t *testing.T) {
+	dir := initTestRepo(t)
+	client := gitutil.NewRealGitClient()
+
+	// Calling EnableRerere twice should not error.
+	if err := client.EnableRerere(dir); err != nil {
+		t.Fatalf("first EnableRerere: %v", err)
+	}
+	if err := client.EnableRerere(dir); err != nil {
+		t.Fatalf("second EnableRerere: %v", err)
+	}
+}
+
+func TestEnableRerere_WorktreeSharesCache(t *testing.T) {
+	dir := initTestRepo(t)
+	client := gitutil.NewRealGitClient()
+
+	// Create a worktree and enable rerere from it.
+	worktreePath := filepath.Join(dir, ".code-factory", "rerere-test", "worktree")
+	if err := client.CreateWorktree(dir, worktreePath, "rerere-test"); err != nil {
+		t.Fatalf("CreateWorktree: %v", err)
+	}
+
+	if err := client.EnableRerere(worktreePath); err != nil {
+		t.Fatalf("EnableRerere in worktree: %v", err)
+	}
+
+	// The config should be readable from the worktree.
+	out, err := exec.Command("git", "-C", worktreePath, "config", "rerere.enabled").Output()
+	if err != nil {
+		t.Fatalf("git config rerere.enabled from worktree: %v", err)
+	}
+	if got := strings.TrimSpace(string(out)); got != "true" {
+		t.Errorf("expected rerere.enabled=true from worktree, got %q", got)
+	}
+}
+
+func TestRerereAutoResolvesRepeatedConflict(t *testing.T) {
+	// Integration test: git rerere records a resolution during one rebase
+	// and auto-applies it when an identical conflict occurs in a second
+	// rebase (simulating the same conflict resurfacing one cascade level up).
+	dir := initTestRepo(t)
+	client := gitutil.NewRealGitClient()
+
+	baseBranch := currentBranch(t, dir)
+
+	// Enable rerere before any conflicts arise.
+	if err := client.EnableRerere(dir); err != nil {
+		t.Fatalf("EnableRerere: %v", err)
+	}
+
+	// Create a shared file on the base branch.
+	if err := os.WriteFile(filepath.Join(dir, "shared.txt"), []byte("line1\nline2\nline3\n"), 0644); err != nil {
+		t.Fatalf("write shared.txt: %v", err)
+	}
+	gitRun(t, dir, "add", "shared.txt")
+	gitRun(t, dir, "commit", "-m", "add shared.txt")
+
+	// Record the pre-fork commit so we can branch from it later.
+	preFork := revParse(t, dir, "HEAD")
+
+	// Branch A modifies shared.txt.
+	gitRun(t, dir, "checkout", "-b", "branch-a")
+	if err := os.WriteFile(filepath.Join(dir, "shared.txt"), []byte("line1\nmodified-by-a\nline3\n"), 0644); err != nil {
+		t.Fatalf("write shared.txt on branch-a: %v", err)
+	}
+	gitRun(t, dir, "add", "shared.txt")
+	gitRun(t, dir, "commit", "-m", "branch-a modifies shared.txt")
+
+	// Branch B modifies the same line differently (branches from preFork).
+	gitRun(t, dir, "checkout", preFork)
+	gitRun(t, dir, "checkout", "-b", "branch-b")
+	if err := os.WriteFile(filepath.Join(dir, "shared.txt"), []byte("line1\nmodified-by-b\nline3\n"), 0644); err != nil {
+		t.Fatalf("write shared.txt on branch-b: %v", err)
+	}
+	gitRun(t, dir, "add", "shared.txt")
+	gitRun(t, dir, "commit", "-m", "branch-b modifies shared.txt")
+
+	// Branch C has the same change as B (branches from preFork).
+	gitRun(t, dir, "checkout", preFork)
+	gitRun(t, dir, "checkout", "-b", "branch-c")
+	if err := os.WriteFile(filepath.Join(dir, "shared.txt"), []byte("line1\nmodified-by-b\nline3\n"), 0644); err != nil {
+		t.Fatalf("write shared.txt on branch-c: %v", err)
+	}
+	gitRun(t, dir, "add", "shared.txt")
+	gitRun(t, dir, "commit", "-m", "branch-c modifies shared.txt (same as b)")
+
+	// Merge branch-a into base first (fast-forward).
+	gitRun(t, dir, "checkout", baseBranch)
+	gitRun(t, dir, "merge", "--ff-only", "branch-a")
+
+	// Rebase branch-b onto base — this will conflict.
+	gitRun(t, dir, "checkout", "branch-b")
+	out, err := exec.Command("git", "-C", dir, "rebase", baseBranch).CombinedOutput()
+	if err == nil {
+		t.Fatal("expected rebase to conflict, but it succeeded")
+	}
+	_ = out
+
+	// Resolve the conflict manually: accept branch-a's version.
+	if err := os.WriteFile(filepath.Join(dir, "shared.txt"), []byte("line1\nmodified-by-a\nline3\n"), 0644); err != nil {
+		t.Fatalf("resolve conflict: %v", err)
+	}
+	gitRun(t, dir, "add", "shared.txt")
+	// Explicitly tell rerere to record the postimage (resolution) so it
+	// can be replayed later. Without this, rebase --continue may finalize
+	// the commit before rerere saves the mapping.
+	gitRun(t, dir, "rerere")
+	gitRun(t, dir, "rebase", "--continue")
+
+	// Rebase branch-c onto base — rerere should auto-resolve the same
+	// conflict pattern using the resolution recorded above.
+	gitRun(t, dir, "checkout", "branch-c")
+	out, err = exec.Command("git", "-C", dir, "rebase", baseBranch).CombinedOutput()
+	if err != nil {
+		// Even with rerere.autoUpdate, git rebase may still pause to let
+		// the user verify. If rerere resolved the file (no markers), just
+		// stage and continue.
+		content, readErr := os.ReadFile(filepath.Join(dir, "shared.txt"))
+		if readErr != nil {
+			t.Fatalf("rebase failed and could not read shared.txt: rebase: %v\n%s", err, out)
+		}
+		if strings.Contains(string(content), "<<<<<<<") {
+			t.Fatalf("rerere did not auto-resolve the conflict; shared.txt still has markers:\n%s", content)
+		}
+		// Rerere resolved it; stage and continue.
+		gitRun(t, dir, "add", "shared.txt")
+		gitRun(t, dir, "rebase", "--continue")
+	}
+
+	// Verify the resolution was applied correctly.
+	content, err := os.ReadFile(filepath.Join(dir, "shared.txt"))
+	if err != nil {
+		t.Fatalf("read shared.txt: %v", err)
+	}
+	if string(content) != "line1\nmodified-by-a\nline3\n" {
+		t.Errorf("expected rerere to apply same resolution, got:\n%s", content)
+	}
+}
+
+// gitRun runs a git command and fails the test on error.
+func gitRun(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	fullArgs := append([]string{"-C", dir}, args...)
+	out, err := exec.Command("git", fullArgs...).CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %s failed: %v\n%s", strings.Join(args, " "), err, out)
 	}
 }
 

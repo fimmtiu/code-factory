@@ -37,6 +37,11 @@ type GitClient interface {
 	// branch already has at most one commit since the merge base with
 	// targetBranch the call is a no-op, so it is safe to invoke repeatedly.
 	SquashSinceMergeBase(worktreeDir, targetBranch, summary string) error
+	// EnableRerere enables git's rerere ("reuse recorded resolution") feature
+	// in the repository that contains worktreeDir. Since worktrees share the
+	// parent repo's rr-cache, enabling rerere in any worktree makes recorded
+	// resolutions available to all sibling worktrees. The call is idempotent.
+	EnableRerere(worktreeDir string) error
 }
 
 // RealGitClient implements GitClient using actual git commands.
@@ -180,6 +185,23 @@ func (g *RealGitClient) SquashSinceMergeBase(worktreeDir, targetBranch, summary 
 		return fmt.Errorf("SquashSinceMergeBase: commit: %w", err)
 	}
 	return nil
+}
+
+// EnableRerere sets rerere.enabled=true and rerere.autoUpdate=true in the git
+// config for the repository that contains worktreeDir. Since linked worktrees
+// share the parent repo's rr-cache directory, enabling rerere in any worktree
+// causes all conflict resolutions recorded during rebases to be cached and
+// automatically replayed when the same conflict appears at a different level
+// of the cascade.
+//
+// rerere.autoUpdate tells git to automatically stage files that rerere has
+// resolved, which is necessary for non-interactive rebases to continue
+// without manual intervention.
+func (g *RealGitClient) EnableRerere(worktreeDir string) error {
+	if err := runGit("-C", worktreeDir, "config", "rerere.enabled", "true"); err != nil {
+		return err
+	}
+	return runGit("-C", worktreeDir, "config", "rerere.autoUpdate", "true")
 }
 
 // RemoveWorktree removes the linked worktree at worktreePath and deletes its

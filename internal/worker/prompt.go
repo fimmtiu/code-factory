@@ -81,6 +81,7 @@ func BuildMergingPrompt(ticket *models.WorkUnit, siblings []db.WorkUnitSummary, 
 	var b strings.Builder
 
 	b.WriteString("Complete this rebase, fixing the current conflict and any further conflicts that arise when applying remaining commits. ")
+	b.WriteString("After staging each resolved file with `git add`, run `git rerere` before `git rebase --continue` so the resolution is recorded for future reuse. ")
 	b.WriteString("You must run linting and tests before committing.\n\n")
 
 	b.WriteString(fmt.Sprintf("### This ticket: `%s`\n\n%s\n", ticket.Identifier, ticket.Description))
