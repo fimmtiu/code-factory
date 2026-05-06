@@ -297,6 +297,98 @@ func revParse(t *testing.T, repoRoot, ref string) string {
 	return strings.TrimSpace(string(out))
 }
 
+func TestSquashSinceMergeBase(t *testing.T) {
+	dir := initTestRepo(t)
+	client := gitutil.NewRealGitClient()
+	baseBranch := currentBranch(t, dir)
+
+	if out, err := exec.Command("git", "-C", dir, "checkout", "-b", "feature").CombinedOutput(); err != nil {
+		t.Fatalf("checkout feature: %v\n%s", err, out)
+	}
+	for i, name := range []string{"a.txt", "b.txt", "c.txt"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(name+"\n"), 0644); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+		if out, err := exec.Command("git", "-C", dir, "add", name).CombinedOutput(); err != nil {
+			t.Fatalf("add %s: %v\n%s", name, err, out)
+		}
+		msg := []string{"add a", "add b", "add c"}[i]
+		if out, err := exec.Command("git", "-C", dir, "commit", "-m", msg).CombinedOutput(); err != nil {
+			t.Fatalf("commit %s: %v\n%s", name, err, out)
+		}
+	}
+
+	if err := client.SquashSinceMergeBase(dir, baseBranch, "feature: summary"); err != nil {
+		t.Fatalf("SquashSinceMergeBase: %v", err)
+	}
+
+	// Exactly one commit since base.
+	out, err := exec.Command("git", "-C", dir, "rev-list", "--count", baseBranch+"..HEAD").Output()
+	if err != nil {
+		t.Fatalf("rev-list: %v", err)
+	}
+	if got := strings.TrimSpace(string(out)); got != "1" {
+		t.Fatalf("expected 1 commit since base after squash, got %q", got)
+	}
+
+	// All three files present at the squashed tip.
+	for _, name := range []string{"a.txt", "b.txt", "c.txt"} {
+		if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
+			t.Errorf("expected %s to remain after squash: %v", name, err)
+		}
+	}
+
+	msgOut, err := exec.Command("git", "-C", dir, "log", "-1", "--format=%B").Output()
+	if err != nil {
+		t.Fatalf("log: %v", err)
+	}
+	msg := string(msgOut)
+	if !strings.HasPrefix(msg, "feature: summary") {
+		t.Errorf("expected commit message subject %q, got: %s", "feature: summary", msg)
+	}
+	for _, want := range []string{"* add a", "* add b", "* add c"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("expected squashed body to contain %q, got: %s", want, msg)
+		}
+	}
+
+	// Squashing again must be a no-op (only one commit since base).
+	tipBefore := revParse(t, dir, "HEAD")
+	if err := client.SquashSinceMergeBase(dir, baseBranch, "feature: summary"); err != nil {
+		t.Fatalf("idempotent SquashSinceMergeBase: %v", err)
+	}
+	if got := revParse(t, dir, "HEAD"); got != tipBefore {
+		t.Errorf("expected idempotent squash, but HEAD moved from %s to %s", tipBefore, got)
+	}
+}
+
+func TestSquashSinceMergeBase_SingleCommitNoOp(t *testing.T) {
+	dir := initTestRepo(t)
+	client := gitutil.NewRealGitClient()
+	baseBranch := currentBranch(t, dir)
+
+	if out, err := exec.Command("git", "-C", dir, "checkout", "-b", "single").CombinedOutput(); err != nil {
+		t.Fatalf("checkout single: %v\n%s", err, out)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "x.txt"), []byte("x\n"), 0644); err != nil {
+		t.Fatalf("write x: %v", err)
+	}
+	if out, err := exec.Command("git", "-C", dir, "add", "x.txt").CombinedOutput(); err != nil {
+		t.Fatalf("add: %v\n%s", err, out)
+	}
+	if out, err := exec.Command("git", "-C", dir, "commit", "-m", "only commit").CombinedOutput(); err != nil {
+		t.Fatalf("commit: %v\n%s", err, out)
+	}
+
+	tipBefore := revParse(t, dir, "HEAD")
+	if err := client.SquashSinceMergeBase(dir, baseBranch, "single: summary"); err != nil {
+		t.Fatalf("SquashSinceMergeBase: %v", err)
+	}
+	if got := revParse(t, dir, "HEAD"); got != tipBefore {
+		t.Errorf("expected single-commit branch to be unchanged, but HEAD moved from %s to %s", tipBefore, got)
+	}
+}
+
 func TestRemoveWorktree(t *testing.T) {
 	dir := initTestRepo(t)
 	client := gitutil.NewRealGitClient()

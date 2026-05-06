@@ -31,6 +31,12 @@ type GitClient interface {
 	// AbortRebase aborts an in-progress rebase in worktreeDir, restoring the
 	// worktree to its pre-rebase state.
 	AbortRebase(worktreeDir string) error
+	// SquashSinceMergeBase rewrites the branch checked out at worktreeDir into
+	// a single commit covering everything not on targetBranch. summary is the
+	// subject line; the original commits' subjects become the body. If the
+	// branch already has at most one commit since the merge base with
+	// targetBranch the call is a no-op, so it is safe to invoke repeatedly.
+	SquashSinceMergeBase(worktreeDir, targetBranch, summary string) error
 }
 
 // RealGitClient implements GitClient using actual git commands.
@@ -129,6 +135,53 @@ func (g *RealGitClient) RebaseOnto(worktreeDir, ontoBranch string) error {
 // error (if any) is returned so callers can decide whether to surface it.
 func (g *RealGitClient) AbortRebase(worktreeDir string) error {
 	return runGit("-C", worktreeDir, "rebase", "--abort")
+}
+
+// SquashSinceMergeBase squashes every commit on the branch checked out at
+// worktreeDir that is not reachable from targetBranch into a single commit
+// whose subject is summary and whose body lists the squashed commits' subjects.
+// If there are 0 or 1 such commits, the branch is left untouched, making the
+// call idempotent for retry paths.
+func (g *RealGitClient) SquashSinceMergeBase(worktreeDir, targetBranch, summary string) error {
+	safeTarget := strings.ReplaceAll(targetBranch, "/", "_")
+
+	base, err := runGitOutput("-C", worktreeDir, "merge-base", "HEAD", safeTarget)
+	if err != nil {
+		return fmt.Errorf("SquashSinceMergeBase: merge-base: %w", err)
+	}
+
+	count, err := runGitOutput("-C", worktreeDir, "rev-list", "--count", base+"..HEAD")
+	if err != nil {
+		return fmt.Errorf("SquashSinceMergeBase: count: %w", err)
+	}
+	if count == "0" || count == "1" {
+		return nil
+	}
+
+	subjects, err := runGitOutput("-C", worktreeDir, "log", "--reverse", "--format=%s", base+"..HEAD")
+	if err != nil {
+		return fmt.Errorf("SquashSinceMergeBase: log: %w", err)
+	}
+
+	var body strings.Builder
+	for _, line := range strings.Split(subjects, "\n") {
+		if line == "" {
+			continue
+		}
+		body.WriteString("* ")
+		body.WriteString(line)
+		body.WriteByte('\n')
+	}
+
+	msg := summary + "\n\n" + body.String()
+
+	if err := runGit("-C", worktreeDir, "reset", "--soft", base); err != nil {
+		return fmt.Errorf("SquashSinceMergeBase: reset --soft: %w", err)
+	}
+	if err := runGit("-C", worktreeDir, "commit", "--allow-empty", "-m", msg); err != nil {
+		return fmt.Errorf("SquashSinceMergeBase: commit: %w", err)
+	}
+	return nil
 }
 
 // RemoveWorktree removes the linked worktree at worktreePath and deletes its

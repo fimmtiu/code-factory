@@ -8,6 +8,7 @@ type FakeGitClient struct {
 	MergeTargets     []string
 	RebaseTargets    []string // ontoBranch values passed to RebaseOnto
 	RebasesAborted   []string // worktreeDir values passed to AbortRebase
+	Squashes         []string // worktreeDir values passed to SquashSinceMergeBase
 
 	// RebaseErr, if non-nil, is returned from RebaseOnto instead of success.
 	// Useful for exercising the conflict path in callers.
@@ -50,5 +51,9 @@ func (f *FakeGitClient) RebaseOnto(worktreeDir, ontoBranch string) error {
 }
 func (f *FakeGitClient) AbortRebase(worktreeDir string) error {
 	f.RebasesAborted = append(f.RebasesAborted, worktreeDir)
+	return nil
+}
+func (f *FakeGitClient) SquashSinceMergeBase(worktreeDir, _, _ string) error {
+	f.Squashes = append(f.Squashes, worktreeDir)
 	return nil
 }

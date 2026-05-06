@@ -714,12 +714,22 @@ func (d *DB) RebaseTicketOnParent(identifier, parentIdentifier, parentBranch str
 // history with no merge commit. If the rebase hits conflicts, it is left in
 // progress in the child's worktree so the user can resolve them manually,
 // and the returned MergeConflictError points at that worktree.
-func (d *DB) rebaseAndFastForward(identifier, mergeTarget string) error {
+//
+// When squash is true, the child branch is collapsed to a single commit
+// against its merge base with the target before rebasing. This is the
+// ticket path; projects merge with their full commit history preserved.
+func (d *DB) rebaseAndFastForward(identifier, mergeTarget string, squash bool) error {
 	childWorktree := d.worktreePath(identifier)
 
 	targetBranch, err := d.git.GetCurrentBranch(mergeTarget)
 	if err != nil {
 		return fmt.Errorf("detect target branch for %s: %w", mergeTarget, err)
+	}
+
+	if squash {
+		if err := d.git.SquashSinceMergeBase(childWorktree, targetBranch, identifier); err != nil {
+			return fmt.Errorf("squash %s: %w", identifier, err)
+		}
 	}
 
 	if err := d.git.RebaseOnto(childWorktree, targetBranch); err != nil {
@@ -764,7 +774,7 @@ func (d *DB) markTicketDone(ticketID int64, identifier string, projectID sql.Nul
 	mu.Lock()
 	defer mu.Unlock()
 
-	if err := d.rebaseAndFastForward(identifier, mergeTarget); err != nil {
+	if err := d.rebaseAndFastForward(identifier, mergeTarget, true); err != nil {
 		return err
 	}
 
@@ -864,8 +874,12 @@ func (d *DB) MergeChain(ctx context.Context, identifier string, onConflict func(
 	}()
 
 	// Phase 1: every rebase + fast-forward in the chain must succeed.
+	// Tickets are squashed to a single commit before rebasing so the parent
+	// (and any grandparents climbed in this cascade) sees one diff per
+	// ticket instead of the full implement/refactor/respond commit fan.
+	// Projects merge their child commits unsquashed.
 	for _, step := range chain {
-		err := d.rebaseAndFastForward(step.Identifier, step.MergeTarget)
+		err := d.rebaseAndFastForward(step.Identifier, step.MergeTarget, !step.IsProject)
 		if err == nil {
 			continue
 		}
@@ -900,7 +914,9 @@ func (d *DB) MergeChain(ctx context.Context, identifier string, onConflict func(
 			}
 			// rebaseAndFastForward is idempotent: a no-op rebase plus a
 			// no-op fast-forward when the target is already at the tip.
-			err = d.rebaseAndFastForward(step.Identifier, step.MergeTarget)
+			// Squash is also idempotent (no-op once the branch has ≤ 1
+			// commit since the merge base).
+			err = d.rebaseAndFastForward(step.Identifier, step.MergeTarget, !step.IsProject)
 			if err == nil {
 				break
 			}
@@ -1880,7 +1896,7 @@ func (d *DB) SetProjectPhase(identifier, phase string) error {
 		mu.Lock()
 		defer mu.Unlock()
 
-		if err := d.rebaseAndFastForward(identifier, mergeTarget); err != nil {
+		if err := d.rebaseAndFastForward(identifier, mergeTarget, false); err != nil {
 			return err
 		}
 	}

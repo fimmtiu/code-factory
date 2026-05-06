@@ -798,6 +798,59 @@ func TestMarkTicketDone_RebaseConflictReturnsChildWorktreePath(t *testing.T) {
 	}
 }
 
+func TestMarkTicketDone_SquashesTicketBranch(t *testing.T) {
+	d, ticketsDir, git := openTestDB(t)
+
+	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj/ticket", "A ticket", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	git.Squashes = nil
+
+	if err := d.SetStatus("proj/ticket", models.PhaseDone, models.StatusIdle); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(git.Squashes) != 1 {
+		t.Fatalf("expected one squash on the ticket branch, got %v", git.Squashes)
+	}
+	wantWorktree := filepath.Join(ticketsDir, "proj", "ticket", "worktree")
+	if git.Squashes[0] != wantWorktree {
+		t.Errorf("expected squash on %q, got %q", wantWorktree, git.Squashes[0])
+	}
+}
+
+func TestMarkTicketDoneCascading_SquashesTicketsButNotProjects(t *testing.T) {
+	d, ticketsDir, git := openTestDB(t)
+
+	if err := d.CreateProject("grand", "Grandparent", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateProject("grand/parent", "Parent", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("grand/parent/t1", "Only ticket", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	git.Squashes = nil
+
+	if err := d.MarkTicketDoneCascading("grand/parent/t1"); err != nil {
+		t.Fatalf("MarkTicketDoneCascading: %v", err)
+	}
+
+	// Cascade rebases ticket → parent project → grandparent project (3 steps).
+	// Only the ticket step should squash.
+	if len(git.Squashes) != 1 {
+		t.Fatalf("expected exactly one squash (ticket only), got %d: %v", len(git.Squashes), git.Squashes)
+	}
+	wantWorktree := filepath.Join(ticketsDir, "grand", "parent", "t1", "worktree")
+	if git.Squashes[0] != wantWorktree {
+		t.Errorf("expected squash on ticket worktree %q, got %q", wantWorktree, git.Squashes[0])
+	}
+}
+
 func TestRebaseTicketOnParent_AbortsOnFailure(t *testing.T) {
 	d, _, git := openTestDB(t)
 	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
