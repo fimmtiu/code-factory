@@ -94,17 +94,21 @@ func (w *Worker) processTicket(ctx context.Context, ticket *models.WorkUnit) {
 	worktreePath := storage.TicketWorktreePathIn(w.ticketsDir, identifier)
 	logfilePath := NextLogfilePath(w.ticketsDir, identifier, logfilePhase)
 
-	// For a fresh refactor run, capture HEAD so we can later tell whether
-	// the agent actually committed anything. An empty refactor (no
-	// "refactor:" commits added) skips user-review and advances directly
-	// to the review phase.
-	var preRefactorHEAD string
-	if !isResponding && ticket.Phase == models.PhaseRefactor {
+	// For a fresh refactor or implement run, capture HEAD so we can later
+	// tell whether the agent actually committed anything. An empty refactor
+	// (no "refactor:" commits added) skips user-review and advances directly
+	// to the review phase. An empty implement leaves the ticket at
+	// implement/user-review but raises a notification so the user knows the
+	// run produced no work and can investigate the log.
+	var preRefactorHEAD, preImplementHEAD string
+	if !isResponding && (ticket.Phase == models.PhaseRefactor || ticket.Phase == models.PhaseImplement) {
 		head, err := git.Output(worktreePath, "rev-parse", "HEAD")
 		if err != nil {
-			w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("warning: could not capture pre-refactor HEAD on %s: %v; will route to user-review", identifier, err))
-		} else {
+			w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("warning: could not capture pre-%s HEAD on %s: %v; will route to user-review", ticket.Phase, identifier, err))
+		} else if ticket.Phase == models.PhaseRefactor {
 			preRefactorHEAD = head
+		} else {
+			preImplementHEAD = head
 		}
 	}
 
@@ -176,6 +180,25 @@ func (w *Worker) processTicket(ctx context.Context, ticket *models.WorkUnit) {
 			nextStatus = models.StatusIdle
 			w.logCh <- NewLogMessageWithFile(w.Number, fmt.Sprintf("refactor on %s added no new commits; advancing to review", identifier), logfilePath)
 		}
+	} else if ticket.Phase == models.PhaseImplement && preImplementHEAD != "" {
+		// An implement run that ended its turn without committing anything
+		// indicates a broken agent response (e.g. model emitted only a
+		// preamble before end_turn). The ticket still routes to user-review
+		// — there's no safe automatic recovery — but we raise a notification
+		// so the user can spot it instead of mistaking it for a normal
+		// review-ready ticket.
+		added, err := commitsAddedSince(worktreePath, preImplementHEAD)
+		if err != nil {
+			w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("warning: could not check implement commits on %s: %v; routing to user-review", identifier, err))
+		} else if !added {
+			w.logCh <- NewLogMessageWithFile(w.Number, fmt.Sprintf("implement on %s produced no commits; flagging for user attention", identifier), logfilePath)
+			if w.notifCh != nil {
+				select {
+				case w.notifCh <- "Empty implement on " + identifier:
+				default:
+				}
+			}
+		}
 	}
 	if err := w.database.SetStatus(identifier, nextPhase, nextStatus); err != nil {
 		w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("error setting %s on %s: %v", nextStatus, identifier, err))
@@ -199,6 +222,18 @@ func refactorCommitsAdded(worktreePath, preHEAD string) (bool, error) {
 		}
 	}
 	return false, nil
+}
+
+// commitsAddedSince reports whether HEAD has any commit not reachable from
+// preHEAD. Used to detect runs that ended their turn without producing any
+// committed work for the next phase to act on (e.g. an implement agent that
+// emitted only a preamble before returning end_turn).
+func commitsAddedSince(worktreePath, preHEAD string) (bool, error) {
+	out, err := git.Output(worktreePath, "rev-list", "--count", preHEAD+"..HEAD")
+	if err != nil {
+		return false, err
+	}
+	return strings.TrimSpace(out) != "0", nil
 }
 
 // releaseTicket clears the claim on a ticket, clears display state, and

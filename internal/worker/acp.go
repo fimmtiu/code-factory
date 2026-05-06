@@ -472,10 +472,18 @@ func runACP(
 
 	stopReason, resultErr, procExited := awaitPromptCompletion(promptCh, waitCh)
 
-	// Log the stop reason so we can diagnose unexpected early exits.
+	// Always close the log with a terminal marker so a reader can tell a
+	// clean end-of-turn apart from a subprocess crash, context cancellation,
+	// or truncated stream — without cross-referencing the in-memory log
+	// channel or the worker DB.
 	client.flushPartialLine()
-	if stopReason != "" && stopReason != acp.StopReasonEndTurn {
+	switch {
+	case resultErr != nil:
+		client.appendOutput(fmt.Sprintf("\n=== ERROR: %v ===\n", resultErr))
+	case stopReason != "":
 		client.appendOutput(fmt.Sprintf("\n=== STOP REASON: %s ===\n", stopReason))
+	default:
+		client.appendOutput("\n=== STOP REASON: (none) ===\n")
 	}
 
 	// Tear down the subprocess and its children.
