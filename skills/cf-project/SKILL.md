@@ -59,7 +59,7 @@ Terminology for the `cf-tickets` system:
    - **Domain model types** — multiple tickets define the same struct, interface, or enum (e.g. `Package`, `Version`, `Dependency`).
    - **Test helpers / fixtures** — multiple tickets need the same test scaffolding (fake-command runners, golden files, table-driven harnesses).
 
-   Do NOT hand the same shared pattern to two unrelated tickets and trust them to converge. They will each invent their own version, in different files, and the merge will be unrecoverable. When in doubt, extract.
+   Do NOT hand the same shared pattern to two unrelated tickets and trust them to converge. They will each invent their own version, in different files, and the merge will be unrecoverable. When the overlapping code is genuine shared infrastructure, extract it into its own ticket. When two tickets just happen to touch the same files for unrelated reasons (e.g. both add a field to the same struct), stack them instead — chain one as a dependency of the other so they run serially.
 
 7. Collect all clarifying questions across all projects and present them to the user in a single batch (see "How to ask clarifying questions" below). Wait for answers before proceeding. If nothing is ambiguous, skip this step.
 8. Determine the dependencies between projects
@@ -120,7 +120,12 @@ Terminology for the `cf-tickets` system:
   TICKET_JSON
   ```
 
-11. **Cross-validate write scopes.** Review every ticket and project you just created. For each pair of sibling work units (work units that do NOT have a dependency relationship between them), verify their `write_scope` entries do not overlap. If they do, fix the decomposition before finishing: either add a dependency or extract a shared ticket. **An empty `write_scope` on a ticket that creates or modifies files is a bug** — fill it in before checking for overlaps. This is the last step — do not skip it.
+11. **Cross-validate write scopes.** Review every ticket and project you just created. For each pair of sibling work units (work units that do NOT have a dependency relationship between them), verify their `write_scope` entries do not overlap. If they do, fix the decomposition before finishing using one of:
+    - **Stack (chain) them** — add a dependency so they run serially (B depends on A). Prefer this when both tickets genuinely need to modify the same files and extracting a shared ticket would be artificial (e.g. "add field X to model" then "add field Y to the same model").
+    - **Extract a shared ticket** — pull the common code into a new ticket that both depend on. Prefer this when the overlap is a distinct, reusable piece of functionality.
+    - **Add a dependency** — if one ticket naturally consumes the other's output, make that explicit.
+
+    Stacking accepts a serial cost but avoids inventing throwaway abstractions. Extraction is better when the shared code has genuine standalone value. **An empty `write_scope` on a ticket that creates or modifies files is a bug** — fill it in before checking for overlaps. This is the last step — do not skip it.
 
 **Important:** Do NOT start implementing. Your job ends when all projects and tickets have been created with `cf-tickets` and write scopes have been cross-validated. Do not write any code, modify any source files, or begin work on any ticket.
 
@@ -134,10 +139,11 @@ Each subproject should either describe an individual feature of the proposed cha
 
 Every ticket and subproject must declare a non-empty **write scope** (`write_scope` in the JSON): the set of packages or files it will create or modify. Write scopes must not overlap between sibling work units (work units that do NOT have a dependency relationship). If two work units both need to create or modify the same file or package, resolve it by one of:
 
-1. **Adding a dependency** — make one work unit depend on the other so it uses the other's output rather than reimplementing it.
-2. **Extracting a shared ticket** — pull the common functionality into a new ticket that both depend on.
+1. **Stacking (chaining)** — make one work unit depend on the other so they run serially (B depends on A) and both are allowed to touch the same files. Because B only starts after A merges, there is no conflict. Prefer stacking when both tickets genuinely need the same files and the shared code is not a distinct, reusable abstraction — forcing an extraction just to satisfy the overlap rule would be artificial.
+2. **Extracting a shared ticket** — pull the common functionality into a new ticket that both depend on. Prefer extraction when the overlapping code is a clearly reusable piece of infrastructure (a helper, a type, a utility).
+3. **Adding a dependency** — if one work unit naturally consumes the other's output, make that explicit.
 
-When in doubt, prefer extraction. A small "utility" ticket that two others depend on is far cheaper than a merge conflict.
+When the overlap is genuine shared infrastructure, prefer extraction. When the overlap is incidental (two tickets both modify the same file for unrelated reasons), prefer stacking. A serial chain is cheaper than a contrived abstraction that exists only to avoid an overlap.
 
 **Watch for implicit shared code.** If two tickets both say "use X" or "import X" and X does not exist yet, someone must create it. If no ticket in their dependency chain creates X, each implementing agent will invent it independently — producing an add/add merge conflict. The Step 6 checklist (command runner, HTTP client, retry/backoff, error types, config loader, logging wrapper, file/path helpers, parsing, domain types, test helpers) is what catches these — work it patiently. The Step 3 inventory tells you which ones already exist; the rest are decisions you have to make explicit before tickets are created.
 

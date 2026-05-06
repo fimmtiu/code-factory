@@ -973,3 +973,198 @@ func TestUpdateChangeRequestDescription_NotFound(t *testing.T) {
 		t.Errorf("expected 'not found' error, got: %v", err)
 	}
 }
+
+// ===== Stacked (chained) tickets =====
+//
+// When sibling tickets share write scope, the planner chains them via
+// dependencies (A → B → C) instead of running them in parallel. These
+// tests verify that the blocking/unblocking and sequential merge
+// behaviour works correctly for such chains.
+
+func TestStackedTickets_ChainStartsBlocked(t *testing.T) {
+	d, _, _ := openTestDB(t)
+	if err := d.CreateProject("proj", "P", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	// Create a chain: A (no deps) → B (depends on A) → C (depends on B).
+	if err := d.CreateTicket("proj/a", "first in chain", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj/b", "second in chain", []string{"proj/a"}, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj/c", "third in chain", []string{"proj/b"}, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	a := findUnit(t, d, "proj/a")
+	b := findUnit(t, d, "proj/b")
+	c := findUnit(t, d, "proj/c")
+
+	if a.Phase != models.PhaseImplement {
+		t.Errorf("proj/a: phase = %s, want implement (head of chain)", a.Phase)
+	}
+	if b.Phase != models.PhaseBlocked {
+		t.Errorf("proj/b: phase = %s, want blocked (depends on a)", b.Phase)
+	}
+	if c.Phase != models.PhaseBlocked {
+		t.Errorf("proj/c: phase = %s, want blocked (depends on b)", c.Phase)
+	}
+}
+
+func TestStackedTickets_CompletingHeadUnblocksNext(t *testing.T) {
+	d, _, _ := openTestDB(t)
+	if err := d.CreateProject("proj", "P", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj/a", "first", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj/b", "second", []string{"proj/a"}, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj/c", "third", []string{"proj/b"}, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	// Complete A.
+	if err := d.SetStatus("proj/a", models.PhaseDone, models.StatusIdle); err != nil {
+		t.Fatal(err)
+	}
+
+	b := findUnit(t, d, "proj/b")
+	c := findUnit(t, d, "proj/c")
+
+	if b.Phase != models.PhaseImplement {
+		t.Errorf("proj/b: phase = %s, want implement (a is done)", b.Phase)
+	}
+	// C still blocked because B is not done yet.
+	if c.Phase != models.PhaseBlocked {
+		t.Errorf("proj/c: phase = %s, want blocked (b not done)", c.Phase)
+	}
+}
+
+func TestStackedTickets_FullChainUnblock(t *testing.T) {
+	d, _, _ := openTestDB(t)
+	if err := d.CreateProject("proj", "P", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj/a", "first", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj/b", "second", []string{"proj/a"}, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj/c", "third", []string{"proj/b"}, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	// Complete A, then B.
+	if err := d.SetStatus("proj/a", models.PhaseDone, models.StatusIdle); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.SetStatus("proj/b", models.PhaseDone, models.StatusIdle); err != nil {
+		t.Fatal(err)
+	}
+
+	c := findUnit(t, d, "proj/c")
+	if c.Phase != models.PhaseImplement {
+		t.Errorf("proj/c: phase = %s, want implement (full chain complete)", c.Phase)
+	}
+}
+
+func TestStackedTickets_MergeSequentially(t *testing.T) {
+	d, ticketsDir, git := openTestDB(t)
+	if err := d.CreateProject("proj", "P", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj/a", "first", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj/b", "second", []string{"proj/a"}, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	// Complete A — should merge into project worktree.
+	git.MergeTargets = nil
+	git.Squashes = nil
+	if err := d.SetStatus("proj/a", models.PhaseDone, models.StatusIdle); err != nil {
+		t.Fatal(err)
+	}
+
+	expectedTarget := filepath.Join(ticketsDir, "proj", "worktree")
+	if len(git.MergeTargets) == 0 {
+		t.Fatal("expected A to merge into project worktree")
+	}
+	if git.MergeTargets[0] != expectedTarget {
+		t.Errorf("A merge target: got %q, want %q", git.MergeTargets[0], expectedTarget)
+	}
+
+	// Complete B — should also merge into the same project worktree, which
+	// now includes A's changes, preventing conflicts on shared files.
+	git.MergeTargets = nil
+	if err := d.SetStatus("proj/b", models.PhaseDone, models.StatusIdle); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(git.MergeTargets) == 0 {
+		t.Fatal("expected B to merge into project worktree")
+	}
+	if git.MergeTargets[0] != expectedTarget {
+		t.Errorf("B merge target: got %q, want %q", git.MergeTargets[0], expectedTarget)
+	}
+}
+
+func TestStackedTickets_ClaimRespectsOrder(t *testing.T) {
+	d, _, _ := openTestDB(t)
+	if err := d.CreateProject("proj", "P", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj/a", "first", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj/b", "second", []string{"proj/a"}, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	// Only A should be claimable; B is blocked.
+	wu, err := d.Claim(1)
+	if err != nil {
+		t.Fatalf("Claim: %v", err)
+	}
+	if wu.Identifier != "proj/a" {
+		t.Errorf("expected to claim proj/a, got %q", wu.Identifier)
+	}
+
+	// No more tickets should be claimable (B is still blocked).
+	_, err = d.Claim(2)
+	if err == nil {
+		t.Error("expected no claimable ticket while B is blocked, but Claim succeeded")
+	}
+}
+
+func TestStackedTickets_NotifyWorkAvailableOnUnblock(t *testing.T) {
+	d, _, _ := openTestDB(t)
+
+	notified := 0
+	d.SetOnWorkAvailable(func() { notified++ })
+
+	if err := d.CreateProject("proj", "P", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj/a", "first", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj/b", "second", []string{"proj/a"}, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	notified = 0 // reset after setup
+	if err := d.SetStatus("proj/a", models.PhaseDone, models.StatusIdle); err != nil {
+		t.Fatal(err)
+	}
+
+	if notified == 0 {
+		t.Error("expected onWorkAvailable notification when stacked ticket is unblocked")
+	}
+}
