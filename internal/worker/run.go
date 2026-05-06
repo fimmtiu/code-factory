@@ -154,57 +154,123 @@ func (w *Worker) processTicket(ctx context.Context, ticket *models.WorkUnit) {
 
 	w.logCh <- NewLogMessageWithFile(w.Number, fmt.Sprintf("completed processing ticket %s", identifier), logfilePath)
 
-	// A respond run can be cut off (turn/token limit) before all CRs are
-	// addressed. If any CRs are still open, leave the ticket in 'responding'
-	// so a worker re-claims it and continues, instead of advancing to
-	// user-review and letting review re-flag the same comments.
-	nextPhase := ticket.Phase
-	nextStatus := models.StatusUserReview
-	if isResponding {
-		open, err := w.database.OpenChangeRequests(identifier)
-		if err != nil {
-			w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("error checking open change requests on %s: %v", identifier, err))
-		} else if len(open) > 0 {
-			nextStatus = models.StatusResponding
-			w.logCh <- NewLogMessageWithFile(w.Number, fmt.Sprintf("%d change requests still open on %s; re-queuing for respond", len(open), identifier), logfilePath)
-		}
-	} else if ticket.Phase == models.PhaseRefactor && preRefactorHEAD != "" {
-		// An empty refactor produced no work for a human to review.
-		// Auto-approve: advance the phase to review without stopping at
-		// user-review.
-		added, err := refactorCommitsAdded(worktreePath, preRefactorHEAD)
-		if err != nil {
-			w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("warning: could not check refactor commits on %s: %v; routing to user-review", identifier, err))
-		} else if !added {
-			nextPhase = models.PhaseReview
-			nextStatus = models.StatusIdle
-			w.logCh <- NewLogMessageWithFile(w.Number, fmt.Sprintf("refactor on %s added no new commits; advancing to review", identifier), logfilePath)
-		}
-	} else if ticket.Phase == models.PhaseImplement && preImplementHEAD != "" {
-		// An implement run that ended its turn without committing anything
-		// indicates a broken agent response (e.g. model emitted only a
-		// preamble before end_turn). The ticket still routes to user-review
-		// — there's no safe automatic recovery — but we raise a notification
-		// so the user can spot it instead of mistaking it for a normal
-		// review-ready ticket.
-		added, err := commitsAddedSince(worktreePath, preImplementHEAD)
-		if err != nil {
-			w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("warning: could not check implement commits on %s: %v; routing to user-review", identifier, err))
-		} else if !added {
-			w.logCh <- NewLogMessageWithFile(w.Number, fmt.Sprintf("implement on %s produced no commits; flagging for user attention", identifier), logfilePath)
-			if w.notifCh != nil {
-				select {
-				case w.notifCh <- "Empty implement on " + identifier:
-				default:
-				}
-			}
-		}
-	}
+	nextPhase, nextStatus := w.postWork(ticket, postWorkContext{
+		identifier:       identifier,
+		worktreePath:     worktreePath,
+		logfilePath:      logfilePath,
+		isResponding:     isResponding,
+		preRefactorHEAD:  preRefactorHEAD,
+		preImplementHEAD: preImplementHEAD,
+	})
 	if err := w.database.SetStatus(identifier, nextPhase, nextStatus); err != nil {
 		w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("error setting %s on %s: %v", nextStatus, identifier, err))
 	}
 	w.releaseTicket(identifier)
 	w.Status = StatusIdle
+}
+
+// postWorkContext bundles the per-ticket state needed by post-work methods.
+type postWorkContext struct {
+	identifier       string
+	worktreePath     string
+	logfilePath      string
+	isResponding     bool
+	preRefactorHEAD  string
+	preImplementHEAD string
+}
+
+// postWork dispatches to the appropriate phase-specific post-work handler
+// and returns the next phase and status for the ticket.
+func (w *Worker) postWork(ticket *models.WorkUnit, ctx postWorkContext) (models.TicketPhase, models.TicketStatus) {
+	if ctx.isResponding {
+		return w.postWorkRespond(ticket, ctx)
+	}
+	switch ticket.Phase {
+	case models.PhaseRefactor:
+		return w.postWorkRefactor(ctx)
+	case models.PhaseReview:
+		return w.postWorkReview(ticket, ctx)
+	case models.PhaseImplement:
+		return w.postWorkImplement(ctx)
+	default:
+		return ticket.Phase, models.StatusUserReview
+	}
+}
+
+// postWorkRespond checks whether all change requests have been addressed.
+// If any remain open, the ticket stays in 'responding' so a worker re-claims
+// it and continues, instead of advancing to user-review.
+func (w *Worker) postWorkRespond(ticket *models.WorkUnit, ctx postWorkContext) (models.TicketPhase, models.TicketStatus) {
+	open, err := w.database.OpenChangeRequests(ctx.identifier)
+	if err != nil {
+		w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("error checking open change requests on %s: %v", ctx.identifier, err))
+	} else if len(open) > 0 {
+		w.logCh <- NewLogMessageWithFile(w.Number, fmt.Sprintf("%d change requests still open on %s; re-queuing for respond", len(open), ctx.identifier), ctx.logfilePath)
+		return ticket.Phase, models.StatusResponding
+	}
+	return ticket.Phase, models.StatusUserReview
+}
+
+// postWorkRefactor checks whether the refactor agent produced any new
+// commits. An empty refactor (no "refactor:" commits) skips user-review
+// and advances directly to the review phase.
+func (w *Worker) postWorkRefactor(ctx postWorkContext) (models.TicketPhase, models.TicketStatus) {
+	if ctx.preRefactorHEAD == "" {
+		return models.PhaseRefactor, models.StatusUserReview
+	}
+	added, err := refactorCommitsAdded(ctx.worktreePath, ctx.preRefactorHEAD)
+	if err != nil {
+		w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("warning: could not check refactor commits on %s: %v; routing to user-review", ctx.identifier, err))
+		return models.PhaseRefactor, models.StatusUserReview
+	}
+	if !added {
+		w.logCh <- NewLogMessageWithFile(w.Number, fmt.Sprintf("refactor on %s added no new commits; advancing to review", ctx.identifier), ctx.logfilePath)
+		return models.PhaseReview, models.StatusIdle
+	}
+	return models.PhaseRefactor, models.StatusUserReview
+}
+
+// postWorkReview performs a pre-merge rebase onto the parent branch while
+// the agent still has context. The result is advisory — the ticket still
+// advances to user-review even on conflict — but a notification is sent
+// so the user can investigate early.
+func (w *Worker) postWorkReview(ticket *models.WorkUnit, ctx postWorkContext) (models.TicketPhase, models.TicketStatus) {
+	if err := w.database.RebaseTicketOnParent(ctx.identifier, ticket.Parent, ticket.ParentBranch); err != nil {
+		w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("pre-merge dry run conflict on %s: %v", ctx.identifier, err))
+		if w.notifCh != nil {
+			select {
+			case w.notifCh <- "Pre-merge dry run conflict on " + ctx.identifier:
+			default:
+			}
+		}
+	} else {
+		w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("pre-merge dry run succeeded for %s", ctx.identifier))
+	}
+	return models.PhaseReview, models.StatusUserReview
+}
+
+// postWorkImplement checks whether the implement agent produced any commits.
+// An empty implement (no commits added) raises a notification so the user
+// can investigate, but the ticket still routes to user-review.
+func (w *Worker) postWorkImplement(ctx postWorkContext) (models.TicketPhase, models.TicketStatus) {
+	if ctx.preImplementHEAD == "" {
+		return models.PhaseImplement, models.StatusUserReview
+	}
+	added, err := commitsAddedSince(ctx.worktreePath, ctx.preImplementHEAD)
+	if err != nil {
+		w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("warning: could not check implement commits on %s: %v; routing to user-review", ctx.identifier, err))
+		return models.PhaseImplement, models.StatusUserReview
+	}
+	if !added {
+		w.logCh <- NewLogMessageWithFile(w.Number, fmt.Sprintf("implement on %s produced no commits; flagging for user attention", ctx.identifier), ctx.logfilePath)
+		if w.notifCh != nil {
+			select {
+			case w.notifCh <- "Empty implement on " + ctx.identifier:
+			default:
+			}
+		}
+	}
+	return models.PhaseImplement, models.StatusUserReview
 }
 
 // refactorCommitsAdded reports whether any commit reachable from HEAD but

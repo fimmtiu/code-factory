@@ -1,6 +1,7 @@
 package worker_test
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -18,14 +19,21 @@ import (
 
 func openTestDB(t *testing.T) (*db.DB, string) {
 	t.Helper()
+	d, _, dir := openTestDBWithGit(t)
+	return d, dir
+}
+
+func openTestDBWithGit(t *testing.T) (*db.DB, *gitutil.FakeGitClient, string) {
+	t.Helper()
 	dir := t.TempDir()
 	d, err := db.Open(dir, dir)
 	if err != nil {
 		t.Fatalf("db.Open: %v", err)
 	}
-	d.SetGitClient(&gitutil.FakeGitClient{})
+	git := &gitutil.FakeGitClient{}
+	d.SetGitClient(git)
 	t.Cleanup(func() { d.Close() })
-	return d, dir
+	return d, git, dir
 }
 
 func createProject(t *testing.T, d *db.DB, id string) {
@@ -772,4 +780,147 @@ func TestPool_WorkAvailable_WakesIdleWorker(t *testing.T) {
 	}
 
 	pool.Stop()
+}
+
+// --- Pre-merge dry run ---
+
+func TestWorker_ReviewPhase_PreMergeRebaseSuccess(t *testing.T) {
+	d, git, ticketsDir := openTestDBWithGit(t)
+	createProject(t, d, "proj")
+	createTicket(t, d, "proj/review-ok")
+
+	// Advance to review phase so the worker picks it up as a review run.
+	if err := d.SetStatus("proj/review-ok", models.PhaseReview, models.StatusIdle); err != nil {
+		t.Fatal(err)
+	}
+
+	// Track rebase calls after setup.
+	git.RebaseTargets = nil
+
+	pool := worker.NewPool(1, 1)
+	pool.WorkFn = worker.NoopWorkFn
+	pool.Start(d, ticketsDir)
+
+	if !waitForLog(pool.LogChannel, "released ticket proj/review-ok", 5*time.Second) {
+		pool.Stop()
+		t.Fatal("ticket was not released within 5 seconds")
+	}
+	pool.Stop()
+
+	// The dry run rebase should have been attempted (in addition to the
+	// start-of-phase rebase). With NoopWorkFn the agent does nothing,
+	// so the dry run succeeds and a success log message should appear.
+	// The ticket should end at review/user-review.
+	units, err := d.Status()
+	if err != nil {
+		t.Fatalf("Status: %v", err)
+	}
+	for _, u := range units {
+		if u.Identifier == "proj/review-ok" {
+			if u.Phase != models.PhaseReview {
+				t.Errorf("expected phase %q, got %q", models.PhaseReview, u.Phase)
+			}
+			if u.Status != models.StatusUserReview {
+				t.Errorf("expected status %q, got %q", models.StatusUserReview, u.Status)
+			}
+			return
+		}
+	}
+	t.Fatal("ticket not found")
+}
+
+func TestWorker_ReviewPhase_PreMergeRebaseConflictNotifies(t *testing.T) {
+	d, git, ticketsDir := openTestDBWithGit(t)
+	createProject(t, d, "proj")
+	createTicket(t, d, "proj/review-conflict")
+
+	// Advance to review phase.
+	if err := d.SetStatus("proj/review-conflict", models.PhaseReview, models.StatusIdle); err != nil {
+		t.Fatal(err)
+	}
+
+	// Fail the dry run rebase (the second rebase call — the first is the
+	// start-of-phase rebase which should succeed).
+	calls := 0
+	git.RebaseErrFunc = func(_, _ string) error {
+		calls++
+		if calls >= 2 {
+			return errors.New("simulated dry-run conflict")
+		}
+		return nil
+	}
+
+	pool := worker.NewPool(1, 1)
+	pool.WorkFn = worker.NoopWorkFn
+	pool.Start(d, ticketsDir)
+
+	// Should see a notification about the dry-run conflict.
+	var sawConflictNotif bool
+	deadline := time.After(5 * time.Second)
+	for !sawConflictNotif {
+		select {
+		case notif := <-pool.NotifChannel:
+			if strings.Contains(notif, "Pre-merge dry run conflict") {
+				sawConflictNotif = true
+			}
+		case <-pool.LogChannel:
+			// drain
+		case <-deadline:
+			pool.Stop()
+			t.Fatal("did not receive dry-run conflict notification within 5 seconds")
+			return
+		}
+	}
+
+	// Wait for ticket to be released.
+	if !waitForLog(pool.LogChannel, "released ticket proj/review-conflict", 5*time.Second) {
+		pool.Stop()
+		t.Fatal("ticket was not released")
+	}
+	pool.Stop()
+
+	// The ticket should still advance to user-review (the dry run is
+	// advisory, not blocking).
+	units, err := d.Status()
+	if err != nil {
+		t.Fatalf("Status: %v", err)
+	}
+	for _, u := range units {
+		if u.Identifier == "proj/review-conflict" {
+			if u.Phase != models.PhaseReview {
+				t.Errorf("expected phase %q, got %q", models.PhaseReview, u.Phase)
+			}
+			if u.Status != models.StatusUserReview {
+				t.Errorf("expected status %q, got %q", models.StatusUserReview, u.Status)
+			}
+			return
+		}
+	}
+	t.Fatal("ticket not found")
+}
+
+func TestWorker_NonReviewPhase_NoPreMergeRebase(t *testing.T) {
+	d, git, ticketsDir := openTestDBWithGit(t)
+	createProject(t, d, "proj")
+	createTicket(t, d, "proj/impl-ticket")
+
+	// Leave at implement phase (the default).
+	// Track rebase calls after setup.
+	git.RebaseTargets = nil
+
+	pool := worker.NewPool(1, 1)
+	pool.WorkFn = worker.NoopWorkFn
+	pool.Start(d, ticketsDir)
+
+	if !waitForLog(pool.LogChannel, "released ticket proj/impl-ticket", 5*time.Second) {
+		pool.Stop()
+		t.Fatal("ticket was not released within 5 seconds")
+	}
+	pool.Stop()
+
+	// Only the start-of-phase rebase should have been called (1 call).
+	// No dry-run rebase for non-review phases.
+	if len(git.RebaseTargets) > 1 {
+		t.Errorf("expected at most 1 rebase call for implement phase, got %d", len(git.RebaseTargets))
+	}
 }
