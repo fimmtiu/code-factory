@@ -708,6 +708,23 @@ func (d *DB) RebaseTicketOnParent(identifier, parentIdentifier, parentBranch str
 	return nil
 }
 
+// identifierIsTicket reports whether identifier names a row in the tickets
+// table. Returns (false, nil) if the identifier exists only as a project
+// (or not at all); the missing-worktree case surfaces later when git
+// operations run.
+func (d *DB) identifierIsTicket(identifier string) (bool, error) {
+	var ignored int
+	err := d.db.QueryRow(`SELECT 1 FROM tickets WHERE identifier = ?`, identifier).Scan(&ignored)
+	switch {
+	case err == nil:
+		return true, nil
+	case err == sql.ErrNoRows:
+		return false, nil
+	default:
+		return false, err
+	}
+}
+
 // rebaseAndFastForward combines a work unit's branch into its parent using a
 // rebase strategy: rebase the child branch onto the parent's current HEAD,
 // then fast-forward the parent to the rebased tip. The result is linear
@@ -715,10 +732,10 @@ func (d *DB) RebaseTicketOnParent(identifier, parentIdentifier, parentBranch str
 // progress in the child's worktree so the user can resolve them manually,
 // and the returned MergeConflictError points at that worktree.
 //
-// When squash is true, the child branch is collapsed to a single commit
-// against its merge base with the target before rebasing. This is the
-// ticket path; projects merge with their full commit history preserved.
-func (d *DB) rebaseAndFastForward(identifier, mergeTarget string, squash bool) error {
+// Ticket branches are squashed to a single commit before rebasing so the
+// parent sees one diff per ticket instead of the full implement/refactor/
+// respond commit fan. Project branches keep their full child commit history.
+func (d *DB) rebaseAndFastForward(identifier, mergeTarget string) error {
 	childWorktree := d.worktreePath(identifier)
 
 	targetBranch, err := d.git.GetCurrentBranch(mergeTarget)
@@ -726,7 +743,11 @@ func (d *DB) rebaseAndFastForward(identifier, mergeTarget string, squash bool) e
 		return fmt.Errorf("detect target branch for %s: %w", mergeTarget, err)
 	}
 
-	if squash {
+	isTicket, err := d.identifierIsTicket(identifier)
+	if err != nil {
+		return fmt.Errorf("classify %s: %w", identifier, err)
+	}
+	if isTicket {
 		if err := d.git.SquashSinceMergeBase(childWorktree, targetBranch, identifier); err != nil {
 			return fmt.Errorf("squash %s: %w", identifier, err)
 		}
@@ -774,7 +795,7 @@ func (d *DB) markTicketDone(ticketID int64, identifier string, projectID sql.Nul
 	mu.Lock()
 	defer mu.Unlock()
 
-	if err := d.rebaseAndFastForward(identifier, mergeTarget, true); err != nil {
+	if err := d.rebaseAndFastForward(identifier, mergeTarget); err != nil {
 		return err
 	}
 
@@ -874,12 +895,10 @@ func (d *DB) MergeChain(ctx context.Context, identifier string, onConflict func(
 	}()
 
 	// Phase 1: every rebase + fast-forward in the chain must succeed.
-	// Tickets are squashed to a single commit before rebasing so the parent
-	// (and any grandparents climbed in this cascade) sees one diff per
-	// ticket instead of the full implement/refactor/respond commit fan.
-	// Projects merge their child commits unsquashed.
+	// rebaseAndFastForward squashes ticket branches and leaves project
+	// branches with their full commit history; see its doc comment.
 	for _, step := range chain {
-		err := d.rebaseAndFastForward(step.Identifier, step.MergeTarget, !step.IsProject)
+		err := d.rebaseAndFastForward(step.Identifier, step.MergeTarget)
 		if err == nil {
 			continue
 		}
@@ -916,7 +935,7 @@ func (d *DB) MergeChain(ctx context.Context, identifier string, onConflict func(
 			// no-op fast-forward when the target is already at the tip.
 			// Squash is also idempotent (no-op once the branch has ≤ 1
 			// commit since the merge base).
-			err = d.rebaseAndFastForward(step.Identifier, step.MergeTarget, !step.IsProject)
+			err = d.rebaseAndFastForward(step.Identifier, step.MergeTarget)
 			if err == nil {
 				break
 			}
@@ -1896,7 +1915,7 @@ func (d *DB) SetProjectPhase(identifier, phase string) error {
 		mu.Lock()
 		defer mu.Unlock()
 
-		if err := d.rebaseAndFastForward(identifier, mergeTarget, false); err != nil {
+		if err := d.rebaseAndFastForward(identifier, mergeTarget); err != nil {
 			return err
 		}
 	}

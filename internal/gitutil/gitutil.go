@@ -143,9 +143,7 @@ func (g *RealGitClient) AbortRebase(worktreeDir string) error {
 // If there are 0 or 1 such commits, the branch is left untouched, making the
 // call idempotent for retry paths.
 func (g *RealGitClient) SquashSinceMergeBase(worktreeDir, targetBranch, summary string) error {
-	safeTarget := strings.ReplaceAll(targetBranch, "/", "_")
-
-	base, err := runGitOutput("-C", worktreeDir, "merge-base", "HEAD", safeTarget)
+	base, err := runGitOutput("-C", worktreeDir, "merge-base", "HEAD", targetBranch)
 	if err != nil {
 		return fmt.Errorf("SquashSinceMergeBase: merge-base: %w", err)
 	}
