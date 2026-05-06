@@ -54,7 +54,7 @@ func runMsgChain(cmd tea.Cmd) []tea.Msg {
 
 func TestAddTicketDialog_NoDepsCreatesImplementTicket(t *testing.T) {
 	d := openUITestDB(t)
-	if err := d.CreateProject("proj", "P", nil, ""); err != nil {
+	if err := d.CreateProject("proj", "P", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
 	parent := &models.WorkUnit{Identifier: "proj", IsProject: true}
@@ -105,10 +105,10 @@ func TestAddTicketDialog_NoDepsCreatesImplementTicket(t *testing.T) {
 
 func TestAddTicketDialog_WithDepsCreatesBlockedTicket(t *testing.T) {
 	d := openUITestDB(t)
-	if err := d.CreateProject("proj", "P", nil, ""); err != nil {
+	if err := d.CreateProject("proj", "P", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/first", "First", nil, ""); err != nil {
+	if err := d.CreateTicket("proj/first", "First", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
 	parent := &models.WorkUnit{Identifier: "proj", IsProject: true}

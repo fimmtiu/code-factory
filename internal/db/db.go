@@ -203,6 +203,8 @@ var schemaStatements = []string{
 var migrations = []string{
 	`ALTER TABLE "projects" ADD COLUMN "parent_branch" text NOT NULL DEFAULT ''`,
 	`ALTER TABLE "tickets" ADD COLUMN "parent_branch" text NOT NULL DEFAULT ''`,
+	`ALTER TABLE "projects" ADD COLUMN "write_scope" text NOT NULL DEFAULT ''`,
+	`ALTER TABLE "tickets" ADD COLUMN "write_scope" text NOT NULL DEFAULT ''`,
 }
 
 func (d *DB) createSchema() error {
@@ -547,13 +549,14 @@ func (d *DB) loadChangeRequests(ticketByID map[int64]*models.WorkUnit) error {
 // non-empty, overrides the default branch this project merges into when
 // completed. The default is the parent project's worktree branch, or the
 // repository's default branch for top-level projects.
-func (d *DB) CreateProject(identifier, description string, deps []string, parentBranch string) error {
+func (d *DB) CreateProject(identifier, description string, deps []string, parentBranch string, writeScope []string) error {
 	if err := models.ValidateIdentifier(identifier); err != nil {
 		return err
 	}
 	if err := validateParentBranch(parentBranch); err != nil {
 		return err
 	}
+	scopeStr := encodeScope(writeScope)
 	if err := d.withTx(func(tx *sql.Tx) error {
 		var parentID sql.NullInt64
 		if parent, hasParent := models.ParentIdentifierOf(identifier); hasParent {
@@ -564,8 +567,8 @@ func (d *DB) CreateProject(identifier, description string, deps []string, parent
 			parentID = sql.NullInt64{Int64: pid, Valid: true}
 		}
 		res, err := tx.Exec(
-			`INSERT INTO projects (identifier, description, last_updated, project_id, parent_branch) VALUES (?, ?, ?, ?, ?)`,
-			identifier, description, time.Now().Unix(), parentID, parentBranch,
+			`INSERT INTO projects (identifier, description, last_updated, project_id, parent_branch, write_scope) VALUES (?, ?, ?, ?, ?, ?)`,
+			identifier, description, time.Now().Unix(), parentID, parentBranch, scopeStr,
 		)
 		if err != nil {
 			return fmt.Errorf("insert project: %w", err)
@@ -590,13 +593,14 @@ func (d *DB) CreateProject(identifier, description string, deps []string, parent
 // non-empty, overrides the default branch this ticket merges into when
 // completed. The default is the parent project's worktree branch, or the
 // repository's default branch for top-level tickets.
-func (d *DB) CreateTicket(identifier, description string, deps []string, parentBranch string) error {
+func (d *DB) CreateTicket(identifier, description string, deps []string, parentBranch string, writeScope []string) error {
 	if err := models.ValidateIdentifier(identifier); err != nil {
 		return err
 	}
 	if err := validateParentBranch(parentBranch); err != nil {
 		return err
 	}
+	scopeStr := encodeScope(writeScope)
 	if err := d.withTx(func(tx *sql.Tx) error {
 		phase := models.PhaseImplement
 		if len(deps) > 0 {
@@ -619,8 +623,8 @@ func (d *DB) CreateTicket(identifier, description string, deps []string, parentB
 		}
 
 		res, err := tx.Exec(
-			`INSERT INTO tickets (identifier, description, phase, status, last_updated, project_id, parent_branch) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-			identifier, description, string(phase), string(models.StatusIdle), time.Now().Unix(), projectID, parentBranch,
+			`INSERT INTO tickets (identifier, description, phase, status, last_updated, project_id, parent_branch, write_scope) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			identifier, description, string(phase), string(models.StatusIdle), time.Now().Unix(), projectID, parentBranch, scopeStr,
 		)
 		if err != nil {
 			return fmt.Errorf("insert ticket: %w", err)
@@ -835,6 +839,14 @@ type completionStep struct {
 	IsProject   bool
 	WorkUnitID  int64
 	MergeTarget string
+}
+
+// candidate represents a claimable ticket during the claim selection process.
+type candidate struct {
+	id         int64
+	identifier string
+	projectID  sql.NullInt64
+	scope      []string
 }
 
 // MarkTicketDoneCascading transitions a ticket to "done" and cascades parent
@@ -1190,75 +1202,120 @@ func (d *DB) Claim(pid int) (*models.WorkUnit, error) {
 	return result, err
 }
 
-// claimTicketRow atomically claims the first claimable ticket for pid and
-// returns its row id and a partially-populated WorkUnit.
+// claimTicketRow selects the first claimable ticket for pid and claims it.
 //
-// The UPDATE-then-SELECT pattern ensures that only one worker can claim a
-// given ticket even under concurrent DEFERRED transactions — the UPDATE's
-// WHERE clause acts as an atomic compare-and-swap.
+// Candidates are selected with ORDER BY id for deterministic ordering, then
+// filtered in Go against a pre-fetched sibling scope map. The chosen
+// candidate is claimed with an UPDATE that includes "AND claimed_by IS NULL"
+// so that a concurrent transaction that claimed the same row first causes
+// RowsAffected == 0 instead of silently overwriting. When that happens the
+// loop advances to the next candidate.
 func claimTicketRow(tx *sql.Tx, pid int) (int64, *models.WorkUnit, error) {
 	now := time.Now().Unix()
 
-	// Atomically claim the first available ticket. SQLite evaluates the
-	// subquery and applies the UPDATE in a single statement, so no other
-	// transaction can claim the same row.
-	res, err := tx.Exec(`
-		UPDATE tickets
-		SET claimed_by = ?, last_updated = ?
-		WHERE id = (
-			SELECT id FROM tickets
-			WHERE phase NOT IN ('blocked', 'done')
-			  AND status IN ('idle', 'responding')
-			  AND claimed_by IS NULL
-			LIMIT 1
-		)
-	`, pid, now)
+	// Find all candidate tickets (not blocked/done, idle/responding, unclaimed),
+	// ordered by id for deterministic selection.
+	rows, err := tx.Query(`
+		SELECT id, identifier, project_id, write_scope
+		FROM tickets
+		WHERE phase NOT IN ('blocked', 'done')
+		  AND status IN ('idle', 'responding')
+		  AND claimed_by IS NULL
+		ORDER BY id
+	`)
 	if err != nil {
 		return 0, nil, err
 	}
-	n, err := res.RowsAffected()
-	if err != nil {
+	defer rows.Close()
+
+	var candidates []candidate
+	for rows.Next() {
+		var c candidate
+		var scopeStr string
+		if err := rows.Scan(&c.id, &c.identifier, &c.projectID, &scopeStr); err != nil {
+			return 0, nil, err
+		}
+		c.scope = decodeScope(scopeStr)
+		candidates = append(candidates, c)
+	}
+	if err := rows.Err(); err != nil {
 		return 0, nil, err
 	}
-	if n == 0 {
+
+	if len(candidates) == 0 {
 		return 0, nil, fmt.Errorf("no claimable ticket available")
 	}
 
-	// Read back the ticket we just claimed. The status is still 'idle' or
-	// 'responding' at this point (the caller transitions it to its active
-	// counterpart), and a worker can only hold one claimable ticket at a time,
-	// so this is unambiguous.
-	var id int64
-	var identifier, description, phase, status, parentBranch string
-	var projectID sql.NullInt64
-	err = tx.QueryRow(`
-		SELECT id, identifier, description, phase, status, project_id, parent_branch
-		FROM tickets
-		WHERE claimed_by = ? AND status IN ('idle', 'responding')
-		LIMIT 1
-	`, pid).Scan(&id, &identifier, &description, &phase, &status, &projectID, &parentBranch)
+	// Fetch all claimed siblings' scopes in a single query, grouped by
+	// project_id, so the per-candidate overlap check is done in memory.
+	claimedScopes, err := loadClaimedSiblingScopes(tx)
 	if err != nil {
 		return 0, nil, err
 	}
 
-	parent, err := projectIdentifierByID(tx, projectID)
-	if err != nil {
-		return 0, nil, err
+	// For each candidate, check sibling exclusion: if the candidate has a
+	// write_scope AND shares a project_id with a currently-claimed sibling
+	// whose write_scope overlaps, skip it. If the UPDATE hits 0 rows
+	// (concurrent claim), try the next candidate.
+	for i := range candidates {
+		c := &candidates[i]
+		if isScopeBlockedBySiblingMap(c, claimedScopes) {
+			continue
+		}
+
+		// Claim the chosen ticket. The "AND claimed_by IS NULL" guard
+		// prevents overwriting a concurrent claim.
+		res, err := tx.Exec(`
+			UPDATE tickets SET claimed_by = ?, last_updated = ?
+			WHERE id = ? AND claimed_by IS NULL
+		`, pid, now, c.id)
+		if err != nil {
+			return 0, nil, err
+		}
+		n, err := res.RowsAffected()
+		if err != nil {
+			return 0, nil, err
+		}
+		if n == 0 {
+			// Another transaction claimed this ticket; try next candidate.
+			continue
+		}
+
+		// Read back the ticket we just claimed.
+		var id int64
+		var identifier, description, phase, status, parentBranch string
+		var projectID sql.NullInt64
+		err = tx.QueryRow(`
+			SELECT id, identifier, description, phase, status, project_id, parent_branch
+			FROM tickets
+			WHERE id = ?
+		`, c.id).Scan(&id, &identifier, &description, &phase, &status, &projectID, &parentBranch)
+		if err != nil {
+			return 0, nil, err
+		}
+
+		parent, err := projectIdentifierByID(tx, projectID)
+		if err != nil {
+			return 0, nil, err
+		}
+
+		wu := &models.WorkUnit{
+			Identifier:   identifier,
+			Description:  description,
+			Phase:        models.TicketPhase(phase),
+			Status:       models.TicketStatus(status),
+			ClaimedBy:    strconv.Itoa(pid),
+			LastUpdated:  time.Unix(now, 0),
+			IsProject:    false,
+			Dependencies: []string{},
+			Parent:       parent,
+			ParentBranch: parentBranch,
+			WriteScope:   c.scope,
+		}
+		return id, wu, nil
 	}
 
-	wu := &models.WorkUnit{
-		Identifier:   identifier,
-		Description:  description,
-		Phase:        models.TicketPhase(phase),
-		Status:       models.TicketStatus(status),
-		ClaimedBy:    strconv.Itoa(pid),
-		LastUpdated:  time.Unix(now, 0),
-		IsProject:    false,
-		Dependencies: []string{},
-		Parent:       parent,
-		ParentBranch: parentBranch,
-	}
-	return id, wu, nil
+	return 0, nil, fmt.Errorf("no claimable ticket available")
 }
 
 // projectIdentifierByID resolves an optional project row ID to its identifier string.
@@ -1530,6 +1587,129 @@ func (d *DB) DeleteChangeRequestsForTicket(identifier string) error {
 		_, err = tx.Exec(`DELETE FROM change_requests WHERE ticket_id = ?`, ticketID)
 		return err
 	})
+}
+
+// GetWriteScope returns the write_scope for a work unit (ticket or project).
+// If the identifier is not found, it returns an empty slice and an error.
+func (d *DB) GetWriteScope(identifier string) ([]string, error) {
+	var scopeStr string
+	err := d.db.QueryRow(`SELECT write_scope FROM tickets WHERE identifier = ?`, identifier).Scan(&scopeStr)
+	if err == sql.ErrNoRows {
+		err = d.db.QueryRow(`SELECT write_scope FROM projects WHERE identifier = ?`, identifier).Scan(&scopeStr)
+	}
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("work unit %q not found", identifier)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return decodeScope(scopeStr), nil
+}
+
+// SetWriteScope updates the write_scope for a work unit (ticket or project).
+// It tries the tickets table first, then projects, matching the lookup order
+// of GetWriteScope.
+func (d *DB) SetWriteScope(identifier string, scope []string) error {
+	scopeStr := encodeScope(scope)
+	return d.withTx(func(tx *sql.Tx) error {
+		res, err := tx.Exec(`UPDATE tickets SET write_scope = ? WHERE identifier = ?`, scopeStr, identifier)
+		if err != nil {
+			return err
+		}
+		n, err := res.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if n > 0 {
+			return nil
+		}
+		res, err = tx.Exec(`UPDATE projects SET write_scope = ? WHERE identifier = ?`, scopeStr, identifier)
+		if err != nil {
+			return err
+		}
+		n, err = res.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if n == 0 {
+			return fmt.Errorf("work unit %q not found", identifier)
+		}
+		return nil
+	})
+}
+
+// encodeScope serializes a scope slice into the comma-delimited string stored
+// in the database. An empty/nil slice produces "".
+func encodeScope(scope []string) string {
+	return strings.Join(scope, ",")
+}
+
+// decodeScope deserializes the comma-delimited scope string from the database
+// into a slice. An empty string produces nil.
+func decodeScope(s string) []string {
+	if s == "" {
+		return nil
+	}
+	return strings.Split(s, ",")
+}
+
+// scopesOverlap reports whether two scope lists have any overlapping paths.
+// Overlap is defined by prefix matching: "internal/db/" overlaps with
+// "internal/db/schema.go" and vice versa.
+func scopesOverlap(a, b []string) bool {
+	for _, ap := range a {
+		for _, bp := range b {
+			if strings.HasPrefix(ap, bp) || strings.HasPrefix(bp, ap) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// loadClaimedSiblingScopes fetches the write_scope of every currently-claimed
+// ticket that has a non-empty scope, grouped by project_id. The result is a
+// map from project_id to a slice of decoded scopes (one []string per sibling).
+// This allows the caller to check scope overlap for each candidate in memory
+// instead of issuing a SQL query per candidate.
+func loadClaimedSiblingScopes(tx *sql.Tx) (map[int64][][]string, error) {
+	rows, err := tx.Query(`
+		SELECT project_id, write_scope FROM tickets
+		WHERE claimed_by IS NOT NULL
+		  AND write_scope != ''
+		  AND phase NOT IN ('done')
+		  AND project_id IS NOT NULL
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[int64][][]string)
+	for rows.Next() {
+		var projectID int64
+		var scopeStr string
+		if err := rows.Scan(&projectID, &scopeStr); err != nil {
+			return nil, err
+		}
+		result[projectID] = append(result[projectID], decodeScope(scopeStr))
+	}
+	return result, rows.Err()
+}
+
+// isScopeBlockedBySiblingMap reports whether a candidate ticket's write_scope
+// overlaps with any currently-claimed sibling under the same project, using
+// the pre-fetched claimedScopes map instead of a per-candidate SQL query.
+func isScopeBlockedBySiblingMap(c *candidate, claimedScopes map[int64][][]string) bool {
+	if len(c.scope) == 0 || !c.projectID.Valid {
+		return false
+	}
+	for _, sibScope := range claimedScopes[c.projectID.Int64] {
+		if scopesOverlap(c.scope, sibScope) {
+			return true
+		}
+	}
+	return false
 }
 
 // OpenChangeRequests returns all change requests with status "open" for the

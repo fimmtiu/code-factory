@@ -38,6 +38,7 @@ type WorkUnit struct {
 	ParentBranch   string          `json:"parent_branch,omitempty"`
 	ClaimedBy      string          `json:"claimed_by,omitempty"`
 	ChangeRequests []ChangeRequest `json:"change_requests,omitempty"`
+	WriteScope     []string        `json:"write_scope,omitempty"`
 }
 
 func NewTicket(identifier, description string) *WorkUnit {

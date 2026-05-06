@@ -214,7 +214,7 @@ func (d *AddTicketDialog) submit() (tea.Model, tea.Cmd) {
 	return d, tea.Batch(
 		dismissDialogCmd(),
 		func() tea.Msg {
-			if err := database.CreateTicket(identifier, description, deps, ""); err != nil {
+			if err := database.CreateTicket(identifier, description, deps, "", nil); err != nil {
 				return ticketCreatedMsg{identifier: identifier, errMsg: err.Error()}
 			}
 			return ticketCreatedMsg{identifier: identifier}

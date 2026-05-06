@@ -53,7 +53,7 @@ func TestBuildPrompt_Implement(t *testing.T) {
 
 func TestBuildPrompt_ImplementWithParentContext(t *testing.T) {
 	d, ticketsDir := openTestDB(t)
-	if err := d.CreateProject("proj", "Parent project description", nil, ""); err != nil {
+	if err := d.CreateProject("proj", "Parent project description", nil, "", nil); err != nil {
 		t.Fatalf("CreateProject: %v", err)
 	}
 	createTicket(t, d, "proj/ticket-1")
@@ -74,10 +74,10 @@ func TestBuildPrompt_ImplementWithParentContext(t *testing.T) {
 
 func TestBuildPrompt_ImplementWithNestedProjectContext(t *testing.T) {
 	d, ticketsDir := openTestDB(t)
-	if err := d.CreateProject("grandparent", "Top-level project", nil, ""); err != nil {
+	if err := d.CreateProject("grandparent", "Top-level project", nil, "", nil); err != nil {
 		t.Fatalf("CreateProject grandparent: %v", err)
 	}
-	if err := d.CreateProject("grandparent/parent", "Mid-level project", nil, ""); err != nil {
+	if err := d.CreateProject("grandparent/parent", "Mid-level project", nil, "", nil); err != nil {
 		t.Fatalf("CreateProject parent: %v", err)
 	}
 	createTicket(t, d, "grandparent/parent/ticket-1")
@@ -250,5 +250,71 @@ func TestBuildMergingPrompt_TopLevelTicket(t *testing.T) {
 
 	if !strings.Contains(prompt, "A standalone ticket") {
 		t.Error("expected prompt to contain ticket description")
+	}
+}
+
+// ===== write_scope in implement prompt =====
+
+func TestBuildPrompt_ImplementIncludesWriteScope(t *testing.T) {
+	d, ticketsDir := openTestDB(t)
+	if err := d.CreateProject("proj", "A project", nil, "", nil); err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	if err := d.CreateTicket("proj/scoped", "Do scoped work", nil, "", nil); err != nil {
+		t.Fatalf("CreateTicket: %v", err)
+	}
+	ticket := buildPromptTicket("proj/scoped", "Do scoped work", models.PhaseImplement)
+	ticket.WriteScope = []string{"internal/db/", "cmd/cf-tickets/main.go"}
+	prompt, err := worker.BuildPrompt(ticket, d, ticketsDir)
+	if err != nil {
+		t.Fatalf("BuildPrompt: %v", err)
+	}
+
+	if !strings.Contains(prompt, "internal/db/") {
+		t.Error("expected prompt to contain write_scope path internal/db/")
+	}
+	if !strings.Contains(prompt, "cmd/cf-tickets/main.go") {
+		t.Error("expected prompt to contain write_scope path cmd/cf-tickets/main.go")
+	}
+	if !strings.Contains(prompt, "write_scope") || !strings.Contains(prompt, "MUST NOT") {
+		t.Error("expected prompt to contain write_scope constraint language")
+	}
+}
+
+func TestBuildPrompt_ImplementOmitsWriteScopeWhenEmpty(t *testing.T) {
+	d, ticketsDir := openTestDB(t)
+	createProject(t, d, "proj")
+	createTicket(t, d, "proj/noscope")
+
+	ticket := buildPromptTicket("proj/noscope", "Do unscoped work", models.PhaseImplement)
+	prompt, err := worker.BuildPrompt(ticket, d, ticketsDir)
+	if err != nil {
+		t.Fatalf("BuildPrompt: %v", err)
+	}
+
+	if strings.Contains(prompt, "write_scope") {
+		t.Error("expected prompt to NOT contain write_scope when none is set")
+	}
+}
+
+func TestBuildPrompt_RefactorDoesNotIncludeWriteScope(t *testing.T) {
+	d, ticketsDir := openTestDB(t)
+	if err := d.CreateProject("proj", "A project", nil, "", nil); err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	if err := d.CreateTicket("proj/refac", "Refactor something", nil, "", nil); err != nil {
+		t.Fatalf("CreateTicket: %v", err)
+	}
+	ticket := buildPromptTicket("proj/refac", "Refactor something", models.PhaseRefactor)
+	ticket.WriteScope = []string{"internal/db/"}
+	prompt, err := worker.BuildPrompt(ticket, d, ticketsDir)
+	if err != nil {
+		t.Fatalf("BuildPrompt: %v", err)
+	}
+
+	// Refactor uses /cf-refactor skill, not the raw implement prompt.
+	// write_scope should not appear.
+	if strings.Contains(prompt, "write_scope") {
+		t.Error("expected refactor prompt to NOT contain write_scope")
 	}
 }

@@ -78,10 +78,10 @@ func projectPhase(t *testing.T, d *db.DB, identifier string) models.TicketPhase 
 
 func TestApprove_ImplementToRefactor(t *testing.T) {
 	d := openTestDB(t)
-	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
+	if err := d.CreateProject("proj", "A project", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/t1", "A ticket", nil, ""); err != nil {
+	if err := d.CreateTicket("proj/t1", "A ticket", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.SetStatus("proj/t1", models.PhaseImplement, models.StatusUserReview); err != nil {
@@ -99,10 +99,10 @@ func TestApprove_ImplementToRefactor(t *testing.T) {
 
 func TestApprove_RefactorToReview(t *testing.T) {
 	d := openTestDB(t)
-	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
+	if err := d.CreateProject("proj", "A project", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/t1", "A ticket", nil, ""); err != nil {
+	if err := d.CreateTicket("proj/t1", "A ticket", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.SetStatus("proj/t1", models.PhaseRefactor, models.StatusIdle); err != nil {
@@ -120,10 +120,10 @@ func TestApprove_RefactorToReview(t *testing.T) {
 
 func TestApprove_ReviewToMerging(t *testing.T) {
 	d := openTestDB(t)
-	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
+	if err := d.CreateProject("proj", "A project", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/t1", "A ticket", nil, ""); err != nil {
+	if err := d.CreateTicket("proj/t1", "A ticket", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.SetStatus("proj/t1", models.PhaseReview, models.StatusIdle); err != nil {
@@ -156,10 +156,10 @@ func TestApprove_ReviewToMerging(t *testing.T) {
 
 func TestApprove_OpenCRsAtImplementSendsToResponding(t *testing.T) {
 	d := openTestDB(t)
-	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
+	if err := d.CreateProject("proj", "A project", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/t1", "A ticket", nil, ""); err != nil {
+	if err := d.CreateTicket("proj/t1", "A ticket", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.SetStatus("proj/t1", models.PhaseImplement, models.StatusUserReview); err != nil {
@@ -183,10 +183,10 @@ func TestApprove_OpenCRsAtImplementSendsToResponding(t *testing.T) {
 
 func TestApprove_OpenCRsAtReviewSendsToResponding(t *testing.T) {
 	d := openTestDB(t)
-	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
+	if err := d.CreateProject("proj", "A project", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/t1", "A ticket", nil, ""); err != nil {
+	if err := d.CreateTicket("proj/t1", "A ticket", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.SetStatus("proj/t1", models.PhaseReview, models.StatusUserReview); err != nil {
@@ -210,10 +210,10 @@ func TestApprove_OpenCRsAtReviewSendsToResponding(t *testing.T) {
 
 func TestApprove_DismissedCRsDoNotBlockAdvancement(t *testing.T) {
 	d := openTestDB(t)
-	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
+	if err := d.CreateProject("proj", "A project", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/t1", "A ticket", nil, ""); err != nil {
+	if err := d.CreateTicket("proj/t1", "A ticket", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.SetStatus("proj/t1", models.PhaseImplement, models.StatusUserReview); err != nil {
@@ -244,14 +244,14 @@ func TestApprove_DismissedCRsDoNotBlockAdvancement(t *testing.T) {
 
 func TestApprove_BlockedReturnsError(t *testing.T) {
 	d := openTestDB(t)
-	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
+	if err := d.CreateProject("proj", "A project", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
 	// Create two tickets; t1 depends on t2 so it starts blocked.
-	if err := d.CreateTicket("proj/t2", "dep", nil, ""); err != nil {
+	if err := d.CreateTicket("proj/t2", "dep", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/t1", "blocker", []string{"proj/t2"}, ""); err != nil {
+	if err := d.CreateTicket("proj/t1", "blocker", []string{"proj/t2"}, "", nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -263,10 +263,10 @@ func TestApprove_BlockedReturnsError(t *testing.T) {
 
 func TestApprove_DoneReturnsError(t *testing.T) {
 	d := openTestDB(t)
-	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
+	if err := d.CreateProject("proj", "A project", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/t1", "A ticket", nil, ""); err != nil {
+	if err := d.CreateTicket("proj/t1", "A ticket", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.SetStatus("proj/t1", models.PhaseReview, models.StatusIdle); err != nil {
@@ -299,10 +299,10 @@ func TestApprove_NotFoundReturnsError(t *testing.T) {
 
 func TestApprove_SingleTicketMarkesProjectDone(t *testing.T) {
 	d := openTestDB(t)
-	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
+	if err := d.CreateProject("proj", "A project", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/t1", "A ticket", nil, ""); err != nil {
+	if err := d.CreateTicket("proj/t1", "A ticket", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.SetStatus("proj/t1", models.PhaseReview, models.StatusIdle); err != nil {
@@ -323,13 +323,13 @@ func TestApprove_SingleTicketMarkesProjectDone(t *testing.T) {
 
 func TestApprove_NotAllTicketsDone_ProjectRemainsOpen(t *testing.T) {
 	d := openTestDB(t)
-	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
+	if err := d.CreateProject("proj", "A project", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/t1", "ticket 1", nil, ""); err != nil {
+	if err := d.CreateTicket("proj/t1", "ticket 1", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/t2", "ticket 2", nil, ""); err != nil {
+	if err := d.CreateTicket("proj/t2", "ticket 2", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
 	// Only approve t1 (review → done).
@@ -351,11 +351,11 @@ func TestApprove_NestedProjectCompletion(t *testing.T) {
 	// Structure: grandparent / parent / t1.
 	d := openTestDB(t)
 	for _, id := range []string{"grandparent", "grandparent/parent"} {
-		if err := d.CreateProject(id, "A project", nil, ""); err != nil {
+		if err := d.CreateProject(id, "A project", nil, "", nil); err != nil {
 			t.Fatalf("CreateProject %q: %v", id, err)
 		}
 	}
-	if err := d.CreateTicket("grandparent/parent/t1", "A ticket", nil, ""); err != nil {
+	if err := d.CreateTicket("grandparent/parent/t1", "A ticket", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.SetStatus("grandparent/parent/t1", models.PhaseReview, models.StatusIdle); err != nil {
@@ -380,10 +380,10 @@ func TestApprove_NestedProjectCompletion(t *testing.T) {
 func TestApprove_TopLevelTicketNoParent(t *testing.T) {
 	// Approve implement → refactor (non-done transition, no parent walk).
 	d := openTestDB(t)
-	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
+	if err := d.CreateProject("proj", "A project", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/t1", "A ticket", nil, ""); err != nil {
+	if err := d.CreateTicket("proj/t1", "A ticket", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.SetStatus("proj/t1", models.PhaseImplement, models.StatusIdle); err != nil {
@@ -423,11 +423,11 @@ func TestMergeChain_GrandparentRebaseFailureLeavesNoneDone(t *testing.T) {
 
 	// grandparent / parent / t1 — completing t1 would cascade both projects.
 	for _, id := range []string{"grandparent", "grandparent/parent"} {
-		if err := d.CreateProject(id, "A project", nil, ""); err != nil {
+		if err := d.CreateProject(id, "A project", nil, "", nil); err != nil {
 			t.Fatalf("CreateProject %q: %v", id, err)
 		}
 	}
-	if err := d.CreateTicket("grandparent/parent/t1", "A ticket", nil, ""); err != nil {
+	if err := d.CreateTicket("grandparent/parent/t1", "A ticket", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.SetStatus("grandparent/parent/t1", models.PhaseReview, models.StatusIdle); err != nil {
@@ -476,11 +476,11 @@ func TestMergeChain_RetryAfterParentConflictSucceeds(t *testing.T) {
 	d, git := openTestDBWithGit(t)
 
 	for _, id := range []string{"grandparent", "grandparent/parent"} {
-		if err := d.CreateProject(id, "A project", nil, ""); err != nil {
+		if err := d.CreateProject(id, "A project", nil, "", nil); err != nil {
 			t.Fatalf("CreateProject %q: %v", id, err)
 		}
 	}
-	if err := d.CreateTicket("grandparent/parent/t1", "A ticket", nil, ""); err != nil {
+	if err := d.CreateTicket("grandparent/parent/t1", "A ticket", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.SetStatus("grandparent/parent/t1", models.PhaseReview, models.StatusIdle); err != nil {
@@ -526,10 +526,10 @@ func TestMergeChain_RetryAfterParentConflictSucceeds(t *testing.T) {
 // MergeChain returns an error and no work unit is finalized.
 func TestMergeChain_TicketRebaseFailureLeavesTicketAtMerging(t *testing.T) {
 	d, git := openTestDBWithGit(t)
-	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
+	if err := d.CreateProject("proj", "A project", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/t1", "A ticket", nil, ""); err != nil {
+	if err := d.CreateTicket("proj/t1", "A ticket", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.SetStatus("proj/t1", models.PhaseReview, models.StatusIdle); err != nil {

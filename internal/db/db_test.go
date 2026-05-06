@@ -57,10 +57,10 @@ func findUnit(t *testing.T, d *db.DB, identifier string) *models.WorkUnit {
 
 func TestSetStatus_UpdatesLastUpdated(t *testing.T) {
 	d, _, _ := openTestDB(t)
-	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
+	if err := d.CreateProject("proj", "A project", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/ticket", "A ticket", nil, ""); err != nil {
+	if err := d.CreateTicket("proj/ticket", "A ticket", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -93,7 +93,7 @@ func TestSetStatus_UpdatesLastUpdated(t *testing.T) {
 
 func TestCreateProject_CreatesWorktree(t *testing.T) {
 	d, ticketsDir, git := openTestDB(t)
-	if err := d.CreateProject("my-proj", "A project", nil, ""); err != nil {
+	if err := d.CreateProject("my-proj", "A project", nil, "", nil); err != nil {
 		t.Fatalf("CreateProject: %v", err)
 	}
 
@@ -109,7 +109,7 @@ func TestCreateProject_CreatesWorktree(t *testing.T) {
 func TestCreateProject_EachSubprojectGetsOwnWorktree(t *testing.T) {
 	d, ticketsDir, git := openTestDB(t)
 	for _, id := range []string{"proj", "proj/sub"} {
-		if err := d.CreateProject(id, "A project", nil, ""); err != nil {
+		if err := d.CreateProject(id, "A project", nil, "", nil); err != nil {
 			t.Fatalf("CreateProject %q: %v", id, err)
 		}
 	}
@@ -130,7 +130,7 @@ func TestCreateProject_EachSubprojectGetsOwnWorktree(t *testing.T) {
 
 func TestCreateProject_CreatesDirectory(t *testing.T) {
 	d, ticketsDir, _ := openTestDB(t)
-	if err := d.CreateProject("my-proj", "A project", nil, ""); err != nil {
+	if err := d.CreateProject("my-proj", "A project", nil, "", nil); err != nil {
 		t.Fatalf("CreateProject: %v", err)
 	}
 	if !dirExists(filepath.Join(ticketsDir, "my-proj")) {
@@ -140,10 +140,10 @@ func TestCreateProject_CreatesDirectory(t *testing.T) {
 
 func TestCreateProject_CreatesNestedDirectory(t *testing.T) {
 	d, ticketsDir, _ := openTestDB(t)
-	if err := d.CreateProject("my-proj", "A project", nil, ""); err != nil {
+	if err := d.CreateProject("my-proj", "A project", nil, "", nil); err != nil {
 		t.Fatalf("CreateProject parent: %v", err)
 	}
-	if err := d.CreateProject("my-proj/sub-proj", "A subproject", nil, ""); err != nil {
+	if err := d.CreateProject("my-proj/sub-proj", "A subproject", nil, "", nil); err != nil {
 		t.Fatalf("CreateProject nested: %v", err)
 	}
 	if !dirExists(filepath.Join(ticketsDir, "my-proj", "sub-proj")) {
@@ -155,7 +155,7 @@ func TestCreateProject_CreatesNestedDirectory(t *testing.T) {
 
 func TestCreateProject_DefaultPhaseIsOpen(t *testing.T) {
 	d, _, _ := openTestDB(t)
-	if err := d.CreateProject("my-proj", "A project", nil, ""); err != nil {
+	if err := d.CreateProject("my-proj", "A project", nil, "", nil); err != nil {
 		t.Fatalf("CreateProject: %v", err)
 	}
 
@@ -178,10 +178,10 @@ func TestCreateProject_DefaultPhaseIsOpen(t *testing.T) {
 
 func TestCreateProject_SubprojectRecordsParent(t *testing.T) {
 	d, _, _ := openTestDB(t)
-	if err := d.CreateProject("parent", "A parent project", nil, ""); err != nil {
+	if err := d.CreateProject("parent", "A parent project", nil, "", nil); err != nil {
 		t.Fatalf("CreateProject parent: %v", err)
 	}
-	if err := d.CreateProject("parent/child", "A child project", nil, ""); err != nil {
+	if err := d.CreateProject("parent/child", "A child project", nil, "", nil); err != nil {
 		t.Fatalf("CreateProject child: %v", err)
 	}
 
@@ -203,7 +203,7 @@ func TestCreateProject_SubprojectRecordsParent(t *testing.T) {
 func TestCreateProject_DeeplyNestedParents(t *testing.T) {
 	d, _, _ := openTestDB(t)
 	for _, id := range []string{"foo", "foo/bar", "foo/bar/baz"} {
-		if err := d.CreateProject(id, "A project", nil, ""); err != nil {
+		if err := d.CreateProject(id, "A project", nil, "", nil); err != nil {
 			t.Fatalf("CreateProject %q: %v", id, err)
 		}
 	}
@@ -231,7 +231,7 @@ func TestCreateProject_DeeplyNestedParents(t *testing.T) {
 
 func TestCreateProject_MissingParentFails(t *testing.T) {
 	d, _, _ := openTestDB(t)
-	err := d.CreateProject("nonexistent/child", "A child project", nil, "")
+	err := d.CreateProject("nonexistent/child", "A child project", nil, "", nil)
 	if err == nil {
 		t.Error("expected error when parent project does not exist, got nil")
 	}
@@ -241,10 +241,10 @@ func TestCreateProject_MissingParentFails(t *testing.T) {
 
 func TestCreateTicket_CreatesDirectory(t *testing.T) {
 	d, ticketsDir, _ := openTestDB(t)
-	if err := d.CreateProject("my-proj", "A project", nil, ""); err != nil {
+	if err := d.CreateProject("my-proj", "A project", nil, "", nil); err != nil {
 		t.Fatalf("CreateProject: %v", err)
 	}
-	if err := d.CreateTicket("my-proj/my-ticket", "A ticket", nil, ""); err != nil {
+	if err := d.CreateTicket("my-proj/my-ticket", "A ticket", nil, "", nil); err != nil {
 		t.Fatalf("CreateTicket: %v", err)
 	}
 	if !dirExists(filepath.Join(ticketsDir, "my-proj", "my-ticket")) {
@@ -254,13 +254,13 @@ func TestCreateTicket_CreatesDirectory(t *testing.T) {
 
 func TestCreateTicket_CreatesDirectoryDeeplyNested(t *testing.T) {
 	d, ticketsDir, _ := openTestDB(t)
-	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
+	if err := d.CreateProject("proj", "A project", nil, "", nil); err != nil {
 		t.Fatalf("CreateProject: %v", err)
 	}
-	if err := d.CreateProject("proj/sub", "A subproject", nil, ""); err != nil {
+	if err := d.CreateProject("proj/sub", "A subproject", nil, "", nil); err != nil {
 		t.Fatalf("CreateProject sub: %v", err)
 	}
-	if err := d.CreateTicket("proj/sub/ticket", "A ticket", nil, ""); err != nil {
+	if err := d.CreateTicket("proj/sub/ticket", "A ticket", nil, "", nil); err != nil {
 		t.Fatalf("CreateTicket: %v", err)
 	}
 	if !dirExists(filepath.Join(ticketsDir, "proj", "sub", "ticket")) {
@@ -271,7 +271,7 @@ func TestCreateTicket_CreatesDirectoryDeeplyNested(t *testing.T) {
 func TestCreateTicket_NoDirectoryOnFailure(t *testing.T) {
 	d, ticketsDir, _ := openTestDB(t)
 	// Attempt to create a ticket whose parent project doesn't exist — should fail.
-	err := d.CreateTicket("nonexistent-proj/ticket", "A ticket", nil, "")
+	err := d.CreateTicket("nonexistent-proj/ticket", "A ticket", nil, "", nil)
 	if err == nil {
 		t.Fatal("expected error for ticket with missing parent project, got nil")
 	}
@@ -284,11 +284,11 @@ func TestCreateTicket_NoDirectoryOnFailure(t *testing.T) {
 
 func TestActionableTickets_ReturnsOnlyActionable(t *testing.T) {
 	d, _, _ := openTestDB(t)
-	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
+	if err := d.CreateProject("proj", "A project", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
 	for _, id := range []string{"t1", "t2", "t3", "t4"} {
-		if err := d.CreateTicket("proj/"+id, "desc", nil, ""); err != nil {
+		if err := d.CreateTicket("proj/"+id, "desc", nil, "", nil); err != nil {
 			t.Fatalf("CreateTicket %s: %v", id, err)
 		}
 	}
@@ -322,13 +322,13 @@ func TestActionableTickets_ReturnsOnlyActionable(t *testing.T) {
 
 func TestGetTicket_ReturnsSingleTicket(t *testing.T) {
 	d, _, _ := openTestDB(t)
-	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
+	if err := d.CreateProject("proj", "A project", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/dep", "A dependency", nil, ""); err != nil {
+	if err := d.CreateTicket("proj/dep", "A dependency", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/ticket", "A ticket", []string{"proj/dep"}, ""); err != nil {
+	if err := d.CreateTicket("proj/ticket", "A ticket", []string{"proj/dep"}, "", nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.SetStatus("proj/ticket", "implement", "working"); err != nil {
@@ -380,10 +380,10 @@ func TestGetTicket_NotFound(t *testing.T) {
 
 func TestDeleteChangeRequestsForTicket(t *testing.T) {
 	d, _, _ := openTestDB(t)
-	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
+	if err := d.CreateProject("proj", "A project", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/ticket", "A ticket", nil, ""); err != nil {
+	if err := d.CreateTicket("proj/ticket", "A ticket", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
 	for _, author := range []string{"alice", "bob", "charlie"} {
@@ -416,10 +416,10 @@ func TestDeleteChangeRequestsForTicket(t *testing.T) {
 
 func TestDeleteChangeRequestsForTicket_NoChangeRequests(t *testing.T) {
 	d, _, _ := openTestDB(t)
-	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
+	if err := d.CreateProject("proj", "A project", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/ticket", "A ticket", nil, ""); err != nil {
+	if err := d.CreateTicket("proj/ticket", "A ticket", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -439,13 +439,13 @@ func TestDeleteChangeRequestsForTicket_NotFound(t *testing.T) {
 
 func TestDeleteChangeRequestsForTicket_LeavesOtherTickets(t *testing.T) {
 	d, _, _ := openTestDB(t)
-	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
+	if err := d.CreateProject("proj", "A project", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/t1", "Ticket 1", nil, ""); err != nil {
+	if err := d.CreateTicket("proj/t1", "Ticket 1", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/t2", "Ticket 2", nil, ""); err != nil {
+	if err := d.CreateTicket("proj/t2", "Ticket 2", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.AddChangeRequest("proj/t1", "a.go:1", "alice", "fix t1"); err != nil {
@@ -482,7 +482,7 @@ func TestDeleteChangeRequestsForTicket_LeavesOtherTickets(t *testing.T) {
 
 func TestCreateProject_StoresParentBranch(t *testing.T) {
 	d, _, _ := openTestDB(t)
-	if err := d.CreateProject("proj", "A project", nil, "custom-branch"); err != nil {
+	if err := d.CreateProject("proj", "A project", nil, "custom-branch", nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -494,7 +494,7 @@ func TestCreateProject_StoresParentBranch(t *testing.T) {
 
 func TestCreateProject_DefaultParentBranch(t *testing.T) {
 	d, _, _ := openTestDB(t)
-	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
+	if err := d.CreateProject("proj", "A project", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -519,7 +519,7 @@ func TestCreateProject_RejectsInvalidParentBranch(t *testing.T) {
 		{"a b", " "},
 	}
 	for _, c := range cases {
-		err := d.CreateProject("proj", "A project", nil, c.branch)
+		err := d.CreateProject("proj", "A project", nil, c.branch, nil)
 		if err == nil {
 			t.Errorf("expected error for parent_branch %q, got nil", c.branch)
 		} else if !strings.Contains(err.Error(), c.bad) {
@@ -530,10 +530,10 @@ func TestCreateProject_RejectsInvalidParentBranch(t *testing.T) {
 
 func TestCreateTicket_RejectsInvalidParentBranch(t *testing.T) {
 	d, _, _ := openTestDB(t)
-	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
+	if err := d.CreateProject("proj", "A project", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	err := d.CreateTicket("proj/ticket", "A ticket", nil, "HEAD@{5}")
+	err := d.CreateTicket("proj/ticket", "A ticket", nil, "HEAD@{5}", nil)
 	if err == nil {
 		t.Error("expected error for parent_branch with @{, got nil")
 	}
@@ -541,10 +541,10 @@ func TestCreateTicket_RejectsInvalidParentBranch(t *testing.T) {
 
 func TestCreateTicket_StoresParentBranch(t *testing.T) {
 	d, _, _ := openTestDB(t)
-	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
+	if err := d.CreateProject("proj", "A project", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/ticket", "A ticket", nil, "custom-branch"); err != nil {
+	if err := d.CreateTicket("proj/ticket", "A ticket", nil, "custom-branch", nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -556,10 +556,10 @@ func TestCreateTicket_StoresParentBranch(t *testing.T) {
 
 func TestCreateTicket_DefaultParentBranch(t *testing.T) {
 	d, _, _ := openTestDB(t)
-	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
+	if err := d.CreateProject("proj", "A project", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/ticket", "A ticket", nil, ""); err != nil {
+	if err := d.CreateTicket("proj/ticket", "A ticket", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -571,14 +571,14 @@ func TestCreateTicket_DefaultParentBranch(t *testing.T) {
 
 func TestCreateTicket_ImplementWhenAllDependenciesDone(t *testing.T) {
 	d, _, _ := openTestDB(t)
-	if err := d.CreateProject("proj", "P", nil, ""); err != nil {
+	if err := d.CreateProject("proj", "P", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
 	// Another project used as a completed dependency.
-	if err := d.CreateProject("donedep", "Done dep", nil, ""); err != nil {
+	if err := d.CreateProject("donedep", "Done dep", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/a", "a", nil, ""); err != nil {
+	if err := d.CreateTicket("proj/a", "a", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
 	// Mark both dependencies as done.
@@ -589,7 +589,7 @@ func TestCreateTicket_ImplementWhenAllDependenciesDone(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := d.CreateTicket("proj/b", "b", []string{"proj/a", "donedep"}, ""); err != nil {
+	if err := d.CreateTicket("proj/b", "b", []string{"proj/a", "donedep"}, "", nil); err != nil {
 		t.Fatal(err)
 	}
 	u := findUnit(t, d, "proj/b")
@@ -600,13 +600,13 @@ func TestCreateTicket_ImplementWhenAllDependenciesDone(t *testing.T) {
 
 func TestCreateTicket_BlockedWhenSomeDependenciesOpen(t *testing.T) {
 	d, _, _ := openTestDB(t)
-	if err := d.CreateProject("proj", "P", nil, ""); err != nil {
+	if err := d.CreateProject("proj", "P", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/a", "a", nil, ""); err != nil {
+	if err := d.CreateTicket("proj/a", "a", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/b", "b", nil, ""); err != nil {
+	if err := d.CreateTicket("proj/b", "b", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
 	// Only one dep is done.
@@ -614,7 +614,7 @@ func TestCreateTicket_BlockedWhenSomeDependenciesOpen(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := d.CreateTicket("proj/c", "c", []string{"proj/a", "proj/b"}, ""); err != nil {
+	if err := d.CreateTicket("proj/c", "c", []string{"proj/a", "proj/b"}, "", nil); err != nil {
 		t.Fatal(err)
 	}
 	u := findUnit(t, d, "proj/c")
@@ -625,10 +625,10 @@ func TestCreateTicket_BlockedWhenSomeDependenciesOpen(t *testing.T) {
 
 func TestGetTicket_IncludesParentBranch(t *testing.T) {
 	d, _, _ := openTestDB(t)
-	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
+	if err := d.CreateProject("proj", "A project", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/ticket", "A ticket", nil, "release-branch"); err != nil {
+	if err := d.CreateTicket("proj/ticket", "A ticket", nil, "release-branch", nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -644,13 +644,13 @@ func TestGetTicket_IncludesParentBranch(t *testing.T) {
 func TestMarkTicketDone_UsesParentBranch(t *testing.T) {
 	d, ticketsDir, git := openTestDB(t)
 
-	if err := d.CreateProject("main-proj", "Main project", nil, ""); err != nil {
+	if err := d.CreateProject("main-proj", "Main project", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateProject("other-proj", "Other project", nil, ""); err != nil {
+	if err := d.CreateProject("other-proj", "Other project", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("main-proj/ticket", "A ticket", nil, "other-proj"); err != nil {
+	if err := d.CreateTicket("main-proj/ticket", "A ticket", nil, "other-proj", nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -670,10 +670,10 @@ func TestMarkTicketDone_UsesParentBranch(t *testing.T) {
 func TestMarkTicketDone_DefaultMergesIntoParentProject(t *testing.T) {
 	d, ticketsDir, git := openTestDB(t)
 
-	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
+	if err := d.CreateProject("proj", "A project", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/ticket", "A ticket", nil, ""); err != nil {
+	if err := d.CreateTicket("proj/ticket", "A ticket", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -693,11 +693,11 @@ func TestMarkTicketDone_DefaultMergesIntoParentProject(t *testing.T) {
 func TestMarkTicketDone_ParentBranchDefaultBranch(t *testing.T) {
 	d, _, git := openTestDB(t)
 
-	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
+	if err := d.CreateProject("proj", "A project", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
 	// Set parent_branch to "main" — should merge into repoRoot, not parent project.
-	if err := d.CreateTicket("proj/ticket", "A ticket", nil, "main"); err != nil {
+	if err := d.CreateTicket("proj/ticket", "A ticket", nil, "main", nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -718,13 +718,13 @@ func TestMarkTicketDone_ParentBranchDefaultBranch(t *testing.T) {
 func TestSetProjectPhase_UsesParentBranch(t *testing.T) {
 	d, ticketsDir, git := openTestDB(t)
 
-	if err := d.CreateProject("parent-proj", "Parent", nil, ""); err != nil {
+	if err := d.CreateProject("parent-proj", "Parent", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateProject("other-proj", "Other", nil, ""); err != nil {
+	if err := d.CreateProject("other-proj", "Other", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateProject("parent-proj/child", "Child", nil, "other-proj"); err != nil {
+	if err := d.CreateProject("parent-proj/child", "Child", nil, "other-proj", nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -744,10 +744,10 @@ func TestSetProjectPhase_UsesParentBranch(t *testing.T) {
 func TestMarkTicketDone_RebasesBeforeMerging(t *testing.T) {
 	d, _, git := openTestDB(t)
 
-	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
+	if err := d.CreateProject("proj", "A project", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/ticket", "A ticket", nil, ""); err != nil {
+	if err := d.CreateTicket("proj/ticket", "A ticket", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -770,10 +770,10 @@ func TestMarkTicketDone_RebasesBeforeMerging(t *testing.T) {
 func TestMarkTicketDone_RebaseConflictReturnsChildWorktreePath(t *testing.T) {
 	d, ticketsDir, git := openTestDB(t)
 
-	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
+	if err := d.CreateProject("proj", "A project", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/ticket", "A ticket", nil, ""); err != nil {
+	if err := d.CreateTicket("proj/ticket", "A ticket", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -803,10 +803,10 @@ func TestMarkTicketDone_RebaseConflictReturnsChildWorktreePath(t *testing.T) {
 func TestMarkTicketDone_SquashesTicketBranch(t *testing.T) {
 	d, ticketsDir, git := openTestDB(t)
 
-	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
+	if err := d.CreateProject("proj", "A project", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/ticket", "A ticket", nil, ""); err != nil {
+	if err := d.CreateTicket("proj/ticket", "A ticket", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
 	git.Squashes = nil
@@ -827,13 +827,13 @@ func TestMarkTicketDone_SquashesTicketBranch(t *testing.T) {
 func TestMarkTicketDoneCascading_SquashesTicketsButNotProjects(t *testing.T) {
 	d, ticketsDir, git := openTestDB(t)
 
-	if err := d.CreateProject("grand", "Grandparent", nil, ""); err != nil {
+	if err := d.CreateProject("grand", "Grandparent", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateProject("grand/parent", "Parent", nil, ""); err != nil {
+	if err := d.CreateProject("grand/parent", "Parent", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("grand/parent/t1", "Only ticket", nil, ""); err != nil {
+	if err := d.CreateTicket("grand/parent/t1", "Only ticket", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
 	git.Squashes = nil
@@ -855,10 +855,10 @@ func TestMarkTicketDoneCascading_SquashesTicketsButNotProjects(t *testing.T) {
 
 func TestRebaseTicketOnParent_AbortsOnFailure(t *testing.T) {
 	d, _, git := openTestDB(t)
-	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
+	if err := d.CreateProject("proj", "A project", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/ticket", "A ticket", nil, ""); err != nil {
+	if err := d.CreateTicket("proj/ticket", "A ticket", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -875,10 +875,10 @@ func TestRebaseTicketOnParent_AbortsOnFailure(t *testing.T) {
 
 func TestRebaseTicketOnParent_UsesParentBranch(t *testing.T) {
 	d, _, git := openTestDB(t)
-	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
+	if err := d.CreateProject("proj", "A project", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/ticket", "A ticket", nil, "release-v2"); err != nil {
+	if err := d.CreateTicket("proj/ticket", "A ticket", nil, "release-v2", nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -896,10 +896,10 @@ func TestRebaseTicketOnParent_UsesParentBranch(t *testing.T) {
 
 func TestRebaseTicketOnParent_FallsBackToParentIdentifier(t *testing.T) {
 	d, _, git := openTestDB(t)
-	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
+	if err := d.CreateProject("proj", "A project", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/ticket", "A ticket", nil, ""); err != nil {
+	if err := d.CreateTicket("proj/ticket", "A ticket", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -934,10 +934,10 @@ func assertRerereEnabled(t *testing.T, git *gitutil.FakeGitClient, want string) 
 func TestMergeChain_EnablesRerereOnWorktrees(t *testing.T) {
 	d, ticketsDir, git := openTestDB(t)
 
-	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
+	if err := d.CreateProject("proj", "A project", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/ticket", "A ticket", nil, ""); err != nil {
+	if err := d.CreateTicket("proj/ticket", "A ticket", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
 	git.RereresEnabled = nil
@@ -955,13 +955,13 @@ func TestMergeChain_EnablesRerereOnWorktrees(t *testing.T) {
 func TestMergeChain_EnablesRerereOnEachCascadeStep(t *testing.T) {
 	d, ticketsDir, git := openTestDB(t)
 
-	if err := d.CreateProject("grand", "Grandparent", nil, ""); err != nil {
+	if err := d.CreateProject("grand", "Grandparent", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateProject("grand/parent", "Parent", nil, ""); err != nil {
+	if err := d.CreateProject("grand/parent", "Parent", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("grand/parent/t1", "Only ticket", nil, ""); err != nil {
+	if err := d.CreateTicket("grand/parent/t1", "Only ticket", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
 	git.RereresEnabled = nil
@@ -985,10 +985,10 @@ func TestMergeChain_EnablesRerereOnEachCascadeStep(t *testing.T) {
 func TestMergeChain_EnablesRerereOnConflictWorktree(t *testing.T) {
 	d, ticketsDir, git := openTestDB(t)
 
-	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
+	if err := d.CreateProject("proj", "A project", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/ticket", "A ticket", nil, ""); err != nil {
+	if err := d.CreateTicket("proj/ticket", "A ticket", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1035,10 +1035,10 @@ func TestMergeChain_EnablesRerereOnConflictWorktree(t *testing.T) {
 
 func TestUpdateChangeRequestDescription_AcceptsStringID(t *testing.T) {
 	d, _, _ := openTestDB(t)
-	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
+	if err := d.CreateProject("proj", "A project", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/ticket", "A ticket", nil, ""); err != nil {
+	if err := d.CreateTicket("proj/ticket", "A ticket", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.AddChangeRequest("proj/ticket", "main.go:10", "alice", "original"); err != nil {
@@ -1101,17 +1101,17 @@ func TestUpdateChangeRequestDescription_NotFound(t *testing.T) {
 
 func TestStackedTickets_ChainStartsBlocked(t *testing.T) {
 	d, _, _ := openTestDB(t)
-	if err := d.CreateProject("proj", "P", nil, ""); err != nil {
+	if err := d.CreateProject("proj", "P", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
 	// Create a chain: A (no deps) → B (depends on A) → C (depends on B).
-	if err := d.CreateTicket("proj/a", "first in chain", nil, ""); err != nil {
+	if err := d.CreateTicket("proj/a", "first in chain", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/b", "second in chain", []string{"proj/a"}, ""); err != nil {
+	if err := d.CreateTicket("proj/b", "second in chain", []string{"proj/a"}, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/c", "third in chain", []string{"proj/b"}, ""); err != nil {
+	if err := d.CreateTicket("proj/c", "third in chain", []string{"proj/b"}, "", nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1132,16 +1132,16 @@ func TestStackedTickets_ChainStartsBlocked(t *testing.T) {
 
 func TestStackedTickets_CompletingHeadUnblocksNext(t *testing.T) {
 	d, _, _ := openTestDB(t)
-	if err := d.CreateProject("proj", "P", nil, ""); err != nil {
+	if err := d.CreateProject("proj", "P", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/a", "first", nil, ""); err != nil {
+	if err := d.CreateTicket("proj/a", "first", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/b", "second", []string{"proj/a"}, ""); err != nil {
+	if err := d.CreateTicket("proj/b", "second", []string{"proj/a"}, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/c", "third", []string{"proj/b"}, ""); err != nil {
+	if err := d.CreateTicket("proj/c", "third", []string{"proj/b"}, "", nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1164,16 +1164,16 @@ func TestStackedTickets_CompletingHeadUnblocksNext(t *testing.T) {
 
 func TestStackedTickets_FullChainUnblock(t *testing.T) {
 	d, _, _ := openTestDB(t)
-	if err := d.CreateProject("proj", "P", nil, ""); err != nil {
+	if err := d.CreateProject("proj", "P", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/a", "first", nil, ""); err != nil {
+	if err := d.CreateTicket("proj/a", "first", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/b", "second", []string{"proj/a"}, ""); err != nil {
+	if err := d.CreateTicket("proj/b", "second", []string{"proj/a"}, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/c", "third", []string{"proj/b"}, ""); err != nil {
+	if err := d.CreateTicket("proj/c", "third", []string{"proj/b"}, "", nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1193,13 +1193,13 @@ func TestStackedTickets_FullChainUnblock(t *testing.T) {
 
 func TestStackedTickets_MergeSequentially(t *testing.T) {
 	d, ticketsDir, git := openTestDB(t)
-	if err := d.CreateProject("proj", "P", nil, ""); err != nil {
+	if err := d.CreateProject("proj", "P", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/a", "first", nil, ""); err != nil {
+	if err := d.CreateTicket("proj/a", "first", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/b", "second", []string{"proj/a"}, ""); err != nil {
+	if err := d.CreateTicket("proj/b", "second", []string{"proj/a"}, "", nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1235,13 +1235,13 @@ func TestStackedTickets_MergeSequentially(t *testing.T) {
 
 func TestStackedTickets_ClaimRespectsOrder(t *testing.T) {
 	d, _, _ := openTestDB(t)
-	if err := d.CreateProject("proj", "P", nil, ""); err != nil {
+	if err := d.CreateProject("proj", "P", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/a", "first", nil, ""); err != nil {
+	if err := d.CreateTicket("proj/a", "first", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/b", "second", []string{"proj/a"}, ""); err != nil {
+	if err := d.CreateTicket("proj/b", "second", []string{"proj/a"}, "", nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1267,13 +1267,13 @@ func TestStackedTickets_NotifyWorkAvailableOnUnblock(t *testing.T) {
 	notified := 0
 	d.SetOnWorkAvailable(func() { notified++ })
 
-	if err := d.CreateProject("proj", "P", nil, ""); err != nil {
+	if err := d.CreateProject("proj", "P", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/a", "first", nil, ""); err != nil {
+	if err := d.CreateTicket("proj/a", "first", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/b", "second", []string{"proj/a"}, ""); err != nil {
+	if err := d.CreateTicket("proj/b", "second", []string{"proj/a"}, "", nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1291,16 +1291,16 @@ func TestStackedTickets_NotifyWorkAvailableOnUnblock(t *testing.T) {
 
 func TestGetSiblingDescriptions_ReturnsSiblingTickets(t *testing.T) {
 	d, _, _ := openTestDB(t)
-	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
+	if err := d.CreateProject("proj", "A project", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/t1", "Add rate-limiting middleware", nil, ""); err != nil {
+	if err := d.CreateTicket("proj/t1", "Add rate-limiting middleware", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/t2", "Refactor request pipeline", nil, ""); err != nil {
+	if err := d.CreateTicket("proj/t2", "Refactor request pipeline", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/t3", "Add caching layer", nil, ""); err != nil {
+	if err := d.CreateTicket("proj/t3", "Add caching layer", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1332,13 +1332,13 @@ func TestGetSiblingDescriptions_ReturnsSiblingTickets(t *testing.T) {
 
 func TestGetSiblingDescriptions_IncludesSiblingSubprojects(t *testing.T) {
 	d, _, _ := openTestDB(t)
-	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
+	if err := d.CreateProject("proj", "A project", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateProject("proj/sub", "A subproject that refactors core", nil, ""); err != nil {
+	if err := d.CreateProject("proj/sub", "A subproject that refactors core", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/t1", "Add a feature", nil, ""); err != nil {
+	if err := d.CreateTicket("proj/t1", "Add a feature", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1361,7 +1361,7 @@ func TestGetSiblingDescriptions_IncludesSiblingSubprojects(t *testing.T) {
 func TestGetSiblingDescriptions_NoParentReturnsEmpty(t *testing.T) {
 	d, _, _ := openTestDB(t)
 	// A top-level ticket has no parent project; siblings are meaningless.
-	if err := d.CreateTicket("standalone", "A standalone ticket", nil, ""); err != nil {
+	if err := d.CreateTicket("standalone", "A standalone ticket", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1390,10 +1390,10 @@ func TestGetSiblingDescriptions_MissingParentProjectReturnsEmpty(t *testing.T) {
 
 func TestGetSiblingDescriptions_OnlyChildReturnsEmpty(t *testing.T) {
 	d, _, _ := openTestDB(t)
-	if err := d.CreateProject("proj", "A project", nil, ""); err != nil {
+	if err := d.CreateProject("proj", "A project", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateTicket("proj/only", "The only ticket", nil, ""); err != nil {
+	if err := d.CreateTicket("proj/only", "The only ticket", nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1403,5 +1403,298 @@ func TestGetSiblingDescriptions_OnlyChildReturnsEmpty(t *testing.T) {
 	}
 	if len(siblings) != 0 {
 		t.Errorf("expected 0 siblings for only child, got %d", len(siblings))
+	}
+}
+
+// ===== WriteScope storage =====
+
+func TestCreateTicket_StoresWriteScope(t *testing.T) {
+	d, _, _ := openTestDB(t)
+	if err := d.CreateProject("proj", "A project", nil, "", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj/ticket", "A ticket", nil, "", []string{"internal/db/", "cmd/main.go"}); err != nil {
+		t.Fatal(err)
+	}
+
+	scope, err := d.GetWriteScope("proj/ticket")
+	if err != nil {
+		t.Fatalf("GetWriteScope: %v", err)
+	}
+	if len(scope) != 2 {
+		t.Fatalf("expected 2 write_scope entries, got %d: %v", len(scope), scope)
+	}
+	if scope[0] != "internal/db/" || scope[1] != "cmd/main.go" {
+		t.Errorf("unexpected write_scope: %v", scope)
+	}
+}
+
+func TestCreateTicket_EmptyWriteScope(t *testing.T) {
+	d, _, _ := openTestDB(t)
+	if err := d.CreateProject("proj", "A project", nil, "", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj/ticket", "A ticket", nil, "", nil); err != nil {
+		t.Fatal(err)
+	}
+
+	scope, err := d.GetWriteScope("proj/ticket")
+	if err != nil {
+		t.Fatalf("GetWriteScope: %v", err)
+	}
+	if len(scope) != 0 {
+		t.Errorf("expected empty write_scope, got %v", scope)
+	}
+}
+
+func TestCreateProject_StoresWriteScope(t *testing.T) {
+	d, _, _ := openTestDB(t)
+	if err := d.CreateProject("proj", "A project", nil, "", []string{"pkg/api/"}); err != nil {
+		t.Fatal(err)
+	}
+
+	scope, err := d.GetWriteScope("proj")
+	if err != nil {
+		t.Fatalf("GetWriteScope: %v", err)
+	}
+	if len(scope) != 1 || scope[0] != "pkg/api/" {
+		t.Errorf("unexpected write_scope: %v", scope)
+	}
+}
+
+func TestSetWriteScope_OverwritesExisting(t *testing.T) {
+	d, _, _ := openTestDB(t)
+	if err := d.CreateProject("proj", "A project", nil, "", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj/ticket", "A ticket", nil, "", []string{"old/path/"}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := d.SetWriteScope("proj/ticket", []string{"new/path/"}); err != nil {
+		t.Fatalf("SetWriteScope: %v", err)
+	}
+
+	scope, err := d.GetWriteScope("proj/ticket")
+	if err != nil {
+		t.Fatalf("GetWriteScope: %v", err)
+	}
+	if len(scope) != 1 || scope[0] != "new/path/" {
+		t.Errorf("expected [new/path/], got %v", scope)
+	}
+}
+
+func TestSetWriteScope_Project(t *testing.T) {
+	d, _, _ := openTestDB(t)
+	if err := d.CreateProject("proj", "A project", nil, "", []string{"old/"}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := d.SetWriteScope("proj", []string{"new/path/"}); err != nil {
+		t.Fatalf("SetWriteScope on project: %v", err)
+	}
+
+	scope, err := d.GetWriteScope("proj")
+	if err != nil {
+		t.Fatalf("GetWriteScope: %v", err)
+	}
+	if len(scope) != 1 || scope[0] != "new/path/" {
+		t.Errorf("expected [new/path/], got %v", scope)
+	}
+}
+
+func TestGetWriteScope_NotFound(t *testing.T) {
+	d, _, _ := openTestDB(t)
+	_, err := d.GetWriteScope("nonexistent")
+	if err == nil {
+		t.Fatal("expected error for nonexistent identifier")
+	}
+}
+
+// ===== Sibling exclusion at claim time =====
+
+func TestClaim_SkipsTicketWithOverlappingSiblingScope(t *testing.T) {
+	d, _, _ := openTestDB(t)
+	if err := d.CreateProject("proj", "A project", nil, "", nil); err != nil {
+		t.Fatal(err)
+	}
+	// t1 and t2 are siblings with overlapping write_scope.
+	if err := d.CreateTicket("proj/t1", "First ticket", nil, "", []string{"internal/db/"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj/t2", "Second ticket", nil, "", []string{"internal/db/"}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Claim t1.
+	wu1, err := d.Claim(100)
+	if err != nil {
+		t.Fatalf("Claim t1: %v", err)
+	}
+	if wu1.Identifier != "proj/t1" {
+		t.Fatalf("expected to claim proj/t1, got %q", wu1.Identifier)
+	}
+
+	// Attempting to claim again should fail because t2 overlaps with the
+	// currently-claimed t1.
+	_, err = d.Claim(200)
+	if err == nil {
+		t.Fatal("expected error when claiming t2 (overlapping scope with claimed t1)")
+	}
+	if !strings.Contains(err.Error(), "no claimable ticket") {
+		t.Errorf("expected 'no claimable ticket' error, got: %v", err)
+	}
+}
+
+func TestClaim_AllowsNonOverlappingSiblings(t *testing.T) {
+	d, _, _ := openTestDB(t)
+	if err := d.CreateProject("proj", "A project", nil, "", nil); err != nil {
+		t.Fatal(err)
+	}
+	// t1 and t2 are siblings with disjoint write_scope.
+	if err := d.CreateTicket("proj/t1", "First ticket", nil, "", []string{"internal/db/"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj/t2", "Second ticket", nil, "", []string{"cmd/server/"}); err != nil {
+		t.Fatal(err)
+	}
+
+	wu1, err := d.Claim(100)
+	if err != nil {
+		t.Fatalf("Claim t1: %v", err)
+	}
+	if wu1.Identifier != "proj/t1" {
+		t.Fatalf("expected to claim proj/t1, got %q", wu1.Identifier)
+	}
+
+	// t2 should be claimable because its scope doesn't overlap t1's.
+	wu2, err := d.Claim(200)
+	if err != nil {
+		t.Fatalf("Claim t2: %v", err)
+	}
+	if wu2.Identifier != "proj/t2" {
+		t.Errorf("expected to claim proj/t2, got %q", wu2.Identifier)
+	}
+}
+
+func TestClaim_AllowsOverlappingNonSiblings(t *testing.T) {
+	d, _, _ := openTestDB(t)
+	// Two separate projects — tickets are NOT siblings.
+	if err := d.CreateProject("proj-a", "Project A", nil, "", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateProject("proj-b", "Project B", nil, "", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj-a/t1", "Ticket in A", nil, "", []string{"internal/db/"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj-b/t1", "Ticket in B", nil, "", []string{"internal/db/"}); err != nil {
+		t.Fatal(err)
+	}
+
+	wu1, err := d.Claim(100)
+	if err != nil {
+		t.Fatalf("Claim first: %v", err)
+	}
+
+	// The other ticket should be claimable because they're not siblings.
+	wu2, err := d.Claim(200)
+	if err != nil {
+		t.Fatalf("Claim second: %v", err)
+	}
+	if wu1.Identifier == wu2.Identifier {
+		t.Error("both claims returned the same ticket")
+	}
+}
+
+func TestClaim_NoScopeTicketsAlwaysClaimable(t *testing.T) {
+	d, _, _ := openTestDB(t)
+	if err := d.CreateProject("proj", "A project", nil, "", nil); err != nil {
+		t.Fatal(err)
+	}
+	// t1 has scope, t2 has no scope — no overlap possible.
+	if err := d.CreateTicket("proj/t1", "First ticket", nil, "", []string{"internal/db/"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj/t2", "Second ticket", nil, "", nil); err != nil {
+		t.Fatal(err)
+	}
+
+	wu1, err := d.Claim(100)
+	if err != nil {
+		t.Fatalf("Claim t1: %v", err)
+	}
+	if wu1.Identifier != "proj/t1" {
+		t.Fatalf("expected to claim proj/t1, got %q", wu1.Identifier)
+	}
+
+	// t2 has no write_scope, so it's always claimable.
+	wu2, err := d.Claim(200)
+	if err != nil {
+		t.Fatalf("Claim t2: %v", err)
+	}
+	if wu2.Identifier != "proj/t2" {
+		t.Errorf("expected to claim proj/t2, got %q", wu2.Identifier)
+	}
+}
+
+func TestClaim_PrefixOverlapBlocksClaim(t *testing.T) {
+	d, _, _ := openTestDB(t)
+	if err := d.CreateProject("proj", "A project", nil, "", nil); err != nil {
+		t.Fatal(err)
+	}
+	// t1 declares a directory scope, t2 declares a file inside that directory.
+	if err := d.CreateTicket("proj/t1", "First ticket", nil, "", []string{"internal/db/"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj/t2", "Second ticket", nil, "", []string{"internal/db/schema.go"}); err != nil {
+		t.Fatal(err)
+	}
+
+	wu1, err := d.Claim(100)
+	if err != nil {
+		t.Fatalf("Claim t1: %v", err)
+	}
+	if wu1.Identifier != "proj/t1" {
+		t.Fatalf("expected to claim proj/t1, got %q", wu1.Identifier)
+	}
+
+	// t2's scope "internal/db/schema.go" is inside t1's "internal/db/" — overlap.
+	_, err = d.Claim(200)
+	if err == nil {
+		t.Fatal("expected error: t2 scope overlaps with claimed t1 via prefix")
+	}
+}
+
+func TestClaim_ReleasedTicketUnblocksScope(t *testing.T) {
+	d, _, _ := openTestDB(t)
+	if err := d.CreateProject("proj", "A project", nil, "", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj/t1", "First ticket", nil, "", []string{"internal/db/"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj/t2", "Second ticket", nil, "", []string{"internal/db/"}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Claim and then release t1.
+	wu1, err := d.Claim(100)
+	if err != nil {
+		t.Fatalf("Claim t1: %v", err)
+	}
+	if err := d.Release(wu1.Identifier); err != nil {
+		t.Fatalf("Release t1: %v", err)
+	}
+
+	// Now t2 should be claimable since t1 is no longer claimed.
+	wu2, err := d.Claim(200)
+	if err != nil {
+		t.Fatalf("Claim t2 after release: %v", err)
+	}
+	// Either t1 or t2 is fine — the point is that a claim succeeds.
+	if wu2.Identifier != "proj/t1" && wu2.Identifier != "proj/t2" {
+		t.Errorf("expected to claim proj/t1 or proj/t2, got %q", wu2.Identifier)
 	}
 }

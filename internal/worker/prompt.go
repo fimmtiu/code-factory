@@ -39,6 +39,18 @@ func BuildPrompt(ticket *models.WorkUnit, database *db.DB, ticketsDir string) (s
 			worktreePath, identifier, ticket.Description,
 		)
 
+		// Append write_scope constraint if set. The scope is already
+		// populated on the WorkUnit at claim time, so no DB call needed.
+		if len(ticket.WriteScope) > 0 {
+			prompt += "\n\n### write_scope\n\nThis ticket's declared write_scope is:\n"
+			for _, s := range ticket.WriteScope {
+				prompt += fmt.Sprintf("- `%s`\n", s)
+			}
+			prompt += "\nYou MUST NOT create or modify files outside these paths. " +
+				"If you believe changes outside the write_scope are necessary, " +
+				"note them in your commit message but do not make them."
+		}
+
 		// Append parent project context recursively.
 		contexts, err := database.GetProjectContext(identifier)
 		if err != nil {
