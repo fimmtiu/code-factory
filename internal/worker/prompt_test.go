@@ -103,6 +103,55 @@ func TestBuildPrompt_ImplementWithNestedProjectContext(t *testing.T) {
 	}
 }
 
+func TestBuildPrompt_ImplementWithDependencyContext(t *testing.T) {
+	d, ticketsDir := openTestDB(t)
+	if err := d.CreateProject("proj", "Top-level project", nil, "", nil); err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	if err := d.CreateTicket("proj/loop", "Refresh loop. Exposes Refresh, RefreshJob, and Loop methods on *Runner.", nil, "", nil); err != nil {
+		t.Fatalf("CreateTicket dep: %v", err)
+	}
+	if err := d.CreateTicket("proj/main", "Wires startup, the worker, refresh, and the TUI together.", []string{"proj/loop"}, "", nil); err != nil {
+		t.Fatalf("CreateTicket dependent: %v", err)
+	}
+
+	ticket := buildPromptTicket("proj/main", "Wires startup, the worker, refresh, and the TUI together.", models.PhaseImplement)
+	prompt, err := worker.BuildPrompt(ticket, d, ticketsDir)
+	if err != nil {
+		t.Fatalf("BuildPrompt: %v", err)
+	}
+
+	if !strings.Contains(prompt, "Prerequisites already merged into this worktree") {
+		t.Error("expected prerequisites heading in prompt")
+	}
+	if !strings.Contains(prompt, "`proj/loop`") {
+		t.Error("expected dependency identifier in prompt")
+	}
+	if !strings.Contains(prompt, "Refresh, RefreshJob, and Loop methods") {
+		t.Error("expected dependency description in prompt so the agent learns the public API names")
+	}
+	if !strings.Contains(prompt, "do not write parallel stubs") {
+		t.Error("expected the consume-existing-API instruction in prompt")
+	}
+}
+
+func TestBuildPrompt_ImplementWithoutDependenciesOmitsSection(t *testing.T) {
+	d, ticketsDir := openTestDB(t)
+	if err := d.CreateProject("proj", "P", nil, "", nil); err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	createTicket(t, d, "proj/loner")
+
+	ticket := buildPromptTicket("proj/loner", "no deps", models.PhaseImplement)
+	prompt, err := worker.BuildPrompt(ticket, d, ticketsDir)
+	if err != nil {
+		t.Fatalf("BuildPrompt: %v", err)
+	}
+	if strings.Contains(prompt, "Prerequisites already merged") {
+		t.Error("did not expect prerequisites heading when ticket has no dependencies")
+	}
+}
+
 func TestBuildPrompt_Refactor(t *testing.T) {
 	d, ticketsDir := openTestDB(t)
 	createProject(t, d, "proj")

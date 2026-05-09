@@ -57,6 +57,34 @@ func (e *MergeUnresolvedError) Error() string {
 	return fmt.Sprintf("merge conflict on %s remains unresolved (worktree %s)", e.Identifier, e.WorktreePath)
 }
 
+// ForbiddenMarkersError is returned when a ticket's diff against its parent
+// branch contains incomplete-work markers (TODO/FIXME/XXX/panic-stubs) in
+// non-test files. Markers are listed as "path:line: text" so the UI can
+// surface them as a jump-to-source list. The user must remove or rephrase
+// the markers in the worktree, then retry the done transition.
+type ForbiddenMarkersError struct {
+	Identifier   string
+	WorktreePath string
+	Markers      []string
+}
+
+func (e *ForbiddenMarkersError) Error() string {
+	plural := "marker"
+	if len(e.Markers) != 1 {
+		plural = "markers"
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "%s cannot be merged: %d incomplete-work %s in %s\n",
+		e.Identifier, len(e.Markers), plural, e.WorktreePath)
+	for _, m := range e.Markers {
+		b.WriteString("  ")
+		b.WriteString(m)
+		b.WriteByte('\n')
+	}
+	b.WriteString("Remove or rephrase these before marking the ticket done.")
+	return b.String()
+}
+
 // DB provides read/write access to the tickets SQLite database.
 type DB struct {
 	db         *sql.DB
@@ -752,6 +780,17 @@ func (d *DB) rebaseAndFastForward(identifier, mergeTarget string) error {
 		return fmt.Errorf("classify %s: %w", identifier, err)
 	}
 	if isTicket {
+		markers, err := d.git.FindForbiddenMarkers(childWorktree, targetBranch)
+		if err != nil {
+			return fmt.Errorf("scan markers on %s: %w", identifier, err)
+		}
+		if len(markers) > 0 {
+			return &ForbiddenMarkersError{
+				Identifier:   identifier,
+				WorktreePath: childWorktree,
+				Markers:      markers,
+			}
+		}
 		if err := d.git.SquashSinceMergeBase(childWorktree, targetBranch, identifier); err != nil {
 			return fmt.Errorf("squash %s: %w", identifier, err)
 		}

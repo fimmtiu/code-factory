@@ -63,6 +63,30 @@ func BuildPrompt(ticket *models.WorkUnit, database *db.DB, ticketsDir string) (s
 			)
 		}
 
+		// Append prerequisite descriptions. The dependencies are already
+		// merged into this worktree, so their public APIs exist on disk —
+		// the agent should grep for and consume them rather than invent
+		// parallel stubs (which is how the gem-upgrader refresh.NewLoop
+		// regression slipped through).
+		deps, err := database.GetDependencyContext(identifier)
+		if err != nil {
+			return "", fmt.Errorf("BuildPrompt: get dependency context: %w", err)
+		}
+		if len(deps) > 0 {
+			prompt += "\n\n### Prerequisites already merged into this worktree\n\n" +
+				"Each item below is a ticket or project this one depends on. Their " +
+				"code is already present in the worktree. Before adding new types, " +
+				"functions, or files, search the existing tree for the symbols these " +
+				"prerequisites describe and consume them directly — do not write " +
+				"parallel stubs of an API that already exists."
+			for _, dep := range deps {
+				prompt += fmt.Sprintf(
+					"\n\n#### `%s`\n\n%s",
+					dep.Identifier, dep.Description,
+				)
+			}
+		}
+
 	case models.PhaseRefactor:
 		env := DetectWorktreeEnv(worktreePath)
 		prompt = env.FormatEnvBlock() +

@@ -4,12 +4,18 @@ package gitutil
 // worktree paths passed to CreateWorktree, merge targets, and rebase targets
 // for test assertions.
 type FakeGitClient struct {
-	WorktreesCreated []string
-	MergeTargets     []string
-	RebaseTargets    []string // ontoBranch values passed to RebaseOnto
-	RebasesAborted   []string // worktreeDir values passed to AbortRebase
-	Squashes         []string // worktreeDir values passed to SquashSinceMergeBase
-	RereresEnabled   []string // worktreeDir values passed to EnableRerere
+	WorktreesCreated     []string
+	MergeTargets         []string
+	RebaseTargets        []string // ontoBranch values passed to RebaseOnto
+	RebasesAborted       []string // worktreeDir values passed to AbortRebase
+	Squashes             []string // worktreeDir values passed to SquashSinceMergeBase
+	RereresEnabled       []string // worktreeDir values passed to EnableRerere
+	ForbiddenMarkerCalls []string // worktreeDir values passed to FindForbiddenMarkers
+
+	// ForbiddenMarkers is what FindForbiddenMarkers returns. nil → empty slice.
+	ForbiddenMarkers []string
+	// ForbiddenMarkersErr, if non-nil, replaces the success return.
+	ForbiddenMarkersErr error
 
 	// RebaseErr, if non-nil, is returned from RebaseOnto instead of success.
 	// Useful for exercising the conflict path in callers.
@@ -61,4 +67,11 @@ func (f *FakeGitClient) SquashSinceMergeBase(worktreeDir, _, _ string) error {
 func (f *FakeGitClient) EnableRerere(worktreeDir string) error {
 	f.RereresEnabled = append(f.RereresEnabled, worktreeDir)
 	return nil
+}
+func (f *FakeGitClient) FindForbiddenMarkers(worktreeDir, _ string) ([]string, error) {
+	f.ForbiddenMarkerCalls = append(f.ForbiddenMarkerCalls, worktreeDir)
+	if f.ForbiddenMarkersErr != nil {
+		return nil, f.ForbiddenMarkersErr
+	}
+	return f.ForbiddenMarkers, nil
 }

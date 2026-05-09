@@ -112,3 +112,65 @@ func TestGetProjectContext_TopLevelIdentifier(t *testing.T) {
 		t.Errorf("expected 0 context entries for top-level identifier, got %d", len(ctx))
 	}
 }
+
+func TestGetDependencyContext_NoDeps(t *testing.T) {
+	d, _, _ := openTestDB(t)
+	if err := d.CreateProject("proj", "P", nil, "", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj/t", "Ticket", nil, "", nil); err != nil {
+		t.Fatal(err)
+	}
+
+	deps, err := d.GetDependencyContext("proj/t")
+	if err != nil {
+		t.Fatalf("GetDependencyContext: %v", err)
+	}
+	if len(deps) != 0 {
+		t.Errorf("expected no deps, got %v", deps)
+	}
+}
+
+func TestGetDependencyContext_TicketAndProjectDeps(t *testing.T) {
+	d, _, _ := openTestDB(t)
+	if err := d.CreateProject("proj", "Top", nil, "", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateProject("proj/sub", "Sub-project description", nil, "", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj/loop", "Refresh loop", nil, "", nil); err != nil {
+		t.Fatal(err)
+	}
+	// Dependent ticket depends on a sibling ticket and a sibling sub-project.
+	if err := d.CreateTicket("proj/main", "Wires it all together", []string{"proj/loop", "proj/sub"}, "", nil); err != nil {
+		t.Fatal(err)
+	}
+
+	deps, err := d.GetDependencyContext("proj/main")
+	if err != nil {
+		t.Fatalf("GetDependencyContext: %v", err)
+	}
+	if len(deps) != 2 {
+		t.Fatalf("expected 2 deps, got %d: %+v", len(deps), deps)
+	}
+
+	// Insertion order is preserved.
+	if deps[0].Identifier != "proj/loop" || deps[0].Description != "Refresh loop" {
+		t.Errorf("deps[0] = %+v", deps[0])
+	}
+	if deps[1].Identifier != "proj/sub" || deps[1].Description != "Sub-project description" {
+		t.Errorf("deps[1] = %+v", deps[1])
+	}
+}
+
+func TestGetDependencyContext_UnknownIdentifier(t *testing.T) {
+	d, _, _ := openTestDB(t)
+	deps, err := d.GetDependencyContext("does/not/exist")
+	if err != nil {
+		t.Fatalf("GetDependencyContext: %v", err)
+	}
+	if len(deps) != 0 {
+		t.Errorf("expected empty for unknown identifier, got %v", deps)
+	}
+}

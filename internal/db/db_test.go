@@ -824,6 +824,46 @@ func TestMarkTicketDone_SquashesTicketBranch(t *testing.T) {
 	}
 }
 
+func TestMarkTicketDone_RejectsForbiddenMarkers(t *testing.T) {
+	d, ticketsDir, git := openTestDB(t)
+
+	if err := d.CreateProject("proj", "A project", nil, "", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj/ticket", "A ticket", nil, "", nil); err != nil {
+		t.Fatal(err)
+	}
+
+	// Inject a marker hit; the fake returns this verbatim from
+	// FindForbiddenMarkers regardless of the diff.
+	git.ForbiddenMarkers = []string{"internal/refresh/refresh.go:24: // TODO: implement periodic refresh"}
+	git.Squashes = nil
+	git.MergeTargets = nil
+
+	err := d.SetStatus("proj/ticket", models.PhaseDone, models.StatusIdle)
+	var fmErr *db.ForbiddenMarkersError
+	if !errors.As(err, &fmErr) {
+		t.Fatalf("expected *db.ForbiddenMarkersError, got %T: %v", err, err)
+	}
+	if fmErr.Identifier != "proj/ticket" {
+		t.Errorf("Identifier = %q, want %q", fmErr.Identifier, "proj/ticket")
+	}
+	wantWorktree := filepath.Join(ticketsDir, "proj", "ticket", "worktree")
+	if fmErr.WorktreePath != wantWorktree {
+		t.Errorf("WorktreePath = %q, want %q", fmErr.WorktreePath, wantWorktree)
+	}
+	if len(fmErr.Markers) != 1 || !strings.Contains(fmErr.Markers[0], "TODO") {
+		t.Errorf("Markers = %v, want a single TODO entry", fmErr.Markers)
+	}
+	// We must abort before any history-rewriting or fast-forward step.
+	if len(git.Squashes) != 0 {
+		t.Errorf("expected no squash when markers present, got %v", git.Squashes)
+	}
+	if len(git.MergeTargets) != 0 {
+		t.Errorf("expected no fast-forward merge when markers present, got %v", git.MergeTargets)
+	}
+}
+
 func TestMarkTicketDoneCascading_SquashesTicketsButNotProjects(t *testing.T) {
 	d, ticketsDir, git := openTestDB(t)
 

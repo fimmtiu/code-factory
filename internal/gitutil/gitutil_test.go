@@ -595,3 +595,162 @@ func TestRemoveWorktree(t *testing.T) {
 		t.Fatalf("worktree directory %q still exists after removal", worktreePath)
 	}
 }
+
+func TestFindForbiddenMarkers_FindsTODOAndPanic(t *testing.T) {
+	dir := initTestRepo(t)
+	client := gitutil.NewRealGitClient()
+	baseBranch := currentBranch(t, dir)
+
+	if out, err := exec.Command("git", "-C", dir, "checkout", "-b", "feat").CombinedOutput(); err != nil {
+		t.Fatalf("checkout: %v\n%s", err, out)
+	}
+	contents := "package x\n" +
+		"func A() {\n" +
+		"\t// TODO: implement A\n" +
+		"\tpanic(\"unimplemented\")\n" +
+		"}\n"
+	if err := os.WriteFile(filepath.Join(dir, "x.go"), []byte(contents), 0644); err != nil {
+		t.Fatalf("write x.go: %v", err)
+	}
+	// Test files should be skipped, even if they contain matching markers.
+	testContents := "package x\n// TODO: cover edge cases\n"
+	if err := os.WriteFile(filepath.Join(dir, "x_test.go"), []byte(testContents), 0644); err != nil {
+		t.Fatalf("write x_test.go: %v", err)
+	}
+	for _, name := range []string{"x.go", "x_test.go"} {
+		if out, err := exec.Command("git", "-C", dir, "add", name).CombinedOutput(); err != nil {
+			t.Fatalf("add %s: %v\n%s", name, err, out)
+		}
+	}
+	if out, err := exec.Command("git", "-C", dir, "commit", "-m", "stub").CombinedOutput(); err != nil {
+		t.Fatalf("commit: %v\n%s", err, out)
+	}
+
+	hits, err := client.FindForbiddenMarkers(dir, baseBranch)
+	if err != nil {
+		t.Fatalf("FindForbiddenMarkers: %v", err)
+	}
+	if len(hits) != 2 {
+		t.Fatalf("expected 2 hits in x.go (TODO + panic), got %d: %v", len(hits), hits)
+	}
+	for _, hit := range hits {
+		if !strings.HasPrefix(hit, "x.go:") {
+			t.Errorf("hit should be in x.go (test file should be skipped): %q", hit)
+		}
+	}
+	// One hit names the TODO line, the other names the panic line.
+	var sawTodo, sawPanic bool
+	for _, hit := range hits {
+		if strings.Contains(hit, "TODO") {
+			sawTodo = true
+		}
+		if strings.Contains(hit, "unimplemented") {
+			sawPanic = true
+		}
+	}
+	if !sawTodo || !sawPanic {
+		t.Errorf("expected both TODO and unimplemented hits, got: %v", hits)
+	}
+}
+
+func TestFindForbiddenMarkers_CleanDiffReturnsNoHits(t *testing.T) {
+	dir := initTestRepo(t)
+	client := gitutil.NewRealGitClient()
+	baseBranch := currentBranch(t, dir)
+
+	if out, err := exec.Command("git", "-C", dir, "checkout", "-b", "clean").CombinedOutput(); err != nil {
+		t.Fatalf("checkout: %v\n%s", err, out)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "y.go"), []byte("package x\nfunc Y() {}\n"), 0644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	if out, err := exec.Command("git", "-C", dir, "add", "y.go").CombinedOutput(); err != nil {
+		t.Fatalf("add: %v\n%s", err, out)
+	}
+	if out, err := exec.Command("git", "-C", dir, "commit", "-m", "y").CombinedOutput(); err != nil {
+		t.Fatalf("commit: %v\n%s", err, out)
+	}
+
+	hits, err := client.FindForbiddenMarkers(dir, baseBranch)
+	if err != nil {
+		t.Fatalf("FindForbiddenMarkers: %v", err)
+	}
+	if len(hits) != 0 {
+		t.Errorf("expected no hits, got %v", hits)
+	}
+}
+
+func TestFindForbiddenMarkers_IgnoresPreExistingMarkersOnBase(t *testing.T) {
+	dir := initTestRepo(t)
+	client := gitutil.NewRealGitClient()
+
+	// Put a TODO into the base branch before the feature branch diverges.
+	// FindForbiddenMarkers must not flag it because it isn't an *added* line
+	// on the feature branch.
+	if err := os.WriteFile(filepath.Join(dir, "z.go"), []byte("package x\n// TODO: pre-existing\n"), 0644); err != nil {
+		t.Fatalf("write base: %v", err)
+	}
+	if out, err := exec.Command("git", "-C", dir, "add", "z.go").CombinedOutput(); err != nil {
+		t.Fatalf("add base: %v\n%s", err, out)
+	}
+	if out, err := exec.Command("git", "-C", dir, "commit", "-m", "base TODO").CombinedOutput(); err != nil {
+		t.Fatalf("commit base: %v\n%s", err, out)
+	}
+	baseBranch := currentBranch(t, dir)
+
+	if out, err := exec.Command("git", "-C", dir, "checkout", "-b", "innocent").CombinedOutput(); err != nil {
+		t.Fatalf("checkout: %v\n%s", err, out)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "innocent.go"), []byte("package x\nfunc I() {}\n"), 0644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	if out, err := exec.Command("git", "-C", dir, "add", "innocent.go").CombinedOutput(); err != nil {
+		t.Fatalf("add: %v\n%s", err, out)
+	}
+	if out, err := exec.Command("git", "-C", dir, "commit", "-m", "innocent").CombinedOutput(); err != nil {
+		t.Fatalf("commit: %v\n%s", err, out)
+	}
+
+	hits, err := client.FindForbiddenMarkers(dir, baseBranch)
+	if err != nil {
+		t.Fatalf("FindForbiddenMarkers: %v", err)
+	}
+	if len(hits) != 0 {
+		t.Errorf("expected no hits on innocent feature branch, got %v", hits)
+	}
+}
+
+func TestFindForbiddenMarkers_MultiLanguageStubs(t *testing.T) {
+	dir := initTestRepo(t)
+	client := gitutil.NewRealGitClient()
+	baseBranch := currentBranch(t, dir)
+
+	if out, err := exec.Command("git", "-C", dir, "checkout", "-b", "polyglot").CombinedOutput(); err != nil {
+		t.Fatalf("checkout: %v\n%s", err, out)
+	}
+	files := map[string]string{
+		"a.py": "def a():\n    raise NotImplementedError\n",
+		"b.rb": "def b\n  raise NotImplementedError\nend\n",
+		"c.rs": "fn c() { unimplemented!() }\n",
+		"d.rs": "fn d() { todo!() }\n",
+	}
+	for name, contents := range files {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(contents), 0644); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+		if out, err := exec.Command("git", "-C", dir, "add", name).CombinedOutput(); err != nil {
+			t.Fatalf("add %s: %v\n%s", name, err, out)
+		}
+	}
+	if out, err := exec.Command("git", "-C", dir, "commit", "-m", "polyglot stubs").CombinedOutput(); err != nil {
+		t.Fatalf("commit: %v\n%s", err, out)
+	}
+
+	hits, err := client.FindForbiddenMarkers(dir, baseBranch)
+	if err != nil {
+		t.Fatalf("FindForbiddenMarkers: %v", err)
+	}
+	if len(hits) != 4 {
+		t.Fatalf("expected 4 hits (one per language), got %d: %v", len(hits), hits)
+	}
+}

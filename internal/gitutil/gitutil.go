@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
@@ -42,6 +43,13 @@ type GitClient interface {
 	// parent repo's rr-cache, enabling rerere in any worktree makes recorded
 	// resolutions available to all sibling worktrees. The call is idempotent.
 	EnableRerere(worktreeDir string) error
+	// FindForbiddenMarkers returns lines added on the branch checked out at
+	// worktreeDir but not present on targetBranch that contain incomplete-work
+	// markers (TODO, FIXME, XXX, panic("unimplemented"), panic("not implemented")).
+	// Hits in test files (paths matching *_test.* or under test/, tests/, spec/
+	// directories) are filtered out. Each returned hit is formatted as
+	// "path:line: text" so callers can surface a jump-to-source list.
+	FindForbiddenMarkers(worktreeDir, targetBranch string) ([]string, error)
 }
 
 // RealGitClient implements GitClient using actual git commands.
@@ -202,6 +210,141 @@ func (g *RealGitClient) EnableRerere(worktreeDir string) error {
 		return err
 	}
 	return runGit("-C", worktreeDir, "config", "rerere.autoUpdate", "true")
+}
+
+// forbiddenMarkerPattern matches incomplete-work markers we want to keep out
+// of merged code. The first alternative is the universal-comment family
+// (TODO/FIXME/XXX) found in every language. The remaining alternatives are
+// stub-throw idioms in the languages code-factory is most often used with:
+// Go's panic("unimplemented"), Rust's unimplemented!()/todo!(), and
+// Python/Ruby's NotImplementedError. Adding more languages is just a matter
+// of extending this regex — no other code in the scanner is language-specific.
+var forbiddenMarkerPattern = regexp.MustCompile(
+	`\b(?:TODO|FIXME|XXX)\b` +
+		`|panic\(\s*"(?:[Uu]nimplemented|not implemented)"\s*\)` +
+		`|\b(?:unimplemented|todo)!\s*\(` +
+		`|\braise\s+NotImplementedError\b`,
+)
+
+// isTestPath reports whether path looks like a test file by language convention.
+// Hits in test files are treated as legitimate scaffolding (e.g. TODO markers
+// listing test cases not yet covered) and are excluded from FindForbiddenMarkers.
+func isTestPath(path string) bool {
+	slashed := filepath.ToSlash(path)
+	for _, dir := range []string{"test", "tests", "spec", "specs", "__tests__"} {
+		if strings.Contains(slashed, "/"+dir+"/") || strings.HasPrefix(slashed, dir+"/") {
+			return true
+		}
+	}
+	base := filepath.Base(slashed)
+	switch {
+	case strings.HasSuffix(base, "_test.go"),
+		strings.HasSuffix(base, "_test.py"),
+		strings.HasPrefix(base, "test_"),
+		strings.HasSuffix(base, "_spec.rb"),
+		strings.HasSuffix(base, "_test.rb"):
+		return true
+	}
+	for _, suffix := range []string{".test.js", ".test.ts", ".test.tsx", ".test.jsx", ".spec.js", ".spec.ts", ".spec.tsx", ".spec.jsx"} {
+		if strings.HasSuffix(base, suffix) {
+			return true
+		}
+	}
+	return false
+}
+
+// FindForbiddenMarkers diffs HEAD against targetBranch (using merge-base
+// semantics) and returns one "path:line: text" entry per added line that
+// matches forbiddenMarkerPattern in a non-test file. The result is empty
+// when the diff is clean.
+func (g *RealGitClient) FindForbiddenMarkers(worktreeDir, targetBranch string) ([]string, error) {
+	out, err := runGitOutput(
+		"-C", worktreeDir,
+		"diff", "--no-color", "-U0",
+		targetBranch+"...HEAD",
+	)
+	if err != nil {
+		return nil, fmt.Errorf("FindForbiddenMarkers: diff: %w", err)
+	}
+	return scanDiffForMarkers(out), nil
+}
+
+// scanDiffForMarkers walks unified-diff output and returns hits in non-test
+// files. Exposed for tests via the gitutil package's own test file (cannot
+// be exercised through the fake without a real git invocation).
+func scanDiffForMarkers(diff string) []string {
+	if diff == "" {
+		return nil
+	}
+	var (
+		hits        []string
+		currentPath string
+		skipFile    bool
+		lineNo      int
+	)
+	hunkHeader := regexp.MustCompile(`^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@`)
+
+	for _, line := range strings.Split(diff, "\n") {
+		switch {
+		case strings.HasPrefix(line, "+++ "):
+			// "+++ b/path/to/file" or "+++ /dev/null" for deletions.
+			rest := strings.TrimPrefix(line, "+++ ")
+			if rest == "/dev/null" {
+				currentPath = ""
+				skipFile = true
+				continue
+			}
+			currentPath = strings.TrimPrefix(rest, "b/")
+			skipFile = isTestPath(currentPath)
+		case strings.HasPrefix(line, "--- "):
+			// Reset state — a new file pair is starting; +++ will follow.
+			currentPath = ""
+			skipFile = false
+			lineNo = 0
+		case strings.HasPrefix(line, "@@"):
+			if skipFile || currentPath == "" {
+				continue
+			}
+			m := hunkHeader.FindStringSubmatch(line)
+			if m == nil {
+				continue
+			}
+			start, perr := parseInt(m[1])
+			if perr != nil {
+				continue
+			}
+			lineNo = start
+		case strings.HasPrefix(line, "+") && !strings.HasPrefix(line, "+++"):
+			if skipFile || currentPath == "" {
+				continue
+			}
+			added := strings.TrimPrefix(line, "+")
+			if forbiddenMarkerPattern.MatchString(added) {
+				hits = append(hits, fmt.Sprintf("%s:%d: %s", currentPath, lineNo, strings.TrimSpace(added)))
+			}
+			lineNo++
+		case strings.HasPrefix(line, "-"):
+			// removed line: position counter only advances on '+' / ' ' lines
+		case strings.HasPrefix(line, " "):
+			if !skipFile && currentPath != "" {
+				lineNo++
+			}
+		}
+	}
+	return hits
+}
+
+// parseInt is a tiny strconv.Atoi shim that returns 0 for empty input. It
+// exists only to keep scanDiffForMarkers free of an extra import block.
+func parseInt(s string) (int, error) {
+	n := 0
+	for _, c := range s {
+		if c < '0' || c > '9' {
+			return 0, fmt.Errorf("not a number: %q", s)
+		}
+		n = n*10 + int(c-'0')
+	}
+	return n, nil
 }
 
 // RemoveWorktree removes the linked worktree at worktreePath and deletes its
