@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -270,8 +271,7 @@ func (g *RealGitClient) FindForbiddenMarkers(worktreeDir, targetBranch string) (
 }
 
 // scanDiffForMarkers walks unified-diff output and returns hits in non-test
-// files. Exposed for tests via the gitutil package's own test file (cannot
-// be exercised through the fake without a real git invocation).
+// files.
 func scanDiffForMarkers(diff string) []string {
 	if diff == "" {
 		return nil
@@ -309,7 +309,7 @@ func scanDiffForMarkers(diff string) []string {
 			if m == nil {
 				continue
 			}
-			start, perr := parseInt(m[1])
+			start, perr := strconv.Atoi(m[1])
 			if perr != nil {
 				continue
 			}
@@ -332,19 +332,6 @@ func scanDiffForMarkers(diff string) []string {
 		}
 	}
 	return hits
-}
-
-// parseInt is a tiny strconv.Atoi shim that returns 0 for empty input. It
-// exists only to keep scanDiffForMarkers free of an extra import block.
-func parseInt(s string) (int, error) {
-	n := 0
-	for _, c := range s {
-		if c < '0' || c > '9' {
-			return 0, fmt.Errorf("not a number: %q", s)
-		}
-		n = n*10 + int(c-'0')
-	}
-	return n, nil
 }
 
 // RemoveWorktree removes the linked worktree at worktreePath and deletes its
