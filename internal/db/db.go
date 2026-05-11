@@ -740,23 +740,6 @@ func (d *DB) RebaseTicketOnParent(identifier, parentIdentifier, parentBranch str
 	return nil
 }
 
-// identifierIsTicket reports whether identifier names a row in the tickets
-// table. Returns (false, nil) if the identifier exists only as a project
-// (or not at all); the missing-worktree case surfaces later when git
-// operations run.
-func (d *DB) identifierIsTicket(identifier string) (bool, error) {
-	var ignored int
-	err := d.db.QueryRow(`SELECT 1 FROM tickets WHERE identifier = ?`, identifier).Scan(&ignored)
-	switch {
-	case err == nil:
-		return true, nil
-	case err == sql.ErrNoRows:
-		return false, nil
-	default:
-		return false, err
-	}
-}
-
 // rebaseAndFastForward combines a work unit's branch into its parent using a
 // rebase strategy: rebase the child branch onto the parent's current HEAD,
 // then fast-forward the parent to the rebased tip. The result is linear
@@ -775,11 +758,11 @@ func (d *DB) rebaseAndFastForward(identifier, mergeTarget string) error {
 		return fmt.Errorf("detect target branch for %s: %w", mergeTarget, err)
 	}
 
-	isTicket, err := d.identifierIsTicket(identifier)
+	unitType, _, err := d.classifyIdentifier(identifier)
 	if err != nil {
 		return fmt.Errorf("classify %s: %w", identifier, err)
 	}
-	if isTicket {
+	if unitType == workUnitTypeTicket {
 		markers, err := d.git.FindForbiddenMarkers(childWorktree, targetBranch)
 		if err != nil {
 			return fmt.Errorf("scan markers on %s: %w", identifier, err)
