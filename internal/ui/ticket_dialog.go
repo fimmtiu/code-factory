@@ -598,6 +598,8 @@ func crDetailLines(cr models.ChangeRequest, worktreePath string) string {
 	codeCtx := fetchCodeContext(worktreePath, cr.CommitHash, filename, lineNumber)
 
 	return strings.Join([]string{
+		theme.Current().DetailLabelStyle.Render("Change request #" + cr.ID),
+		"",
 		theme.Current().DetailLabelStyle.Render("File:") + " " + filename,
 		theme.Current().DetailLabelStyle.Render("Line:") + " " + strconv.Itoa(lineNumber),
 		theme.Current().DetailLabelStyle.Render("Status:") + " " + cr.Status,

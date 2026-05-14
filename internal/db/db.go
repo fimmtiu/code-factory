@@ -967,7 +967,11 @@ func (d *DB) MergeChain(ctx context.Context, identifier string, onConflict func(
 			if cbErr := onConflict(step.Identifier, conflictErr.WorktreePath); cbErr != nil {
 				return cbErr
 			}
-			clean, cleanErr := git.IsWorktreeClean(conflictErr.WorktreePath)
+			scope, scopeErr := d.GetWriteScope(step.Identifier)
+			if scopeErr != nil {
+				return scopeErr
+			}
+			clean, cleanErr := git.IsWorktreeCleanForScope(conflictErr.WorktreePath, scope)
 			if cleanErr != nil {
 				return cleanErr
 			}

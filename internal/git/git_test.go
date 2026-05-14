@@ -249,3 +249,167 @@ func TestHasUncommittedChanges_UntrackedFile(t *testing.T) {
 		t.Error("untracked-only worktree should not report uncommitted changes")
 	}
 }
+
+func TestIsWorktreeCleanForScope(t *testing.T) {
+	mkdirAll := func(t *testing.T, wt, rel string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Join(wt, rel), 0755); err != nil {
+			t.Fatalf("mkdir %s: %v", rel, err)
+		}
+	}
+	write := func(t *testing.T, wt, rel, body string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(wt, rel), []byte(body), 0644); err != nil {
+			t.Fatalf("write %s: %v", rel, err)
+		}
+	}
+
+	t.Run("empty scope falls back to whole-tree check", func(t *testing.T) {
+		wt := setupTestRepo(t)
+		write(t, wt, "sibling.txt", "untracked\n")
+
+		clean, err := IsWorktreeCleanForScope(wt, nil)
+		if err != nil {
+			t.Fatalf("IsWorktreeCleanForScope: %v", err)
+		}
+		if clean {
+			t.Error("empty scope should be dirty when any untracked file exists")
+		}
+	})
+
+	t.Run("untracked file outside scope is ignored", func(t *testing.T) {
+		wt := setupTestRepo(t)
+		mkdirAll(t, wt, "src/mine")
+		mkdirAll(t, wt, "src/sibling-gem/lib")
+		write(t, wt, "src/sibling-gem/Gemfile", "source 'rubygems'\n")
+		write(t, wt, "src/sibling-gem/lib/x.rb", "module X; end\n")
+
+		clean, err := IsWorktreeCleanForScope(wt, []string{"src/mine/"})
+		if err != nil {
+			t.Fatalf("IsWorktreeCleanForScope: %v", err)
+		}
+		if !clean {
+			t.Error("expected clean: untracked files are outside scope")
+		}
+	})
+
+	t.Run("untracked file inside scope is dirty", func(t *testing.T) {
+		wt := setupTestRepo(t)
+		mkdirAll(t, wt, "src/mine")
+		write(t, wt, "src/mine/forgot.rb", "module Forgot; end\n")
+
+		clean, err := IsWorktreeCleanForScope(wt, []string{"src/mine/"})
+		if err != nil {
+			t.Fatalf("IsWorktreeCleanForScope: %v", err)
+		}
+		if clean {
+			t.Error("expected dirty: untracked file is inside scope")
+		}
+	})
+
+	t.Run("modified tracked file outside scope is ignored", func(t *testing.T) {
+		wt := setupTestRepo(t)
+		// file0.txt was committed on the feature branch by setupTestRepo.
+		write(t, wt, "file0.txt", "modified by sibling staging\n")
+
+		clean, err := IsWorktreeCleanForScope(wt, []string{"src/mine/"})
+		if err != nil {
+			t.Fatalf("IsWorktreeCleanForScope: %v", err)
+		}
+		if !clean {
+			t.Error("expected clean: modified tracked file is outside scope")
+		}
+	})
+
+	t.Run("modified tracked file inside scope is dirty", func(t *testing.T) {
+		wt := setupTestRepo(t)
+		write(t, wt, "file0.txt", "modified content\n")
+
+		clean, err := IsWorktreeCleanForScope(wt, []string{"file0.txt"})
+		if err != nil {
+			t.Fatalf("IsWorktreeCleanForScope: %v", err)
+		}
+		if clean {
+			t.Error("expected dirty: modified tracked file is in scope")
+		}
+	})
+
+	t.Run("exact-file scope entry matches the file but not a sibling with shared prefix", func(t *testing.T) {
+		wt := setupTestRepo(t)
+		// Create one tracked file matching the scope path exactly, and an
+		// untracked file whose path is a prefix-extension of the scope path
+		// but a different file ("file0.txt" vs "file0.txt.bak").
+		write(t, wt, "file0.txt.bak", "backup\n")
+
+		clean, err := IsWorktreeCleanForScope(wt, []string{"file0.txt"})
+		if err != nil {
+			t.Fatalf("IsWorktreeCleanForScope: %v", err)
+		}
+		if !clean {
+			t.Error("expected clean: 'file0.txt' scope must not match 'file0.txt.bak'")
+		}
+	})
+
+	t.Run("unmerged entries are always dirty regardless of scope", func(t *testing.T) {
+		wt := setupTestRepo(t)
+		// Create a conflict on file0.txt (which is outside this unit's scope)
+		// by making the feature branch and main diverge on it, then merging.
+		run := func(dir string, expectFail bool, args ...string) {
+			t.Helper()
+			cmd := exec.Command("git", args...)
+			cmd.Dir = dir
+			cmd.Env = append(os.Environ(),
+				"GIT_AUTHOR_NAME=Test", "GIT_AUTHOR_EMAIL=test@test.com",
+				"GIT_COMMITTER_NAME=Test", "GIT_COMMITTER_EMAIL=test@test.com",
+			)
+			out, err := cmd.CombinedOutput()
+			if err != nil && !expectFail {
+				t.Fatalf("git %v: %v\n%s", args, err, out)
+			}
+		}
+		// On feature: modify file0.txt and commit.
+		write(t, wt, "file0.txt", "feature edit\n")
+		run(wt, false, "commit", "-am", "feature edit")
+		// On main: modify file0.txt differently and commit.
+		run(wt, false, "checkout", "main")
+		write(t, wt, "file0.txt", "main edit\n")
+		run(wt, false, "add", "file0.txt")
+		run(wt, false, "commit", "-m", "main edit")
+		// Merge feature into main → conflict (git exits non-zero on conflict).
+		run(wt, true, "merge", "feature")
+
+		// Scope is something totally unrelated to file0.txt, but the
+		// unmerged state must still surface as dirty.
+		clean, err := IsWorktreeCleanForScope(wt, []string{"src/mine/"})
+		if err != nil {
+			t.Fatalf("IsWorktreeCleanForScope: %v", err)
+		}
+		if clean {
+			t.Error("expected dirty: unmerged entries must always count, even outside scope")
+		}
+	})
+}
+
+func TestPathInScope(t *testing.T) {
+	cases := []struct {
+		name  string
+		path  string
+		scope []string
+		want  bool
+	}{
+		{"exact match", "lib/foo.rb", []string{"lib/foo.rb"}, true},
+		{"dir prefix with trailing slash", "lib/foo/bar.rb", []string{"lib/foo/"}, true},
+		{"dir prefix without trailing slash", "lib/foo/bar.rb", []string{"lib/foo"}, true},
+		{"prefix-extension is not a match", "lib/foo_bar.rb", []string{"lib/foo"}, false},
+		{"unrelated path", "src/other.rb", []string{"lib/foo/"}, false},
+		{"multiple entries, second matches", "spec/x_spec.rb", []string{"lib/foo/", "spec/"}, true},
+		{"empty scope entry is ignored", "anything.rb", []string{""}, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := pathInScope(tc.path, tc.scope); got != tc.want {
+				t.Errorf("pathInScope(%q, %v) = %v, want %v", tc.path, tc.scope, got, tc.want)
+			}
+		})
+	}
+}

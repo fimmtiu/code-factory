@@ -76,7 +76,11 @@ func Approve(database *db.DB, identifier string) error {
 		if err != nil {
 			return err
 		}
-		clean, err := git.IsWorktreeClean(worktreePath)
+		scope, err := database.GetWriteScope(identifier)
+		if err != nil {
+			return err
+		}
+		clean, err := git.IsWorktreeCleanForScope(worktreePath, scope)
 		if err != nil {
 			return err
 		}
