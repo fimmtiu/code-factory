@@ -217,15 +217,31 @@ func (g *RealGitClient) EnableRerere(worktreeDir string) error {
 // of merged code. The first alternative is the universal-comment family
 // (TODO/FIXME/XXX) found in every language. The remaining alternatives are
 // stub-throw idioms in the languages code-factory is most often used with:
-// Go's panic("unimplemented"), Rust's unimplemented!()/todo!(), and
-// Python/Ruby's NotImplementedError. Adding more languages is just a matter
-// of extending this regex — no other code in the scanner is language-specific.
+// Go's panic("unimplemented") and Rust's unimplemented!()/todo!(). Adding
+// more languages is just a matter of extending this regex — no other code in
+// the scanner is language-specific.
+//
+// Note: raise NotImplementedError is intentionally excluded. In Ruby (and
+// Python) it is the idiomatic way to declare an abstract method, not a
+// placeholder stub, so treating it as forbidden would block legitimate
+// library code.
 var forbiddenMarkerPattern = regexp.MustCompile(
 	`\b(?:TODO|FIXME|XXX)\b` +
 		`|panic\(\s*"(?:[Uu]nimplemented|not implemented)"\s*\)` +
-		`|\b(?:unimplemented|todo)!\s*\(` +
-		`|\braise\s+NotImplementedError\b`,
+		`|\b(?:unimplemented|todo)!\s*\(`,
 )
+
+// isDocPath reports whether path is a documentation or prose file (Markdown,
+// plain text, reStructuredText). Such files are excluded from marker scanning
+// because TODO/FIXME/XXX in prose is often intentional template text, not an
+// unimplemented code stub.
+func isDocPath(path string) bool {
+	switch filepath.Ext(filepath.Base(path)) {
+	case ".md", ".txt", ".rst":
+		return true
+	}
+	return false
+}
 
 // isTestPath reports whether path looks like a test file by language convention.
 // Hits in test files are treated as legitimate scaffolding (e.g. TODO markers
@@ -256,8 +272,8 @@ func isTestPath(path string) bool {
 
 // FindForbiddenMarkers diffs HEAD against targetBranch (using merge-base
 // semantics) and returns one "path:line: text" entry per added line that
-// matches forbiddenMarkerPattern in a non-test file. The result is empty
-// when the diff is clean.
+// matches forbiddenMarkerPattern in a non-test, non-documentation file. The
+// result is empty when the diff is clean.
 func (g *RealGitClient) FindForbiddenMarkers(worktreeDir, targetBranch string) ([]string, error) {
 	out, err := runGitOutput(
 		"-C", worktreeDir,
@@ -270,8 +286,8 @@ func (g *RealGitClient) FindForbiddenMarkers(worktreeDir, targetBranch string) (
 	return scanDiffForMarkers(out), nil
 }
 
-// scanDiffForMarkers walks unified-diff output and returns hits in non-test
-// files.
+// scanDiffForMarkers walks unified-diff output and returns hits in non-test,
+// non-documentation files.
 func scanDiffForMarkers(diff string) []string {
 	if diff == "" {
 		return nil
@@ -295,7 +311,7 @@ func scanDiffForMarkers(diff string) []string {
 				continue
 			}
 			currentPath = strings.TrimPrefix(rest, "b/")
-			skipFile = isTestPath(currentPath)
+			skipFile = isTestPath(currentPath) || isDocPath(currentPath)
 		case strings.HasPrefix(line, "--- "):
 			// Reset state — a new file pair is starting; +++ will follow.
 			currentPath = ""

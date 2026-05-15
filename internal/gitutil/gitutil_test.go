@@ -729,8 +729,6 @@ func TestFindForbiddenMarkers_MultiLanguageStubs(t *testing.T) {
 		t.Fatalf("checkout: %v\n%s", err, out)
 	}
 	files := map[string]string{
-		"a.py": "def a():\n    raise NotImplementedError\n",
-		"b.rb": "def b\n  raise NotImplementedError\nend\n",
 		"c.rs": "fn c() { unimplemented!() }\n",
 		"d.rs": "fn d() { todo!() }\n",
 	}
@@ -750,7 +748,78 @@ func TestFindForbiddenMarkers_MultiLanguageStubs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FindForbiddenMarkers: %v", err)
 	}
-	if len(hits) != 4 {
-		t.Fatalf("expected 4 hits (one per language), got %d: %v", len(hits), hits)
+	if len(hits) != 2 {
+		t.Fatalf("expected 2 hits (one per Rust stub macro), got %d: %v", len(hits), hits)
+	}
+}
+
+func TestFindForbiddenMarkers_AllowsRaiseNotImplementedError(t *testing.T) {
+	dir := initTestRepo(t)
+	client := gitutil.NewRealGitClient()
+	baseBranch := currentBranch(t, dir)
+
+	if out, err := exec.Command("git", "-C", dir, "checkout", "-b", "abstract").CombinedOutput(); err != nil {
+		t.Fatalf("checkout: %v\n%s", err, out)
+	}
+	// Ruby and Python use raise NotImplementedError as the idiomatic abstract
+	// method declaration — it should not be flagged as an incomplete-work marker.
+	files := map[string]string{
+		"a.rb": "def database_yaml_names\n  raise NotImplementedError, \"#{self.class.name} must implement\"\nend\n",
+		"b.py": "def compute():\n    raise NotImplementedError\n",
+	}
+	for name, contents := range files {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(contents), 0644); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+		if out, err := exec.Command("git", "-C", dir, "add", name).CombinedOutput(); err != nil {
+			t.Fatalf("add %s: %v\n%s", name, err, out)
+		}
+	}
+	if out, err := exec.Command("git", "-C", dir, "commit", "-m", "abstract methods").CombinedOutput(); err != nil {
+		t.Fatalf("commit: %v\n%s", err, out)
+	}
+
+	hits, err := client.FindForbiddenMarkers(dir, baseBranch)
+	if err != nil {
+		t.Fatalf("FindForbiddenMarkers: %v", err)
+	}
+	if len(hits) != 0 {
+		t.Errorf("raise NotImplementedError should not be flagged (abstract method idiom), got: %v", hits)
+	}
+}
+
+func TestFindForbiddenMarkers_AllowsTODOInDocFiles(t *testing.T) {
+	dir := initTestRepo(t)
+	client := gitutil.NewRealGitClient()
+	baseBranch := currentBranch(t, dir)
+
+	if out, err := exec.Command("git", "-C", dir, "checkout", "-b", "docs").CombinedOutput(); err != nil {
+		t.Fatalf("checkout: %v\n%s", err, out)
+	}
+	// TODO/FIXME/XXX in documentation files are intentional prose (template
+	// text, annotations, etc.) — they should not be flagged as code stubs.
+	files := map[string]string{
+		"SKILL.md":  "# Wizard\n> Default: `<TODO: describe the column>`\n",
+		"README.md": "<!-- TODO: add examples -->\n",
+		"notes.txt": "TODO: revisit this section\n",
+	}
+	for name, contents := range files {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(contents), 0644); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+		if out, err := exec.Command("git", "-C", dir, "add", name).CombinedOutput(); err != nil {
+			t.Fatalf("add %s: %v\n%s", name, err, out)
+		}
+	}
+	if out, err := exec.Command("git", "-C", dir, "commit", "-m", "docs").CombinedOutput(); err != nil {
+		t.Fatalf("commit: %v\n%s", err, out)
+	}
+
+	hits, err := client.FindForbiddenMarkers(dir, baseBranch)
+	if err != nil {
+		t.Fatalf("FindForbiddenMarkers: %v", err)
+	}
+	if len(hits) != 0 {
+		t.Errorf("TODO in doc files should not be flagged, got: %v", hits)
 	}
 }
