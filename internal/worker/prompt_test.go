@@ -1,6 +1,7 @@
 package worker_test
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -19,6 +20,23 @@ func buildPromptTicket(identifier, description string, phase models.TicketPhase)
 		Status:       models.StatusIdle,
 		IsProject:    false,
 		Dependencies: []string{},
+	}
+}
+
+// installFakeSkill writes a SKILL.md under a tempdir HOME so BuildPrompt can
+// inline it. The body is wrapped in YAML frontmatter so the frontmatter
+// stripper has something to strip.
+func installFakeSkill(t *testing.T, name, body string) {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	dir := filepath.Join(home, ".claude", "skills", name)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("MkdirAll %s: %v", dir, err)
+	}
+	content := "---\nname: " + name + "\ndescription: fake\n---\n\n" + body
+	if err := os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte(content), 0o644); err != nil {
+		t.Fatalf("WriteFile SKILL.md: %v", err)
 	}
 }
 
@@ -153,6 +171,7 @@ func TestBuildPrompt_ImplementWithoutDependenciesOmitsSection(t *testing.T) {
 }
 
 func TestBuildPrompt_Refactor(t *testing.T) {
+	installFakeSkill(t, "cf-refactor", "REFACTOR_BODY_MARKER")
 	d, ticketsDir := openTestDB(t)
 	createProject(t, d, "proj")
 	createTicket(t, d, "proj/ticket-1")
@@ -169,9 +188,16 @@ func TestBuildPrompt_Refactor(t *testing.T) {
 	if !strings.Contains(prompt, "proj/ticket-1") {
 		t.Error("expected ticket identifier in refactor prompt")
 	}
+	if !strings.Contains(prompt, "REFACTOR_BODY_MARKER") {
+		t.Error("expected inlined cf-refactor skill body in refactor prompt")
+	}
+	if strings.Contains(prompt, "name: cf-refactor") {
+		t.Error("expected YAML frontmatter to be stripped from inlined skill body")
+	}
 }
 
 func TestBuildPrompt_Review(t *testing.T) {
+	installFakeSkill(t, "cf-review", "REVIEW_BODY_MARKER")
 	d, ticketsDir := openTestDB(t)
 	createProject(t, d, "proj")
 	createTicket(t, d, "proj/ticket-1")
@@ -188,9 +214,31 @@ func TestBuildPrompt_Review(t *testing.T) {
 	if !strings.Contains(prompt, "proj/ticket-1") {
 		t.Error("expected ticket identifier in review prompt")
 	}
+	if !strings.Contains(prompt, "REVIEW_BODY_MARKER") {
+		t.Error("expected inlined cf-review skill body in review prompt")
+	}
+}
+
+func TestBuildPrompt_ReviewMissingSkillIsError(t *testing.T) {
+	// Point HOME at a tempdir with no skills installed and confirm we surface
+	// the missing skill rather than silently shipping a degraded prompt.
+	t.Setenv("HOME", t.TempDir())
+	d, ticketsDir := openTestDB(t)
+	createProject(t, d, "proj")
+	createTicket(t, d, "proj/ticket-1")
+
+	ticket := buildPromptTicket("proj/ticket-1", "desc", models.PhaseReview)
+	_, err := worker.BuildPrompt(ticket, d, ticketsDir)
+	if err == nil {
+		t.Fatal("expected error when cf-review skill is not installed")
+	}
+	if !strings.Contains(err.Error(), "cf-review") {
+		t.Errorf("expected error to mention cf-review, got %v", err)
+	}
 }
 
 func TestBuildPrompt_RespondingStatus(t *testing.T) {
+	installFakeSkill(t, "cf-respond", "RESPOND_BODY_MARKER")
 	d, ticketsDir := openTestDB(t)
 	createProject(t, d, "proj")
 	createTicket(t, d, "proj/ticket-1")
@@ -208,6 +256,9 @@ func TestBuildPrompt_RespondingStatus(t *testing.T) {
 	}
 	if !strings.Contains(prompt, "proj/ticket-1") {
 		t.Error("expected ticket identifier in responding-status prompt")
+	}
+	if !strings.Contains(prompt, "RESPOND_BODY_MARKER") {
+		t.Error("expected inlined cf-respond skill body in responding-status prompt")
 	}
 }
 

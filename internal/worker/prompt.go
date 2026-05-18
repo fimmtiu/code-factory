@@ -19,9 +19,7 @@ func BuildPrompt(ticket *models.WorkUnit, database *db.DB, ticketsDir string) (s
 	worktreePath := storage.TicketWorktreePathIn(ticketsDir, identifier)
 
 	if ticket.Status == models.StatusResponding {
-		env := DetectWorktreeEnv(worktreePath)
-		return env.FormatEnvBlock() +
-			fmt.Sprintf("/cf-respond on worktree `%s` for ticket `%s`", worktreePath, identifier), nil
+		return buildSkillPrompt("cf-respond", worktreePath, identifier)
 	}
 
 	var prompt string
@@ -88,20 +86,34 @@ func BuildPrompt(ticket *models.WorkUnit, database *db.DB, ticketsDir string) (s
 		}
 
 	case models.PhaseRefactor:
-		env := DetectWorktreeEnv(worktreePath)
-		prompt = env.FormatEnvBlock() +
-			fmt.Sprintf("/cf-refactor on worktree `%s` for ticket `%s`", worktreePath, identifier)
+		return buildSkillPrompt("cf-refactor", worktreePath, identifier)
 
 	case models.PhaseReview:
-		env := DetectWorktreeEnv(worktreePath)
-		prompt = env.FormatEnvBlock() +
-			fmt.Sprintf("/cf-review on worktree `%s` for ticket `%s`", worktreePath, identifier)
+		return buildSkillPrompt("cf-review", worktreePath, identifier)
 
 	default:
 		return "", fmt.Errorf("BuildPrompt: unsupported ticket phase %q", ticket.Phase)
 	}
 
 	return prompt, nil
+}
+
+// buildSkillPrompt assembles a prompt that inlines the named skill's SKILL.md
+// body. We embed the body directly instead of relying on slash-command
+// expansion: the ACP wrapper that launches these sessions does not parse
+// leading "/<skill>" tokens the way the interactive Claude Code CLI does, so
+// a bare slash command reaches the model as plain text and the skill's
+// structured protocol never runs. Inlining sidesteps the wrapper entirely.
+func buildSkillPrompt(skill, worktreePath, identifier string) (string, error) {
+	body, err := LoadSkillBody(skill)
+	if err != nil {
+		return "", fmt.Errorf("BuildPrompt: %w", err)
+	}
+	env := DetectWorktreeEnv(worktreePath)
+	return env.FormatEnvBlock() + fmt.Sprintf(
+		"Execute the `/%s` skill on worktree `%s` for ticket `%s`. The skill body is reproduced below — follow it exactly.\n\n---\n\n%s",
+		skill, worktreePath, identifier, body,
+	), nil
 }
 
 // BuildMergingPrompt constructs an intent-aware prompt for the merging agent.
