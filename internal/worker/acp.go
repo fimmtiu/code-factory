@@ -381,6 +381,14 @@ func runACP(
 	cmd.Cancel = func() error {
 		return syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM)
 	}
+	// Pin npx to the global node version so the worktree's .node-version
+	// (pinned for project tooling) doesn't override it. nodenv global returns
+	// the version from ~/.nodenv/version, ignoring any local .node-version file.
+	if os.Getenv("NODENV_VERSION") == "" {
+		if out, err := exec.Command("nodenv", "global").Output(); err == nil {
+			cmd.Env = append(os.Environ(), "NODENV_VERSION="+strings.TrimSpace(string(out)))
+		}
+	}
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
