@@ -33,7 +33,7 @@ Subcommands:
   new                               Interactively create a new ticket
   new-project                       Interactively create a new project
   init                              Initialize .code-factory/ directory in the current repo
-  status                            Show all tickets and projects
+  list                              Show all tickets and projects
   create-project <id>               Create a project (reads JSON description from stdin)
   create-ticket <id>                Create a ticket (reads JSON description from stdin)
   set-status <id> <phase> [status]  Set a ticket's phase and status

@@ -94,24 +94,24 @@ func TestRunInit_NoGitRepo(t *testing.T) {
 	}
 }
 
-// ===== runStatus =====
+// ===== runList =====
 
-func TestRunStatus_Empty(t *testing.T) {
+func TestRunList_Empty(t *testing.T) {
 	d := openTestDB(t)
 	out := captureOutput(func() {
-		if err := runStatus(d); err != nil {
-			t.Fatalf("runStatus returned error: %v", err)
+		if err := runList(d); err != nil {
+			t.Fatalf("runList returned error: %v", err)
 		}
 	})
 	if !strings.Contains(out, "[]") && !strings.Contains(out, "null") {
 		// Accept either "[]" or "null" for an empty result set
 		if out == "" {
-			t.Error("expected non-empty output from runStatus")
+			t.Error("expected non-empty output from runList")
 		}
 	}
 }
 
-func TestRunStatus_WithData(t *testing.T) {
+func TestRunList_WithData(t *testing.T) {
 	d := openTestDB(t)
 	if err := d.CreateProject("my-proj", "A test project", nil, "", nil); err != nil {
 		t.Fatal(err)
@@ -121,8 +121,8 @@ func TestRunStatus_WithData(t *testing.T) {
 	}
 
 	out := captureOutput(func() {
-		if err := runStatus(d); err != nil {
-			t.Fatalf("runStatus returned error: %v", err)
+		if err := runList(d); err != nil {
+			t.Fatalf("runList returned error: %v", err)
 		}
 	})
 	if !strings.Contains(out, "my-proj") {

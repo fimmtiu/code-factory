@@ -23,7 +23,7 @@ Creates the `.code-factory/` directory and a default `settings.json` in the curr
 ### Querying state
 
 ```
-cf-tickets status
+cf-tickets list
 ```
 
 Prints all projects and tickets as pretty-printed JSON, including phase, status, dependencies, and change requests.

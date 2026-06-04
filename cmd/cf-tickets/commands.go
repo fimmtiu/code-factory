@@ -42,8 +42,8 @@ func runCommand(subcommand string, args []string) error {
 	defer d.Close()
 
 	switch subcommand {
-	case "status":
-		return runStatus(d)
+	case "list":
+		return runList(d)
 	case "create-project":
 		return runCreateProject(d, args, os.Stdin)
 	case "create-ticket":
@@ -90,7 +90,7 @@ func runInit() error {
 	return nil
 }
 
-func runStatus(d *db.DB) error {
+func runList(d *db.DB) error {
 	units, err := d.Status()
 	if err != nil {
 		return err
