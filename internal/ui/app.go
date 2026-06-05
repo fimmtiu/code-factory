@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/fimmtiu/code-factory/internal/db"
+	"github.com/fimmtiu/code-factory/internal/models"
 	"github.com/fimmtiu/code-factory/internal/ui/theme"
 	"github.com/fimmtiu/code-factory/internal/worker"
 )
@@ -45,9 +46,10 @@ type Model struct {
 	// OS notification batching: when a "needs attention" notification arrives,
 	// we buffer it and fire terminal-notifier after a 3-second delay. If
 	// multiple arrive in that window, the message becomes "Multiple tickets
-	// need attention".
-	osNotifPending []string // buffered notification texts; nil = no timer running
-	osNotifID      int      // incremented on each batch to expire stale timers
+	// need attention". When the timer fires, notifications whose ticket is no
+	// longer actionable are dropped — the user already dealt with it.
+	osNotifPending []worker.Notification // buffered notifications; nil = no timer running
+	osNotifID      int                   // incremented on each batch to expire stale timers
 }
 
 // NewModel creates a new root Model with the given pool, database, poll
@@ -102,13 +104,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case workerNotifMsg:
 		// Re-arm the listener so the next notification is also delivered.
 		cmds := []tea.Cmd{
-			ShowNotification(msg.text),
+			ShowNotification(msg.notif.Text),
 			waitForWorkerNotif(m.pool.NotifChannel),
 		}
 		// Buffer for a batched OS notification. If this is the first in
 		// the batch, start a 3-second timer.
 		startTimer := len(m.osNotifPending) == 0
-		m.osNotifPending = append(m.osNotifPending, msg.text)
+		m.osNotifPending = append(m.osNotifPending, msg.notif)
 		if startTimer {
 			m.osNotifID++
 			id := m.osNotifID
@@ -133,15 +135,28 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case fireOSNotifMsg:
-		if msg.id == m.osNotifID && len(m.osNotifPending) > 0 {
-			text := m.osNotifPending[0]
-			if len(m.osNotifPending) > 1 {
-				text = "Multiple tickets need attention"
-			}
-			m.osNotifPending = nil
-			return m, fireOSNotification(text)
+		if msg.id != m.osNotifID || len(m.osNotifPending) == 0 {
+			return m, nil
 		}
-		return m, nil
+		pending := m.osNotifPending
+		m.osNotifPending = nil
+		// Drop notifications whose ticket is no longer actionable: by the
+		// time the batch window expired, the user had already dealt with it
+		// (e.g. approved the permission request), so a popup would be stale.
+		kept := pending[:0]
+		for _, n := range pending {
+			if m.stillActionable(n.Identifier) {
+				kept = append(kept, n)
+			}
+		}
+		if len(kept) == 0 {
+			return m, nil
+		}
+		text := kept[0].Text
+		if len(kept) > 1 {
+			text = "Multiple tickets need attention"
+		}
+		return m, fireOSNotification(text)
 
 	case dismissDialogMsg:
 		m.dialog = nil
@@ -507,6 +522,23 @@ func (m Model) handleQuit() (tea.Model, tea.Cmd) {
 	}
 	m.dialog = NewQuitDialog()
 	return m, nil
+}
+
+// stillActionable reports whether the ticket with the given identifier is in a
+// status that still warrants an OS popup (needs-attention or user-review). A
+// permission request the user approved during the batch window will have left
+// needs-attention, so its stale popup is suppressed. On a missing identifier or
+// DB error it returns true, erring toward showing the notification rather than
+// silently dropping it.
+func (m Model) stillActionable(identifier string) bool {
+	if m.db == nil || identifier == "" {
+		return true
+	}
+	status, err := m.db.GetTicketStatus(identifier)
+	if err != nil {
+		return true
+	}
+	return status == models.StatusNeedsAttention || status == models.StatusUserReview
 }
 
 // allWorkersIdle returns true if every worker in the pool is StatusIdle.

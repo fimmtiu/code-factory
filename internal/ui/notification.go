@@ -8,6 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/fimmtiu/code-factory/internal/util"
+	"github.com/fimmtiu/code-factory/internal/worker"
 )
 
 // notifIconPath is the absolute path to the notification icon.
@@ -40,14 +41,14 @@ func ShowNotification(text string) tea.Cmd {
 }
 
 // workerNotifMsg is sent to the root model when a worker pushes a notification.
-type workerNotifMsg struct{ text string }
+type workerNotifMsg struct{ notif worker.Notification }
 
 // waitForWorkerNotif blocks until the next notification arrives on ch, then
 // delivers it as a workerNotifMsg. The caller must re-arm this command after
 // each message so the channel stays drained.
-func waitForWorkerNotif(ch <-chan string) tea.Cmd {
+func waitForWorkerNotif(ch <-chan worker.Notification) tea.Cmd {
 	return func() tea.Msg {
-		return workerNotifMsg{text: <-ch}
+		return workerNotifMsg{notif: <-ch}
 	}
 }
 

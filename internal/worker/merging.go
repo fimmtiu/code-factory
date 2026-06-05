@@ -93,7 +93,7 @@ func (w *Worker) processMerging(ctx context.Context, ticket *models.WorkUnit) {
 		}
 		if w.notifCh != nil {
 			select {
-			case w.notifCh <- "Merge conflict on " + identifier:
+			case w.notifCh <- Notification{Text: "Merge conflict on " + identifier, Identifier: identifier}:
 			default:
 			}
 		}
@@ -110,7 +110,7 @@ func (w *Worker) processMerging(ctx context.Context, ticket *models.WorkUnit) {
 		}
 		if w.notifCh != nil {
 			select {
-			case w.notifCh <- "Merge blocked: forbidden markers on " + identifier:
+			case w.notifCh <- Notification{Text: "Merge blocked: forbidden markers on " + identifier, Identifier: identifier}:
 			default:
 			}
 		}
@@ -127,7 +127,7 @@ func (w *Worker) processMerging(ctx context.Context, ticket *models.WorkUnit) {
 	}
 	if w.notifCh != nil {
 		select {
-		case w.notifCh <- "Merging error on " + identifier:
+		case w.notifCh <- Notification{Text: "Merging error on " + identifier, Identifier: identifier}:
 		default:
 		}
 	}

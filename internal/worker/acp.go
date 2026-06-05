@@ -217,7 +217,7 @@ func (c *acpWorkerClient) RequestPermission(ctx context.Context, params acp.Requ
 	c.appendOutput(fmt.Sprintf("\n=== PERMISSION REQUEST ===\n%s\n", payload))
 	if c.w.notifCh != nil {
 		select {
-		case c.w.notifCh <- c.identifier + " needs attention":
+		case c.w.notifCh <- Notification{Text: c.identifier + " needs attention", Identifier: c.identifier}:
 		default:
 		}
 	}

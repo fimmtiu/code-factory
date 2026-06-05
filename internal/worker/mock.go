@@ -109,7 +109,7 @@ func MockWorkFn(ctx context.Context, w *Worker, database dbInterface, logCh chan
 	}
 	if w.notifCh != nil {
 		select {
-		case w.notifCh <- params.Identifier + " needs attention":
+		case w.notifCh <- Notification{Text: params.Identifier + " needs attention", Identifier: params.Identifier}:
 		default:
 		}
 	}

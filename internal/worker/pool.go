@@ -29,12 +29,21 @@ type WorkParams struct {
 // without a running Claude process.
 type WorkFn func(ctx context.Context, w *Worker, database dbInterface, logCh chan<- LogMessage, params WorkParams) error
 
+// Notification is a popup request sent from a worker to the TUI. Identifier
+// names the work unit it concerns (empty if none); the TUI uses it to suppress
+// stale batched OS popups for tickets that are no longer actionable by the time
+// the batch timer fires (e.g. a permission request the user already approved).
+type Notification struct {
+	Text       string
+	Identifier string
+}
+
 // Pool holds the collection of workers and the shared log channel. It is the
 // single point of management for the main goroutine.
 type Pool struct {
 	Workers      []*Worker
 	LogChannel   chan LogMessage
-	NotifChannel chan string // receives notification text strings from workers for display in the TUI
+	NotifChannel chan Notification // receives notifications from workers for display in the TUI
 	PoolSize     int
 	PollInterval int // seconds
 
@@ -63,7 +72,7 @@ func NewPool(size int, pollInterval int) *Pool {
 	return &Pool{
 		Workers:       workers,
 		LogChannel:    make(chan LogMessage, logChannelBuffer),
-		NotifChannel:  make(chan string, 20),
+		NotifChannel:  make(chan Notification, 20),
 		WorkAvailable: make(chan struct{}, size),
 		PoolSize:      size,
 		PollInterval:  pollInterval,

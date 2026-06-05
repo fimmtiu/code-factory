@@ -95,7 +95,7 @@ type Worker struct {
 	// the worker's lifetime.
 	database      *db.DB
 	logCh         chan<- LogMessage
-	notifCh       chan<- string // sends notification text to the TUI
+	notifCh       chan<- Notification // sends notifications to the TUI
 	ticketsDir    string
 	workFn        WorkFn
 	workAvailable <-chan struct{} // signaled when new tickets become claimable

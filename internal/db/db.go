@@ -2109,6 +2109,20 @@ func (d *DB) GetTicketPhase(identifier string) (models.TicketPhase, error) {
 	return models.TicketPhase(phase), nil
 }
 
+// GetTicketStatus returns the current status of the ticket with the given
+// identifier.
+func (d *DB) GetTicketStatus(identifier string) (models.TicketStatus, error) {
+	var status string
+	err := d.db.QueryRow(`SELECT status FROM tickets WHERE identifier = ?`, identifier).Scan(&status)
+	if err == sql.ErrNoRows {
+		return "", fmt.Errorf("ticket %q not found", identifier)
+	}
+	if err != nil {
+		return "", err
+	}
+	return models.TicketStatus(status), nil
+}
+
 // SetProjectPhase updates the phase of the project with the given identifier.
 // When phase is "done", the project's branch is rebased onto its parent and
 // fast-forwarded in (or into repoRoot if there is no parent), producing linear

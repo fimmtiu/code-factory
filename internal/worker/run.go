@@ -239,7 +239,7 @@ func (w *Worker) postWorkReview(ticket *models.WorkUnit, ctx postWorkContext) (m
 		w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("pre-merge dry run conflict on %s: %v", ctx.identifier, err))
 		if w.notifCh != nil {
 			select {
-			case w.notifCh <- "Pre-merge dry run conflict on " + ctx.identifier:
+			case w.notifCh <- Notification{Text: "Pre-merge dry run conflict on " + ctx.identifier, Identifier: ctx.identifier}:
 			default:
 			}
 		}
@@ -265,7 +265,7 @@ func (w *Worker) postWorkImplement(ctx postWorkContext) (models.TicketPhase, mod
 		w.logCh <- NewLogMessageWithFile(w.Number, fmt.Sprintf("implement on %s produced no commits; flagging for user attention", ctx.identifier), ctx.logfilePath)
 		if w.notifCh != nil {
 			select {
-			case w.notifCh <- "Empty implement on " + ctx.identifier:
+			case w.notifCh <- Notification{Text: "Empty implement on " + ctx.identifier, Identifier: ctx.identifier}:
 			default:
 			}
 		}

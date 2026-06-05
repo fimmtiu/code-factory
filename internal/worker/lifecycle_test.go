@@ -860,7 +860,7 @@ func TestWorker_ReviewPhase_PreMergeRebaseConflictNotifies(t *testing.T) {
 	for !sawConflictNotif {
 		select {
 		case notif := <-pool.NotifChannel:
-			if strings.Contains(notif, "Pre-merge dry run conflict") {
+			if strings.Contains(notif.Text, "Pre-merge dry run conflict") {
 				sawConflictNotif = true
 			}
 		case <-pool.LogChannel:
