@@ -70,6 +70,14 @@ func (rc *renderContext) appendMeta(n int, kind diffLineKind, lineNum int) {
 // space + speech balloon (2 cells) + space = 4 columns.
 const crEmojiSuffix = " \U0001F4AC "
 
+// styledCREmoji returns the CR emoji suffix rendered with the highlight
+// background so the speech balloon stands out instead of blending into the
+// terminal default background. The styled string still occupies 4 visual
+// columns, so width math that uses crEmojiSuffix stays correct.
+func styledCREmoji() string {
+	return theme.Current().DiffCREmojiStyle.Render(crEmojiSuffix)
+}
+
 // renderDiff produces a formatted diff string from parsed diff files.
 // Each file begins with a blank line (including the first file). paneWidth
 // controls the full-width background padding for hunk headers and
@@ -201,7 +209,7 @@ func renderHunk(sb *strings.Builder, h diff.Hunk, rc *renderContext) int {
 			// Line number on the left, plain text (no background).
 			prefix := fmt.Sprintf("%*d ", numWidth, lineNum)
 			if hasCR {
-				sb.WriteString(truncateToWidth(prefix+text, rc.paneWidth-4) + crEmojiSuffix)
+				sb.WriteString(truncateToWidth(prefix+text, rc.paneWidth-4) + styledCREmoji())
 			} else {
 				sb.WriteString(prefix + text)
 			}
@@ -234,10 +242,10 @@ func writeStyledLine(sb *strings.Builder, style lipgloss.Style, content string, 
 // the same total width.
 func appendCREmojiToStyled(styled string, n int) string {
 	if n == 1 {
-		return styled + crEmojiSuffix
+		return styled + styledCREmoji()
 	}
 	parts := strings.Split(styled, "\n")
-	parts[0] += crEmojiSuffix
+	parts[0] += styledCREmoji()
 	for i := 1; i < len(parts); i++ {
 		parts[i] += "    "
 	}

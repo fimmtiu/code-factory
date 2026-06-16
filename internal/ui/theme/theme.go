@@ -83,6 +83,7 @@ type Theme struct {
 	DiffSelectedStyle   lipgloss.Style
 	DiffRangeStyle      lipgloss.Style
 	DiffLineSelectStyle lipgloss.Style
+	DiffCREmojiStyle    lipgloss.Style
 	DiffSeparatorStyle  lipgloss.Style
 	DiffStatusBarStyle  lipgloss.Style
 	CommitHashStyle     lipgloss.Style
