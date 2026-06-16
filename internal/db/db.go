@@ -741,15 +741,19 @@ func (d *DB) RebaseTicketOnParent(identifier, parentIdentifier, parentBranch str
 }
 
 // rebaseAndFastForward combines a work unit's branch into its parent using a
-// rebase strategy: rebase the child branch onto the parent's current HEAD,
-// then fast-forward the parent to the rebased tip. The result is linear
-// history with no merge commit. If the rebase hits conflicts, it is left in
-// progress in the child's worktree so the user can resolve them manually,
-// and the returned MergeConflictError points at that worktree.
+// rebase strategy: squash the child branch to a single commit, rebase it onto
+// the parent's current HEAD, then fast-forward the parent to the rebased tip.
+// The result is linear history with no merge commit. If the rebase hits
+// conflicts, it is left in progress in the child's worktree so the user can
+// resolve them manually, and the returned MergeConflictError points at that
+// worktree.
 //
-// Ticket branches are squashed to a single commit before rebasing so the
-// parent sees one diff per ticket instead of the full implement/refactor/
-// respond commit fan. Project branches keep their full child commit history.
+// Both ticket and project branches are squashed to a single commit before
+// rebasing. The parent then replays exactly one commit per work unit instead
+// of the full commit fan — for a ticket the implement/refactor/respond
+// commits, for a project the accumulated merged-child commits. Squashing
+// projects too keeps an out-of-date branch from replaying dozens of commits
+// to land a small net changeset.
 func (d *DB) rebaseAndFastForward(identifier, mergeTarget string) error {
 	childWorktree := d.worktreePath(identifier)
 
@@ -762,6 +766,8 @@ func (d *DB) rebaseAndFastForward(identifier, mergeTarget string) error {
 	if err != nil {
 		return fmt.Errorf("classify %s: %w", identifier, err)
 	}
+	// The forbidden-marker scan applies only to tickets: projects carry no
+	// hand-written code of their own, just the merged work of their children.
 	if unitType == workUnitTypeTicket {
 		markers, err := d.git.FindForbiddenMarkers(childWorktree, targetBranch)
 		if err != nil {
@@ -774,9 +780,10 @@ func (d *DB) rebaseAndFastForward(identifier, mergeTarget string) error {
 				Markers:      markers,
 			}
 		}
-		if err := d.git.SquashSinceMergeBase(childWorktree, targetBranch, identifier); err != nil {
-			return fmt.Errorf("squash %s: %w", identifier, err)
-		}
+	}
+
+	if err := d.git.SquashSinceMergeBase(childWorktree, targetBranch, identifier); err != nil {
+		return fmt.Errorf("squash %s: %w", identifier, err)
 	}
 
 	// Enable rerere so that conflict resolutions are recorded in the
@@ -938,8 +945,8 @@ func (d *DB) MergeChain(ctx context.Context, identifier string, onConflict func(
 	}()
 
 	// Phase 1: every rebase + fast-forward in the chain must succeed.
-	// rebaseAndFastForward squashes ticket branches and leaves project
-	// branches with their full commit history; see its doc comment.
+	// rebaseAndFastForward squashes each branch — ticket and project
+	// alike — to a single commit before rebasing; see its doc comment.
 	for _, step := range chain {
 		err := d.rebaseAndFastForward(step.Identifier, step.MergeTarget)
 		if err == nil {

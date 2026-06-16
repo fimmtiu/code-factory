@@ -864,7 +864,7 @@ func TestMarkTicketDone_RejectsForbiddenMarkers(t *testing.T) {
 	}
 }
 
-func TestMarkTicketDoneCascading_SquashesTicketsButNotProjects(t *testing.T) {
+func TestMarkTicketDoneCascading_SquashesEveryBranch(t *testing.T) {
 	d, ticketsDir, git := openTestDB(t)
 
 	if err := d.CreateProject("grand", "Grandparent", nil, "", nil); err != nil {
@@ -883,13 +883,27 @@ func TestMarkTicketDoneCascading_SquashesTicketsButNotProjects(t *testing.T) {
 	}
 
 	// Cascade rebases ticket → parent project → grandparent project (3 steps).
-	// Only the ticket step should squash.
-	if len(git.Squashes) != 1 {
-		t.Fatalf("expected exactly one squash (ticket only), got %d: %v", len(git.Squashes), git.Squashes)
+	// Every branch is squashed to a single commit before its rebase so an
+	// out-of-date project doesn't replay its full merged-child commit fan.
+	wantWorktrees := []string{
+		filepath.Join(ticketsDir, "grand", "parent", "t1", "worktree"),
+		filepath.Join(ticketsDir, "grand", "parent", "worktree"),
+		filepath.Join(ticketsDir, "grand", "worktree"),
 	}
-	wantWorktree := filepath.Join(ticketsDir, "grand", "parent", "t1", "worktree")
-	if git.Squashes[0] != wantWorktree {
-		t.Errorf("expected squash on ticket worktree %q, got %q", wantWorktree, git.Squashes[0])
+	if len(git.Squashes) != len(wantWorktrees) {
+		t.Fatalf("expected a squash on every branch (%d), got %d: %v", len(wantWorktrees), len(git.Squashes), git.Squashes)
+	}
+	for _, want := range wantWorktrees {
+		found := false
+		for _, got := range git.Squashes {
+			if got == want {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("expected a squash on %q; squashes were %v", want, git.Squashes)
+		}
 	}
 }
 
