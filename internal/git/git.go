@@ -34,6 +34,13 @@ func DetectDefaultBranch(worktreePath string) string {
 	return "master"
 }
 
+// BranchExists reports whether a local branch with the given name exists in the
+// worktree's repository.
+func BranchExists(worktreePath, branch string) bool {
+	_, err := Output(worktreePath, "rev-parse", "--verify", "--quiet", "refs/heads/"+branch)
+	return err == nil
+}
+
 // FetchCommitList returns the most recent commits from the worktree, newest first.
 // It runs git log --no-merges to get non-merge commits with full hashes.
 func FetchCommitList(worktreePath string, maxCommits int) ([]CommitEntry, error) {

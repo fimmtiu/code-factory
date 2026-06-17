@@ -32,7 +32,7 @@ func assertStyleFieldCount(t *testing.T, th *Theme) {
 		}
 	}
 
-	const expectedStyleFields = 66
+	const expectedStyleFields = 67
 	if count != expectedStyleFields {
 		t.Errorf("Theme has %d lipgloss.Style fields, want %d", count, expectedStyleFields)
 	}

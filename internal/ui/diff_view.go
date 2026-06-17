@@ -383,27 +383,91 @@ func (v *DiffView) clampSelected() {
 
 // ── Commands ─────────────────────────────────────────────────────────────────
 
-// parentBranch returns the branch name to compare against for fork-point
-// detection. For nested tickets (e.g. "proj/ticket"), this is the parent
-// project's branch (e.g. "proj"). For top-level tickets, it falls back to
-// the repository's default branch (main/master).
-func parentBranch(identifier, worktreePath string) string {
-	if parent, ok := models.ParentIdentifierOf(identifier); ok {
-		return strings.ReplaceAll(parent, "/", "_")
+// resolveForkPoint locates the separator's fork-point index by comparing HEAD
+// against the branch the ticket was actually stacked on. It mirrors how the
+// ticket was built, in priority order:
+//
+//  1. The explicitly recorded ParentBranch, if any.
+//  2. The branches of the ticket's dependencies — walking up to the nearest
+//     ancestor branch that still exists, since a dependency's leaf branch is
+//     deleted once merged into its group. Among the dependencies, the fork
+//     point nearest HEAD wins (that's the branch we're stacked directly on).
+//  3. The identifier-hierarchy parent (e.g. "proj/ticket" → "proj").
+//  4. The repository's default branch (main/master).
+//
+// Earlier tiers that don't yield a fork point fall through to later ones, so a
+// stale ParentBranch or a dependency whose branch is gone never strands the
+// separator. Returns -1 if no base could be matched.
+func resolveForkPoint(database *db.DB, commits []git.CommitEntry, worktreePath, identifier string) int {
+	var wu *models.WorkUnit
+	if database != nil {
+		wu, _ = database.GetTicket(identifier)
 	}
-	return git.DetectDefaultBranch(worktreePath)
+
+	if wu != nil {
+		// Tier 1: explicitly recorded parent branch.
+		if wu.ParentBranch != "" {
+			if idx := matchForkPoint(commits, worktreePath, wu.ParentBranch); idx >= 0 {
+				return idx
+			}
+		}
+
+		// Tier 2: dependency branches, nearest fork point to HEAD.
+		best := -1
+		for _, dep := range wu.Dependencies {
+			branch := nearestExistingBranch(worktreePath, dep)
+			if branch == "" {
+				continue
+			}
+			if idx := matchForkPoint(commits, worktreePath, branch); idx >= 0 && (best == -1 || idx < best) {
+				best = idx
+			}
+		}
+		if best >= 0 {
+			return best
+		}
+	}
+
+	// Tier 3: identifier-hierarchy parent.
+	if parent, ok := models.ParentIdentifierOf(identifier); ok {
+		branch := strings.ReplaceAll(parent, "/", "_")
+		if idx := matchForkPoint(commits, worktreePath, branch); idx >= 0 {
+			return idx
+		}
+	}
+
+	// Tier 4: repository default branch.
+	return matchForkPoint(commits, worktreePath, git.DetectDefaultBranch(worktreePath))
+}
+
+// nearestExistingBranch maps a work-unit identifier to a branch name, walking up
+// the identifier hierarchy until it finds a branch that still exists. This
+// handles dependencies whose own leaf branch has been deleted after being merged
+// into its parent group's branch (which retains the merged commit). Returns ""
+// if no branch in the chain exists.
+func nearestExistingBranch(worktreePath, identifier string) string {
+	for id := identifier; ; {
+		branch := strings.ReplaceAll(id, "/", "_")
+		if git.BranchExists(worktreePath, branch) {
+			return branch
+		}
+		parent, ok := models.ParentIdentifierOf(id)
+		if !ok {
+			return ""
+		}
+		id = parent
+	}
 }
 
 // fetchCommitsCmd fetches the commit list and fork point asynchronously.
-func fetchCommitsCmd(worktreePath, identifier string) tea.Cmd {
+func fetchCommitsCmd(database *db.DB, worktreePath, identifier string) tea.Cmd {
 	return func() tea.Msg {
 		commits, err := git.FetchCommitList(worktreePath, maxCommits)
 		if err != nil {
 			return diffCommitListMsg{forkPointIdx: -1, errMsg: err.Error()}
 		}
 
-		baseBranch := parentBranch(identifier, worktreePath)
-		forkPointIdx := matchForkPoint(commits, worktreePath, baseBranch)
+		forkPointIdx := resolveForkPoint(database, commits, worktreePath, identifier)
 
 		hasUncommit, _ := git.HasUncommittedChanges(worktreePath)
 
@@ -478,7 +542,7 @@ func (v DiffView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return v, nil
 		}
 		return v, tea.Batch(
-			fetchCommitsCmd(wp, msg.identifier),
+			fetchCommitsCmd(v.database, wp, msg.identifier),
 			fetchCRMapCmd(v.database, msg.identifier),
 		)
 
