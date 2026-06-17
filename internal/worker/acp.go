@@ -32,6 +32,11 @@ type acpWorkerClient struct {
 	phase        models.TicketPhase
 	activeStatus models.TicketStatus // status to restore when a permission request resolves
 
+	// worktree is the ticket's working directory. The external permissions
+	// checker is run here so it resolves relative paths and the project-level
+	// config against the correct git repository.
+	worktree string
+
 	// allow holds compiled rules from the worktree's .claude/settings*.json.
 	// When a permission request matches, we auto-approve without prompting,
 	// since the claude-code-acp wrapper bounces every tool call through
@@ -194,6 +199,20 @@ func (c *acpWorkerClient) RequestPermission(ctx context.Context, params acp.Requ
 				Outcome: acp.NewRequestPermissionOutcomeSelected(params.Options[0].OptionId),
 			}, nil
 		}
+	}
+
+	// Consult the external permissions checker before bothering the user. The
+	// tool-call title is the semantic operation string the checker classifies.
+	// When it approves, auto-allow with the broadest grant available so the
+	// agent doesn't re-prompt for equivalent calls. On denial, a missing
+	// binary, or any error, fall through to the interactive prompt below.
+	if approved, reason := checkPermission(ctx, c.worktree, c.identifier, title); approved {
+		c.appendOutput(fmt.Sprintf("\n=== AUTO-ALLOW (permissions-checker) ===\n%s\n\n", title))
+		if resp, ok := selectAllowAlways(params.Options); ok {
+			return resp, nil
+		}
+	} else if reason != "" {
+		c.appendOutput(fmt.Sprintf("\n=== permissions-checker denied, prompting user ===\n%s\n%s\n\n", title, reason))
 	}
 
 	// Build structured options for the TUI and a text summary for the logfile.
@@ -423,6 +442,7 @@ func runACP(
 		identifier:   params.Identifier,
 		phase:        params.Phase,
 		activeStatus: params.Status,
+		worktree:     params.WorktreePath,
 		allow:        loadAllowList(params.WorktreePath),
 		logCh:        logCh,
 	}
