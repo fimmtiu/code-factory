@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -785,17 +786,45 @@ func parseCodeLocationForDisplay(loc string) (string, int) {
 	return loc[:idx], line
 }
 
+// codeContextCache memoizes the line contents of a file at a given commit. A
+// blob at a fixed commit is immutable, so the result never needs invalidating.
+// This keeps fetchCodeContext off the git subprocess path on every re-render of
+// the ticket dialog, which would otherwise stall the UI for a second or two each
+// time a change request is selected.
+var (
+	codeContextCacheMu sync.Mutex
+	codeContextCache   = map[string][]string{}
+)
+
+// gitShowLines returns filename's contents at commitHash within worktree, split
+// into lines, or nil if the blob can't be read. Both the success and failure
+// results are cached; failures (bad path/commit) are deterministic for an
+// immutable blob, so there's no value in re-forking git for them.
+func gitShowLines(worktree, commitHash, filename string) []string {
+	key := worktree + "\x00" + commitHash + "\x00" + filename
+	codeContextCacheMu.Lock()
+	defer codeContextCacheMu.Unlock()
+	if lines, ok := codeContextCache[key]; ok {
+		return lines
+	}
+	cmd := exec.Command("git", "show", commitHash+":"+filename)
+	cmd.Dir = worktree
+	var lines []string
+	if out, err := cmd.Output(); err == nil {
+		lines = strings.Split(string(out), "\n")
+	}
+	codeContextCache[key] = lines
+	return lines
+}
+
 func fetchCodeContext(worktree, commitHash, filename string, lineNumber int) string {
 	if commitHash == "" {
 		return "(Code context unavailable)"
 	}
-	cmd := exec.Command("git", "show", commitHash+":"+filename)
-	cmd.Dir = worktree
-	out, err := cmd.Output()
-	if err != nil {
+	lines := gitShowLines(worktree, commitHash, filename)
+	if lines == nil {
 		return "(Code context unavailable)"
 	}
-	lines := strings.Split(string(out), "\n")
 	targetIdx := lineNumber - 1
 	if targetIdx < 0 {
 		targetIdx = 0
