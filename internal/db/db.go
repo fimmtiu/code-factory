@@ -1296,10 +1296,18 @@ func claimTicketRow(tx *sql.Tx, pid int) (int64, *models.WorkUnit, error) {
 			continue
 		}
 
-		// Claim the chosen ticket. The "AND claimed_by IS NULL" guard
-		// prevents overwriting a concurrent claim.
+		// Claim the chosen ticket and transition it to its active status in
+		// the same write. The "AND claimed_by IS NULL" guard prevents
+		// overwriting a concurrent claim. Setting the status atomically closes
+		// a race: a worker that died after claiming but before marking the
+		// ticket "working" used to leave it idle-but-claimed, a state
+		// RecoverOrphanedTickets does not reset, stranding the ticket
+		// permanently. An idle ticket becomes "working"; a "responding" ticket
+		// stays "responding" so the pending /cf-respond run is retried.
 		res, err := tx.Exec(`
-			UPDATE tickets SET claimed_by = ?, last_updated = ?
+			UPDATE tickets
+			SET claimed_by = ?, last_updated = ?,
+			    status = CASE WHEN status = 'idle' THEN 'working' ELSE status END
 			WHERE id = ? AND claimed_by IS NULL
 		`, pid, now, c.id)
 		if err != nil {
