@@ -333,14 +333,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if msg.String() == "5" && m.activeViewIsFiltering() {
 				break
 			}
-			m.activeView = ViewLog
-			return m, func() tea.Msg { return logActivatedMsg{} }
+			m.activeView = ViewMemories
+			return m, nil
 		case "f6", "6":
 			if msg.String() == "6" && m.activeViewIsFiltering() {
 				break
 			}
-			m.activeView = ViewMemories
-			return m, nil
+			m.activeView = ViewLog
+			return m, func() tea.Msg { return logActivatedMsg{} }
 
 		case "shift+tab":
 			m.activeView = nextView(m.activeView)

@@ -33,12 +33,12 @@ const (
 	ViewCommand
 	ViewWorker
 	ViewDiff
-	ViewLog
 	ViewMemories
+	ViewLog
 )
 
 // viewCount is the total number of views; used for tab cycling.
-const viewCount = ViewMemories + 1
+const viewCount = ViewLog + 1
 
 // viewModel is the interface that each view sub-model must satisfy.
 type viewModel interface {

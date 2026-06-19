@@ -14,8 +14,8 @@ func TestNextView_CyclesThroughAllViews(t *testing.T) {
 }
 
 func TestNextView_Order(t *testing.T) {
-	// Verify the full cycle order: Project → Command → Worker → Diffs → Log → Memories → Project.
-	want := []ViewID{ViewCommand, ViewWorker, ViewDiff, ViewLog, ViewMemories, ViewProject}
+	// Verify the full cycle order: Project → Command → Worker → Diffs → Memories → Log → Project.
+	want := []ViewID{ViewCommand, ViewWorker, ViewDiff, ViewMemories, ViewLog, ViewProject}
 	v := ViewProject
 	for i, expected := range want {
 		v = nextView(v)
@@ -36,8 +36,8 @@ func TestPrevView_CyclesThroughAllViews(t *testing.T) {
 }
 
 func TestPrevView_Order(t *testing.T) {
-	// Reverse cycle: Project → Memories → Log → Diffs → Worker → Command → Project.
-	want := []ViewID{ViewMemories, ViewLog, ViewDiff, ViewWorker, ViewCommand, ViewProject}
+	// Reverse cycle: Project → Log → Memories → Diffs → Worker → Command → Project.
+	want := []ViewID{ViewLog, ViewMemories, ViewDiff, ViewWorker, ViewCommand, ViewProject}
 	v := ViewProject
 	for i, expected := range want {
 		v = prevView(v)
@@ -48,8 +48,14 @@ func TestPrevView_Order(t *testing.T) {
 }
 
 func TestViewLog_HasCorrectValue(t *testing.T) {
-	if ViewLog != 4 {
-		t.Errorf("ViewLog = %d, want 4", ViewLog)
+	if ViewLog != 5 {
+		t.Errorf("ViewLog = %d, want 5", ViewLog)
+	}
+}
+
+func TestViewMemories_HasCorrectValue(t *testing.T) {
+	if ViewMemories != 4 {
+		t.Errorf("ViewMemories = %d, want 4", ViewMemories)
 	}
 }
 

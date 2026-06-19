@@ -453,4 +453,4 @@ func (v MemoriesView) KeyBindings() []KeyBinding {
 	}
 }
 
-func (v MemoriesView) Label() string { return "F6:Memories" }
+func (v MemoriesView) Label() string { return "F5:Memories" }
