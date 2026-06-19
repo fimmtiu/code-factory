@@ -580,7 +580,7 @@ func (v CommandView) renderListRow(row listRow, selected bool) string {
 	case row.header != "":
 		return theme.Current().DetailLabelStyle.Render(" " + row.header)
 	case row.none:
-		return theme.Current().DetailLabelStyle.Render(rowIndent + "(none)")
+		return theme.Current().EmptyStateStyle.Render(rowIndent + "(none)")
 	default:
 		return v.renderRow(row.wu, selected)
 	}
