@@ -40,12 +40,22 @@ type respondToAgentDoneMsg struct {
 
 // ── listRow ───────────────────────────────────────────────────────────────────
 
-// listRow represents one row in the command view list. If separator is true,
-// the row is a blank non-selectable divider between the two status groups.
+// listRow represents one row in the command view list. Exactly one kind of row
+// is meaningful at a time: wu marks a selectable ticket row; header marks a
+// non-selectable group heading ("Needs attention:" / "Ready for review:"); none
+// marks a non-selectable "(none)" placeholder shown when a group is empty; and
+// blank marks a non-selectable blank divider between the two groups. Only ticket
+// rows can be selected — every other kind is skipped during navigation.
 type listRow struct {
-	wu        *models.WorkUnit
-	separator bool
+	wu     *models.WorkUnit
+	header string
+	none   bool
+	blank  bool
 }
+
+// selectable reports whether the cursor can land on this row. Only ticket rows
+// are selectable; headers, placeholders, and the blank divider are skipped.
+func (r listRow) selectable() bool { return r.wu != nil }
 
 // ── CommandView ───────────────────────────────────────────────────────────────
 
@@ -106,27 +116,37 @@ func (v CommandView) tickCmd() tea.Cmd {
 
 // ── Row building ──────────────────────────────────────────────────────────────
 
-// buildRows converts the ordered ticket list into a slice of listRows with an
-// optional separator between the two status groups.
+// buildRows converts the actionable ticket list into display rows grouped under
+// a "Needs attention:" header and a "Ready for review:" header. Each group's
+// header is always present; an empty group shows a single "(none)" placeholder.
+// A blank divider separates the two groups. Headers, placeholders, and the
+// divider are all non-selectable.
 func buildRows(tickets []*models.WorkUnit) []listRow {
-	var rows []listRow
-	var hasNA, hasUR bool
+	var na, ur []*models.WorkUnit
 	for _, t := range tickets {
-		if t.Status == models.StatusNeedsAttention {
-			hasNA = true
-		} else if t.Status == models.StatusUserReview {
-			hasUR = true
+		switch t.Status {
+		case models.StatusNeedsAttention:
+			na = append(na, t)
+		case models.StatusUserReview:
+			ur = append(ur, t)
 		}
 	}
 
-	separatorInserted := false
-	for _, t := range tickets {
-		if !separatorInserted && hasNA && hasUR && t.Status == models.StatusUserReview {
-			rows = append(rows, listRow{separator: true})
-			separatorInserted = true
+	var rows []listRow
+	appendGroup := func(header string, group []*models.WorkUnit) {
+		rows = append(rows, listRow{header: header})
+		if len(group) == 0 {
+			rows = append(rows, listRow{none: true})
+			return
 		}
-		rows = append(rows, listRow{wu: t})
+		for _, t := range group {
+			rows = append(rows, listRow{wu: t})
+		}
 	}
+
+	appendGroup("Needs attention:", na)
+	rows = append(rows, listRow{blank: true})
+	appendGroup("Ready for review:", ur)
 	return rows
 }
 
@@ -149,13 +169,13 @@ func (v CommandView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Remember the currently selected ticket so we can restore it after
 		// rebuilding the row list.
 		prevID := ""
-		if v.selected < len(v.rows) && !v.rows[v.selected].separator {
+		if v.selected < len(v.rows) && v.rows[v.selected].selectable() {
 			prevID = v.rows[v.selected].wu.Identifier
 		}
 		v.rows = buildRows(msg.tickets)
 		if prevID != "" {
 			for i, row := range v.rows {
-				if !row.separator && row.wu.Identifier == prevID {
+				if row.selectable() && row.wu.Identifier == prevID {
 					v.selected = i
 					break
 				}
@@ -241,14 +261,14 @@ func (v CommandView) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (v *CommandView) moveUp(n int) {
 	for i := 0; i < n; i++ {
 		v.selected--
-		// Skip separators going upward.
-		for v.selected >= 0 && v.rows[v.selected].separator {
+		// Skip non-selectable rows going upward.
+		for v.selected >= 0 && !v.rows[v.selected].selectable() {
 			v.selected--
 		}
 		if v.selected < 0 {
 			v.selected = 0
-			// Land on first non-separator.
-			for v.selected < len(v.rows) && v.rows[v.selected].separator {
+			// Land on the first selectable row.
+			for v.selected < len(v.rows) && !v.rows[v.selected].selectable() {
 				v.selected++
 			}
 			break
@@ -261,14 +281,14 @@ func (v *CommandView) moveDown(n int) {
 	last := len(v.rows) - 1
 	for i := 0; i < n; i++ {
 		v.selected++
-		// Skip separators going downward.
-		for v.selected <= last && v.rows[v.selected].separator {
+		// Skip non-selectable rows going downward.
+		for v.selected <= last && !v.rows[v.selected].selectable() {
 			v.selected++
 		}
 		if v.selected > last {
-			// Land on last non-separator.
+			// Land on the last selectable row.
 			v.selected = last
-			for v.selected >= 0 && v.rows[v.selected].separator {
+			for v.selected >= 0 && !v.rows[v.selected].selectable() {
 				v.selected--
 			}
 			if v.selected < 0 {
@@ -291,14 +311,14 @@ func (v *CommandView) clampSelected() {
 	if v.selected < 0 {
 		v.selected = 0
 	}
-	// If we land on a separator, move forward.
-	for v.selected < len(v.rows) && v.rows[v.selected].separator {
+	// If we land on a non-selectable row, move forward.
+	for v.selected < len(v.rows) && !v.rows[v.selected].selectable() {
 		v.selected++
 	}
-	// If no non-separator found, search backward.
+	// If no selectable row was found, search backward.
 	if v.selected >= len(v.rows) {
 		v.selected = len(v.rows) - 1
-		for v.selected >= 0 && v.rows[v.selected].separator {
+		for v.selected >= 0 && !v.rows[v.selected].selectable() {
 			v.selected--
 		}
 	}
@@ -337,7 +357,7 @@ func (v CommandView) selectedTicket() *models.WorkUnit {
 		return nil
 	}
 	row := v.rows[v.selected]
-	if row.separator {
+	if !row.selectable() {
 		return nil
 	}
 	return row.wu
@@ -512,14 +532,7 @@ func (v CommandView) View() string {
 	}
 
 	for i := v.offset; i < end; i++ {
-		row := v.rows[i]
-		if row.separator {
-			sb.WriteString("\n")
-			continue
-		}
-
-		line := v.renderRow(row.wu, i == v.selected)
-		sb.WriteString(line)
+		sb.WriteString(v.renderListRow(v.rows[i], i == v.selected))
 		if i < end-1 {
 			sb.WriteString("\n")
 		}
@@ -527,12 +540,6 @@ func (v CommandView) View() string {
 	return theme.Current().ViewPaneStyle.Width(v.width - viewBorderOverhead).Height(v.listHeight()).Render(clipLines(sb.String(), v.listHeight()))
 }
 
-// renderRow formats one ticket row in tabular style:
-//
-//	<identifier>  <phase>  <status>  <N>m
-//
-// The identifier expands to fill available width; phase, status, and time are
-// right-aligned.
 // formatAge converts a duration into a human-readable age string such as
 // "just now", "45m ago", "3h 20m ago", or "1d 13h 20m ago".
 func formatAge(d time.Duration) string {
@@ -554,13 +561,46 @@ func formatAge(d time.Duration) string {
 	return fmt.Sprintf("%dm ago", mins)
 }
 
+// rowIndent is the leading whitespace before a ticket row's identifier; it
+// keeps the text clear of the left border and indents tickets under their
+// group header (which is indented by one space).
+const rowIndent = "   "
+
+// rowTrailing is the extra space appended after the timestamp so ticket text
+// doesn't butt up against the right border.
+const rowTrailing = " "
+
+// renderListRow renders a single display row: a non-selectable group header, a
+// "(none)" placeholder for an empty group, a blank divider, or a selectable
+// ticket row.
+func (v CommandView) renderListRow(row listRow, selected bool) string {
+	switch {
+	case row.blank:
+		return ""
+	case row.header != "":
+		return theme.Current().DetailLabelStyle.Render(" " + row.header)
+	case row.none:
+		return theme.Current().DetailLabelStyle.Render(rowIndent + "(none)")
+	default:
+		return v.renderRow(row.wu, selected)
+	}
+}
+
+// renderRow formats one ticket row in tabular style:
+//
+//	<identifier>  <phase>  <N>m ago<trailing>
+//
+// The identifier expands to fill available width; phase and time are
+// right-aligned. The status column is omitted because rows are grouped by
+// status under their headers.
 func (v CommandView) renderRow(wu *models.WorkUnit, selected bool) string {
 	age := formatAge(time.Since(wu.LastUpdated))
-	// Fixed-width right columns: 2 + 10 (phase) + 2 + 15 (status) + 2 + 12 (age) = 43 chars.
-	right := fmt.Sprintf("  %-10s  %-15s  %12s", wu.Phase, wu.Status, age)
+	// Fixed-width right columns: 2 + 10 (phase) + 2 + 12 (age) = 26 chars.
+	right := fmt.Sprintf("  %-10s  %12s", wu.Phase, age)
 
-	// Available width for identifier (subtract border overhead).
-	availW := v.width - viewBorderOverhead - lipgloss.Width(right)
+	// Available width for identifier, after the indent, right columns, and the
+	// trailing space before the border.
+	availW := v.width - viewBorderOverhead - lipgloss.Width(rowIndent) - lipgloss.Width(right) - lipgloss.Width(rowTrailing)
 	if availW < 1 {
 		availW = 1
 	}
@@ -582,7 +622,7 @@ func (v CommandView) renderRow(wu *models.WorkUnit, selected bool) string {
 		id += strings.Repeat(" ", availW-idW)
 	}
 
-	line := id + right
+	line := rowIndent + id + right + rowTrailing
 
 	if selected {
 		return theme.Current().CmdSelectedStyle.Width(v.width - viewBorderOverhead).Render(line)

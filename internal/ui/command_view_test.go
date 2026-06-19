@@ -84,6 +84,91 @@ func TestCommandView_GKey_DifferentPhase(t *testing.T) {
 	}
 }
 
+// ── buildRows grouping tests ─────────────────────────────────────────────────
+
+func na(id string) *models.WorkUnit {
+	return &models.WorkUnit{Identifier: id, Phase: models.PhaseImplement, Status: models.StatusNeedsAttention}
+}
+
+func ur(id string) *models.WorkUnit {
+	return &models.WorkUnit{Identifier: id, Phase: models.PhaseReview, Status: models.StatusUserReview}
+}
+
+func TestBuildRows_GroupsUnderHeaders(t *testing.T) {
+	rows := buildRows([]*models.WorkUnit{na("a"), na("b"), ur("c")})
+
+	// header, a, b, blank, header, c
+	if len(rows) != 6 {
+		t.Fatalf("expected 6 rows, got %d: %+v", len(rows), rows)
+	}
+	if rows[0].header != "Needs attention:" {
+		t.Errorf("row 0 header = %q, want %q", rows[0].header, "Needs attention:")
+	}
+	if rows[1].wu == nil || rows[1].wu.Identifier != "a" {
+		t.Errorf("row 1 should be ticket a, got %+v", rows[1])
+	}
+	if !rows[3].blank {
+		t.Errorf("row 3 should be the blank divider, got %+v", rows[3])
+	}
+	if rows[4].header != "Ready for review:" {
+		t.Errorf("row 4 header = %q, want %q", rows[4].header, "Ready for review:")
+	}
+	if rows[5].wu == nil || rows[5].wu.Identifier != "c" {
+		t.Errorf("row 5 should be ticket c, got %+v", rows[5])
+	}
+
+	// Only the three ticket rows are selectable.
+	for i, row := range rows {
+		wantSelectable := i == 1 || i == 2 || i == 5
+		if row.selectable() != wantSelectable {
+			t.Errorf("row %d selectable = %v, want %v", i, row.selectable(), wantSelectable)
+		}
+	}
+}
+
+func TestBuildRows_EmptyGroupsShowNone(t *testing.T) {
+	rows := buildRows(nil)
+
+	// header, none, blank, header, none
+	if len(rows) != 5 {
+		t.Fatalf("expected 5 rows, got %d: %+v", len(rows), rows)
+	}
+	if rows[0].header != "Needs attention:" || !rows[1].none {
+		t.Errorf("expected NA header then (none), got %+v, %+v", rows[0], rows[1])
+	}
+	if !rows[2].blank {
+		t.Errorf("row 2 should be the blank divider, got %+v", rows[2])
+	}
+	if rows[3].header != "Ready for review:" || !rows[4].none {
+		t.Errorf("expected UR header then (none), got %+v, %+v", rows[3], rows[4])
+	}
+	for i, row := range rows {
+		if row.selectable() {
+			t.Errorf("row %d (%+v) should not be selectable", i, row)
+		}
+	}
+}
+
+func TestCommandView_NavigationSkipsNonSelectableRows(t *testing.T) {
+	v := CommandView{width: 120, height: 40}
+	v.rows = buildRows([]*models.WorkUnit{na("a"), ur("b")})
+	// rows: 0 header, 1 a, 2 blank, 3 header, 4 b
+	v.clampSelected()
+	if v.selected != 1 {
+		t.Fatalf("clampSelected should land on first ticket (index 1), got %d", v.selected)
+	}
+
+	v.moveDown(1)
+	if v.selected != 4 {
+		t.Errorf("moveDown should skip blank+header and land on ticket b (index 4), got %d", v.selected)
+	}
+
+	v.moveUp(1)
+	if v.selected != 1 {
+		t.Errorf("moveUp should skip header+blank and land on ticket a (index 1), got %d", v.selected)
+	}
+}
+
 // ── KeyBinding description tests ─────────────────────────────────────────────
 
 func TestCommandView_KeyBindings_GDescription(t *testing.T) {
