@@ -126,6 +126,31 @@ func (d *DB) ListMemories() ([]Memory, error) {
 	return scanMemories(rows)
 }
 
+// UpdateMemory changes the kind and text of an existing memory, leaving its
+// scope and source ticket untouched. kind defaults to "lesson" when blank.
+// Returns an error if no row matched, so curation tooling can detect stale ids.
+func (d *DB) UpdateMemory(id int64, kind, text string) error {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return fmt.Errorf("UpdateMemory: text must not be empty")
+	}
+	if strings.TrimSpace(kind) == "" {
+		kind = "lesson"
+	}
+	res, err := d.db.Exec(`UPDATE memories SET kind = ?, text = ? WHERE id = ?`, kind, text, id)
+	if err != nil {
+		return fmt.Errorf("UpdateMemory: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("UpdateMemory: %w", err)
+	}
+	if n == 0 {
+		return fmt.Errorf("UpdateMemory: no memory with id %d", id)
+	}
+	return nil
+}
+
 // DeleteMemory removes a memory by id. Returns an error if no row matched, so
 // curation tooling can detect stale ids.
 func (d *DB) DeleteMemory(id int64) error {

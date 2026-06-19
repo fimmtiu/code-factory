@@ -120,6 +120,50 @@ func TestMemoriesView_UpDownMovesSelectionInListFocus(t *testing.T) {
 	}
 }
 
+func TestMemoriesView_AddKeyOpensDialogEvenWhenEmpty(t *testing.T) {
+	d := openUITestDB(t)
+	v := seedMemoriesView(t, d)
+	if len(v.memories) != 0 {
+		t.Fatalf("expected an empty view, got %d memories", len(v.memories))
+	}
+
+	_, cmd := v.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("A")})
+	var open *openMemoryDialogMsg
+	for _, m := range runMsgChain(cmd) {
+		if om, ok := m.(openMemoryDialogMsg); ok {
+			open = &om
+		}
+	}
+	if open == nil {
+		t.Fatalf("A did not emit openMemoryDialogMsg")
+	}
+	if open.existing != nil {
+		t.Errorf("add dialog should carry no existing memory, got %+v", open.existing)
+	}
+}
+
+func TestMemoriesView_EditKeyOpensDialogForSelected(t *testing.T) {
+	d := openUITestDB(t)
+	if _, err := d.AddMemory("", "lesson", "editable", "T-1"); err != nil {
+		t.Fatalf("AddMemory: %v", err)
+	}
+	v := seedMemoriesView(t, d)
+
+	_, cmd := v.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("E")})
+	var open *openMemoryDialogMsg
+	for _, m := range runMsgChain(cmd) {
+		if om, ok := m.(openMemoryDialogMsg); ok {
+			open = &om
+		}
+	}
+	if open == nil {
+		t.Fatalf("E did not emit openMemoryDialogMsg")
+	}
+	if open.existing == nil || open.existing.Text != "editable" {
+		t.Errorf("edit dialog should carry the selected memory, got %+v", open.existing)
+	}
+}
+
 func TestMemoriesView_DeleteKeyOpensDialogThenDeletes(t *testing.T) {
 	d := openUITestDB(t)
 	id, err := d.AddMemory("", "lesson", "doomed", "T-1")

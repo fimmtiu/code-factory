@@ -106,11 +106,25 @@ func (v MemoriesView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Reload so the deleted row disappears and the selection re-clamps.
 		return v, v.fetchCmd()
 
+	case memorySavedMsg:
+		// A newly added memory sorts to the top; surface it by selecting it.
+		if msg.err == nil && !msg.edited {
+			v.selected = 0
+			v.listOffset = 0
+		}
+		return v, v.fetchCmd()
+
 	case tea.KeyMsg:
+		// Adding a memory is possible even when the list is empty.
+		if msg.String() == "a" || msg.String() == "A" {
+			return v.openAddDialog()
+		}
 		if len(v.memories) == 0 {
 			return v, nil
 		}
 		switch msg.String() {
+		case "e", "E":
+			return v.openEditDialog()
 		case "left":
 			v.focus = memFocusList
 		case "right":
@@ -146,6 +160,22 @@ func (v MemoriesView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	return v, nil
+}
+
+// openAddDialog asks the root model to open the dialog for adding a new
+// repository-wide memory.
+func (v MemoriesView) openAddDialog() (tea.Model, tea.Cmd) {
+	return v, func() tea.Msg { return openMemoryDialogMsg{existing: nil} }
+}
+
+// openEditDialog asks the root model to open the dialog for editing the
+// currently selected memory.
+func (v MemoriesView) openEditDialog() (tea.Model, tea.Cmd) {
+	if v.selected >= len(v.memories) {
+		return v, nil
+	}
+	m := v.memories[v.selected]
+	return v, func() tea.Msg { return openMemoryDialogMsg{existing: &m} }
 }
 
 // openDeleteDialog asks the root model to confirm deletion of the selected memory.
@@ -417,6 +447,8 @@ func (v MemoriesView) KeyBindings() []KeyBinding {
 		{Key: "↑/↓", Description: "Navigate list / scroll detail"},
 		{Key: "←/→", Description: "Switch focus between list and detail pane"},
 		{Key: "PgUp/PgDn", Description: "Page navigate / scroll"},
+		{Key: "A", Description: "Add a new memory"},
+		{Key: "E", Description: "Edit selected memory"},
 		{Key: "X", Description: "Delete selected memory"},
 	}
 }

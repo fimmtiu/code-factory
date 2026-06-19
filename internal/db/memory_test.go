@@ -67,6 +67,54 @@ func TestMemory_DeleteUnknownIDErrors(t *testing.T) {
 	}
 }
 
+func TestMemory_UpdateChangesKindAndTextKeepingScope(t *testing.T) {
+	d, _, _ := openTestDB(t)
+	id, err := d.AddMemory("proj/server", "lesson", "original text", "ticket-1")
+	if err != nil {
+		t.Fatalf("AddMemory: %v", err)
+	}
+
+	if err := d.UpdateMemory(id, "gotcha", "revised text"); err != nil {
+		t.Fatalf("UpdateMemory: %v", err)
+	}
+
+	all, err := d.ListMemories()
+	if err != nil {
+		t.Fatalf("ListMemories: %v", err)
+	}
+	if len(all) != 1 {
+		t.Fatalf("expected 1 memory, got %d", len(all))
+	}
+	m := all[0]
+	if m.Kind != "gotcha" || m.Text != "revised text" {
+		t.Errorf("update not applied: kind=%q text=%q", m.Kind, m.Text)
+	}
+	if m.Scope != "proj/server" {
+		t.Errorf("scope changed: got %q, want %q", m.Scope, "proj/server")
+	}
+	if m.SourceTicket != "ticket-1" {
+		t.Errorf("source ticket changed: got %q, want %q", m.SourceTicket, "ticket-1")
+	}
+}
+
+func TestMemory_UpdateUnknownIDErrors(t *testing.T) {
+	d, _, _ := openTestDB(t)
+	if err := d.UpdateMemory(999, "note", "text"); err == nil {
+		t.Error("expected error updating nonexistent memory id")
+	}
+}
+
+func TestMemory_UpdateRejectsEmptyText(t *testing.T) {
+	d, _, _ := openTestDB(t)
+	id, err := d.AddMemory("", "lesson", "original", "")
+	if err != nil {
+		t.Fatalf("AddMemory: %v", err)
+	}
+	if err := d.UpdateMemory(id, "note", "   "); err == nil {
+		t.Error("expected error updating memory to empty text")
+	}
+}
+
 func TestMemory_AddRejectsEmptyText(t *testing.T) {
 	d, _, _ := openTestDB(t)
 	if _, err := d.AddMemory("", "lesson", "   ", ""); err == nil {

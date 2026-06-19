@@ -189,6 +189,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.dialog = NewPhasePickerDialog(m.db, msg.wu)
 		return m, nil
 
+	case openMemoryDialogMsg:
+		m.dialog = NewMemoryDialog(m.db, msg.existing, m.width)
+		return m, nil
+
+	case memorySavedMsg:
+		var cmds []tea.Cmd
+		switch {
+		case msg.err != nil:
+			cmds = append(cmds, ShowNotification("Memory save failed: "+msg.err.Error()))
+		case msg.edited:
+			cmds = append(cmds, ShowNotification("Memory updated"))
+		default:
+			cmds = append(cmds, ShowNotification("Memory added"))
+		}
+		updated, cmd := m.views[ViewMemories].Update(msg)
+		m.views[ViewMemories] = updated.(viewModel)
+		if cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+		return m, tea.Batch(cmds...)
+
 	case openDeleteMemoryDialogMsg:
 		m.dialog = NewDeleteMemoryDialog(m.db, msg.id, msg.label)
 		return m, nil
@@ -410,7 +431,7 @@ func (m Model) View() string {
 				rightPairs = dv.HintPairs()
 			}
 		case ViewMemories:
-			rightPairs = []string{"↑↓", "navigate", "←→", "switch pane", "X", "delete"}
+			rightPairs = []string{"↑↓", "navigate", "←→", "switch pane", "A", "add", "E", "edit", "X", "delete"}
 		}
 		if len(rightPairs) > 0 {
 			right := theme.Current().HelpHintStyle.Render(buildHint(rightPairs...))
