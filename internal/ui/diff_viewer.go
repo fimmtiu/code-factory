@@ -244,6 +244,15 @@ func (m *DiffViewerModel) nearestSelectable(start, lo, hi int) int {
 	if lo < 0 {
 		lo = 0
 	}
+	// Clamp start into [lo, hi). When the diff content is shorter than half the
+	// pane, callers pass a start (the pane midpoint) past the end of the content;
+	// the bounded outward search below would then never reach the content window.
+	if start < lo {
+		start = lo
+	}
+	if start >= hi {
+		start = hi - 1
+	}
 	for d := 0; d < hi-lo; d++ {
 		up := start - d
 		down := start + d

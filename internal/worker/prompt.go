@@ -108,32 +108,57 @@ func BuildPrompt(ticket *models.WorkUnit, database *db.DB, ticketsDir string) (s
 	return prompt + memory, nil
 }
 
-// buildMemorySection formats the repository memories in scope for identifier
-// into a prompt section, or returns "" when there are none. Memories are
-// presented as fallible hints: a wrong lesson would otherwise propagate to
-// every future ticket, so the agent is told to verify before relying on them.
+// buildMemorySection returns the repository-memory portion of a prompt: the
+// in-scope memories for identifier (when any exist) followed by an instruction
+// telling the agent how to record new ones. Existing memories are presented as
+// fallible hints — a wrong lesson would otherwise propagate to every future
+// ticket — so the agent is told to verify before relying on them.
 func buildMemorySection(database *db.DB, identifier string) (string, error) {
 	memories, err := database.MemoriesForIdentifier(identifier, db.DefaultMemoryLimit)
 	if err != nil {
 		return "", fmt.Errorf("BuildPrompt: get memories: %w", err)
 	}
-	if len(memories) == 0 {
-		return "", nil
-	}
 
 	var b strings.Builder
-	b.WriteString("\n\n### Repository memory\n\n")
-	b.WriteString("Lessons, patterns, and notes recorded by earlier tickets. Treat them as " +
-		"fallible hints, not rules — verify any file, symbol, or command they name still " +
-		"exists and applies before relying on it.\n")
-	for _, m := range memories {
-		scope := m.Scope
-		if scope == "" {
-			scope = "repository-wide"
+	if len(memories) > 0 {
+		b.WriteString("\n\n### Repository memory\n\n")
+		b.WriteString("Lessons, patterns, and notes recorded by earlier tickets. Treat them as " +
+			"fallible hints, not rules — verify any file, symbol, or command they name still " +
+			"exists and applies before relying on it.\n")
+		for _, m := range memories {
+			scope := m.Scope
+			if scope == "" {
+				scope = "repository-wide"
+			}
+			b.WriteString(fmt.Sprintf("\n- [%s] (scope: %s) %s", m.Kind, scope, m.Text))
 		}
-		b.WriteString(fmt.Sprintf("\n- [%s] (scope: %s) %s", m.Kind, scope, m.Text))
 	}
+
+	b.WriteString(memoryCaptureInstruction(identifier))
 	return b.String(), nil
+}
+
+// memoryCaptureInstruction tells the agent to record durable, cross-ticket
+// lessons via the cf-memory CLI before finishing. It is appended to every
+// phase's prompt. The suggested --scope defaults to the ticket's parent project
+// so a lesson reaches sibling tickets without leaking repository-wide.
+func memoryCaptureInstruction(identifier string) string {
+	scopeFlag := "--scope " + identifier
+	scopeGuidance := "this ticket's identifier prefix"
+	if parent, ok := models.ParentIdentifierOf(identifier); ok {
+		scopeFlag = "--scope " + parent
+		scopeGuidance = fmt.Sprintf("the project it applies to (e.g. `%s`)", parent)
+	}
+
+	return fmt.Sprintf("\n\n### Recording lessons for future tickets\n\n"+
+		"If you learned something durable that would help future tickets in this codebase "+
+		"— a non-obvious gotcha, a reusable pattern, or a project convention — record it before "+
+		"you finish:\n\n"+
+		"```\ncf-memory add %s --kind <lesson|pattern|gotcha|note> --source %s \"<one concise sentence>\"\n```\n\n"+
+		"Scope it to %s; omit `--scope` only for facts true across the entire repository. "+
+		"Record at most a few high-value, generalizable notes, and skip anything ticket-specific, "+
+		"obvious, routine, or already listed in the repository memory above.",
+		scopeFlag, identifier, scopeGuidance)
 }
 
 // buildSkillPrompt assembles a prompt that inlines the named skill's SKILL.md

@@ -482,7 +482,33 @@ func TestBuildPrompt_NoMemorySectionWhenEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildPrompt: %v", err)
 	}
+	// No existing memories => no read section...
 	if strings.Contains(prompt, "Repository memory") {
-		t.Error("did not expect a memory section when no memories exist")
+		t.Error("did not expect a memory read section when no memories exist")
+	}
+	// ...but the capture instruction is always present.
+	if !strings.Contains(prompt, "Recording lessons for future tickets") {
+		t.Error("expected the memory capture instruction even with no memories")
+	}
+	if !strings.Contains(prompt, "cf-memory add") {
+		t.Error("expected the cf-memory add command in the capture instruction")
+	}
+}
+
+func TestBuildPrompt_CaptureInstructionSuggestsParentScope(t *testing.T) {
+	d, ticketsDir := openTestDB(t)
+	createProject(t, d, "proj")
+	createTicket(t, d, "proj/sub")
+
+	ticket := buildPromptTicket("proj/sub", "Do the thing", models.PhaseImplement)
+	prompt, err := worker.BuildPrompt(ticket, d, ticketsDir)
+	if err != nil {
+		t.Fatalf("BuildPrompt: %v", err)
+	}
+	if !strings.Contains(prompt, "--scope proj ") {
+		t.Error("expected capture instruction to suggest the parent project as scope")
+	}
+	if !strings.Contains(prompt, "--source proj/sub") {
+		t.Error("expected capture instruction to set --source to the ticket identifier")
 	}
 }

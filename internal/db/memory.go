@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -12,6 +13,11 @@ import (
 // DefaultMemoryLimit caps how many memories are injected into a single prompt
 // so repository memory can't crowd out the rest of the agent's context.
 const DefaultMemoryLimit = 20
+
+// DefaultMaxPerScope caps how many memories are retained per scope. AddMemory
+// enforces it on every insert (mirroring InsertLog's log pruning) so the store
+// is self-limiting; PruneMemories applies it across all scopes on demand.
+const DefaultMaxPerScope = 50
 
 // Memory is a cross-ticket lesson, pattern, or note recorded by an agent and
 // replayed into the prompts of later tickets within its scope.
@@ -45,7 +51,16 @@ func (d *DB) AddMemory(scope, kind, text, sourceTicket string) (int64, error) {
 		if err != nil {
 			return err
 		}
-		id, err = res.LastInsertId()
+		if id, err = res.LastInsertId(); err != nil {
+			return err
+		}
+		// Keep the store self-limiting: drop the oldest entries in this scope
+		// beyond the cap, the same way InsertLog prunes the logs table.
+		_, err = tx.Exec(`
+			DELETE FROM memories WHERE scope = ? AND id NOT IN (
+				SELECT id FROM memories WHERE scope = ?
+				ORDER BY created_at DESC, id DESC LIMIT ?
+			)`, scope, scope, DefaultMaxPerScope)
 		return err
 	})
 	if err != nil {
@@ -126,6 +141,101 @@ func (d *DB) DeleteMemory(id int64) error {
 		return fmt.Errorf("DeleteMemory: no memory with id %d", id)
 	}
 	return nil
+}
+
+// PruneResult reports what a PruneMemories pass removed, broken down by the
+// rule that triggered each removal.
+type PruneResult struct {
+	Duplicates int     `json:"duplicates"` // same scope + text as a newer memory
+	AgedOut    int     `json:"aged_out"`   // older than maxAge
+	OverCap    int     `json:"over_cap"`   // beyond maxPerScope within a scope
+	Deleted    []int64 `json:"deleted"`    // ids removed (empty on a dry run)
+}
+
+// PruneMemories curates the store by removing, in order: exact duplicates
+// (same scope and normalized text, keeping the newest), memories older than
+// maxAge (when > 0), and memories beyond maxPerScope within each scope (when
+// > 0, keeping the newest). When dryRun is true it reports the counts without
+// deleting anything. Each removed memory is counted under a single rule.
+func (d *DB) PruneMemories(maxPerScope int, maxAge time.Duration, dryRun bool) (PruneResult, error) {
+	all, err := d.ListMemories() // newest-first
+	if err != nil {
+		return PruneResult{}, err
+	}
+
+	var res PruneResult
+	deleting := make(map[int64]bool)
+
+	// 1. Dedup: newest occurrence of each (scope, normalized text) wins.
+	seen := make(map[string]bool)
+	survivors := make([]Memory, 0, len(all))
+	for _, m := range all {
+		key := m.Scope + "\x00" + normalizeText(m.Text)
+		if seen[key] {
+			deleting[m.ID] = true
+			res.Duplicates++
+			continue
+		}
+		seen[key] = true
+		survivors = append(survivors, m)
+	}
+
+	// 2. Age out survivors older than the cutoff.
+	if maxAge > 0 {
+		cutoff := time.Now().Add(-maxAge).Unix()
+		kept := survivors[:0]
+		for _, m := range survivors {
+			if m.CreatedAt.Unix() < cutoff {
+				deleting[m.ID] = true
+				res.AgedOut++
+				continue
+			}
+			kept = append(kept, m)
+		}
+		survivors = kept
+	}
+
+	// 3. Per-scope cap. survivors stays newest-first, so within each scope the
+	// entries past the cap are the oldest.
+	if maxPerScope > 0 {
+		perScope := make(map[string]int)
+		for _, m := range survivors {
+			perScope[m.Scope]++
+			if perScope[m.Scope] > maxPerScope {
+				deleting[m.ID] = true
+				res.OverCap++
+			}
+		}
+	}
+
+	if dryRun || len(deleting) == 0 {
+		return res, nil
+	}
+
+	ids := make([]int64, 0, len(deleting))
+	for id := range deleting {
+		ids = append(ids, id)
+	}
+	slices.Sort(ids)
+
+	if err := d.withTx(func(tx *sql.Tx) error {
+		for _, id := range ids {
+			if _, err := tx.Exec(`DELETE FROM memories WHERE id = ?`, id); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		return PruneResult{}, fmt.Errorf("PruneMemories: %w", err)
+	}
+	res.Deleted = ids
+	return res, nil
+}
+
+// normalizeText canonicalizes memory text for duplicate detection: lowercased
+// with runs of whitespace collapsed to single spaces.
+func normalizeText(s string) string {
+	return strings.ToLower(strings.Join(strings.Fields(s), " "))
 }
 
 // scanMemories materializes a memories result set.

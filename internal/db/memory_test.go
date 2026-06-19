@@ -1,6 +1,7 @@
 package db_test
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/fimmtiu/code-factory/internal/db"
@@ -70,6 +71,67 @@ func TestMemory_AddRejectsEmptyText(t *testing.T) {
 	d, _, _ := openTestDB(t)
 	if _, err := d.AddMemory("", "lesson", "   ", ""); err == nil {
 		t.Error("expected error adding memory with empty text")
+	}
+}
+
+func TestPruneMemories_DedupKeepsNewest(t *testing.T) {
+	d, _, _ := openTestDB(t)
+	mustAdd(t, d, "proj", "lesson", "Always run make lint")
+	mustAdd(t, d, "proj", "lesson", "always   run MAKE lint") // normalizes to the same text
+	mustAdd(t, d, "proj", "lesson", "a different lesson")
+
+	res, err := d.PruneMemories(0, 0, false)
+	if err != nil {
+		t.Fatalf("PruneMemories: %v", err)
+	}
+	if res.Duplicates != 1 {
+		t.Errorf("expected 1 duplicate removed, got %d", res.Duplicates)
+	}
+	if got := textsFor(t, d, "proj/ticket"); len(got) != 2 {
+		t.Fatalf("expected 2 memories after dedup, got %d: %v", len(got), got)
+	}
+}
+
+func TestPruneMemories_PerScopeCap(t *testing.T) {
+	d, _, _ := openTestDB(t)
+	for i := 0; i < 4; i++ {
+		mustAdd(t, d, "proj", "note", fmt.Sprintf("note %d", i))
+	}
+	mustAdd(t, d, "other", "note", "keep me")
+
+	res, err := d.PruneMemories(2, 0, false)
+	if err != nil {
+		t.Fatalf("PruneMemories: %v", err)
+	}
+	if res.OverCap != 2 {
+		t.Errorf("expected 2 over-cap removed, got %d", res.OverCap)
+	}
+	all, err := d.ListMemories()
+	if err != nil {
+		t.Fatalf("ListMemories: %v", err)
+	}
+	if len(all) != 3 { // proj keeps newest 2, other keeps its 1
+		t.Errorf("expected 3 memories remaining, got %d", len(all))
+	}
+}
+
+func TestPruneMemories_DryRunDeletesNothing(t *testing.T) {
+	d, _, _ := openTestDB(t)
+	mustAdd(t, d, "proj", "note", "dup")
+	mustAdd(t, d, "proj", "note", "dup")
+
+	res, err := d.PruneMemories(0, 0, true)
+	if err != nil {
+		t.Fatalf("PruneMemories: %v", err)
+	}
+	if res.Duplicates != 1 {
+		t.Errorf("expected dry run to report 1 duplicate, got %d", res.Duplicates)
+	}
+	if len(res.Deleted) != 0 {
+		t.Errorf("expected dry run to delete nothing, got %v", res.Deleted)
+	}
+	if all, _ := d.ListMemories(); len(all) != 2 {
+		t.Errorf("expected both memories to remain after dry run, got %d", len(all))
 	}
 }
 

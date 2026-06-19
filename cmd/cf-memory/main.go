@@ -37,5 +37,9 @@ Subcommands:
       --source <id>    Ticket identifier that authored it
   list [flags]         List memories as JSON
       --scope <id>     Show only the memories a ticket/project at <id> would receive
-  rm <id>              Delete a memory by id`)
+  rm <id>              Delete a memory by id
+  prune [flags]        Curate the store: drop duplicates, aged-out, and over-cap entries
+      --max-per-scope N  Keep at most N newest per scope (default 50; 0 disables)
+      --max-age DAYS     Remove memories older than DAYS (0 disables)
+      --dry-run          Report what would be removed without deleting`)
 }
