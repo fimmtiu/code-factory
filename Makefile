@@ -9,7 +9,7 @@ lint:
 	gofmt -w .
 
 clean:
-	rm -f cf-tickets cf-testdata code-factory
+	rm -f cf-tickets cf-testdata code-factory cf-memory
 
 clean-data:
 	rm -rf .code-factory
@@ -17,7 +17,7 @@ clean-data:
 INSTALL_DIR ?= $(HOME)/bin
 
 install: build
-	GOBIN=$(INSTALL_DIR) go install ./cmd/cf-tickets ./cmd/cf-testdata ./cmd/code-factory
+	GOBIN=$(INSTALL_DIR) go install ./cmd/cf-tickets ./cmd/cf-testdata ./cmd/code-factory ./cmd/cf-memory
 	for skill in skills/*; do \
 		cp -rf $$skill $(HOME)/.claude/skills/; \
 	done

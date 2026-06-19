@@ -18,8 +18,16 @@ func BuildPrompt(ticket *models.WorkUnit, database *db.DB, ticketsDir string) (s
 	identifier := ticket.Identifier
 	worktreePath := storage.TicketWorktreePathIn(ticketsDir, identifier)
 
+	// Repository memory applies to every phase, so build it once and append it
+	// to whatever phase-specific prompt we produce below.
+	memory, err := buildMemorySection(database, identifier)
+	if err != nil {
+		return "", err
+	}
+
 	if ticket.Status == models.StatusResponding {
-		return buildSkillPrompt("cf-respond", worktreePath, identifier)
+		p, err := buildSkillPrompt("cf-respond", worktreePath, identifier)
+		return p + memory, err
 	}
 
 	var prompt string
@@ -86,16 +94,46 @@ func BuildPrompt(ticket *models.WorkUnit, database *db.DB, ticketsDir string) (s
 		}
 
 	case models.PhaseRefactor:
-		return buildSkillPrompt("cf-refactor", worktreePath, identifier)
+		p, err := buildSkillPrompt("cf-refactor", worktreePath, identifier)
+		return p + memory, err
 
 	case models.PhaseReview:
-		return buildSkillPrompt("cf-review", worktreePath, identifier)
+		p, err := buildSkillPrompt("cf-review", worktreePath, identifier)
+		return p + memory, err
 
 	default:
 		return "", fmt.Errorf("BuildPrompt: unsupported ticket phase %q", ticket.Phase)
 	}
 
-	return prompt, nil
+	return prompt + memory, nil
+}
+
+// buildMemorySection formats the repository memories in scope for identifier
+// into a prompt section, or returns "" when there are none. Memories are
+// presented as fallible hints: a wrong lesson would otherwise propagate to
+// every future ticket, so the agent is told to verify before relying on them.
+func buildMemorySection(database *db.DB, identifier string) (string, error) {
+	memories, err := database.MemoriesForIdentifier(identifier, db.DefaultMemoryLimit)
+	if err != nil {
+		return "", fmt.Errorf("BuildPrompt: get memories: %w", err)
+	}
+	if len(memories) == 0 {
+		return "", nil
+	}
+
+	var b strings.Builder
+	b.WriteString("\n\n### Repository memory\n\n")
+	b.WriteString("Lessons, patterns, and notes recorded by earlier tickets. Treat them as " +
+		"fallible hints, not rules — verify any file, symbol, or command they name still " +
+		"exists and applies before relying on it.\n")
+	for _, m := range memories {
+		scope := m.Scope
+		if scope == "" {
+			scope = "repository-wide"
+		}
+		b.WriteString(fmt.Sprintf("\n- [%s] (scope: %s) %s", m.Kind, scope, m.Text))
+	}
+	return b.String(), nil
 }
 
 // buildSkillPrompt assembles a prompt that inlines the named skill's SKILL.md

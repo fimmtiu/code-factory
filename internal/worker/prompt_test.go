@@ -418,3 +418,71 @@ func TestBuildPrompt_RefactorDoesNotIncludeWriteScope(t *testing.T) {
 		t.Error("expected refactor prompt to NOT contain write_scope")
 	}
 }
+
+func TestBuildPrompt_ImplementIncludesScopedMemory(t *testing.T) {
+	d, ticketsDir := openTestDB(t)
+	createProject(t, d, "proj")
+	createTicket(t, d, "proj/ticket-1")
+
+	if _, err := d.AddMemory("proj", "gotcha", "rake compile needs Linux/Docker", ""); err != nil {
+		t.Fatalf("AddMemory: %v", err)
+	}
+	if _, err := d.AddMemory("other", "lesson", "should not appear", ""); err != nil {
+		t.Fatalf("AddMemory: %v", err)
+	}
+
+	ticket := buildPromptTicket("proj/ticket-1", "Do the thing", models.PhaseImplement)
+	prompt, err := worker.BuildPrompt(ticket, d, ticketsDir)
+	if err != nil {
+		t.Fatalf("BuildPrompt: %v", err)
+	}
+
+	if !strings.Contains(prompt, "Repository memory") {
+		t.Error("expected memory section heading in implement prompt")
+	}
+	if !strings.Contains(prompt, "rake compile needs Linux/Docker") {
+		t.Error("expected in-scope memory text in prompt")
+	}
+	if strings.Contains(prompt, "should not appear") {
+		t.Error("out-of-scope memory leaked into prompt")
+	}
+}
+
+func TestBuildPrompt_SkillPhaseIncludesMemory(t *testing.T) {
+	installFakeSkill(t, "cf-refactor", "Refactor body")
+	d, ticketsDir := openTestDB(t)
+	createProject(t, d, "proj")
+	createTicket(t, d, "proj/refac")
+
+	if _, err := d.AddMemory("", "pattern", "prefer table-driven tests here", ""); err != nil {
+		t.Fatalf("AddMemory: %v", err)
+	}
+
+	ticket := buildPromptTicket("proj/refac", "Refactor something", models.PhaseRefactor)
+	prompt, err := worker.BuildPrompt(ticket, d, ticketsDir)
+	if err != nil {
+		t.Fatalf("BuildPrompt: %v", err)
+	}
+
+	if !strings.Contains(prompt, "Repository memory") {
+		t.Error("expected memory section in refactor (skill) prompt")
+	}
+	if !strings.Contains(prompt, "prefer table-driven tests here") {
+		t.Error("expected global memory text in skill prompt")
+	}
+}
+
+func TestBuildPrompt_NoMemorySectionWhenEmpty(t *testing.T) {
+	d, ticketsDir := openTestDB(t)
+	createProject(t, d, "proj")
+	createTicket(t, d, "proj/ticket-1")
+
+	ticket := buildPromptTicket("proj/ticket-1", "Do the thing", models.PhaseImplement)
+	prompt, err := worker.BuildPrompt(ticket, d, ticketsDir)
+	if err != nil {
+		t.Fatalf("BuildPrompt: %v", err)
+	}
+	if strings.Contains(prompt, "Repository memory") {
+		t.Error("did not expect a memory section when no memories exist")
+	}
+}

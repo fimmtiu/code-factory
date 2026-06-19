@@ -223,6 +223,19 @@ var schemaStatements = []string{
 		"logfile" text
 	)`,
 	`CREATE INDEX IF NOT EXISTS "idx_logs_timestamp" ON "logs"("timestamp")`,
+	// memories holds cross-ticket lessons, patterns, and notes. scope is an
+	// identifier prefix the memory applies to ('' = repository-global); a memory
+	// is injected into a ticket's prompt when its scope is the ticket itself or
+	// any ancestor in the identifier tree. source_ticket records who authored it.
+	`CREATE TABLE IF NOT EXISTS "memories" (
+		"id" integer PRIMARY KEY,
+		"scope" text NOT NULL DEFAULT '',
+		"kind" text NOT NULL DEFAULT 'lesson',
+		"text" text NOT NULL,
+		"source_ticket" text NOT NULL DEFAULT '',
+		"created_at" integer NOT NULL
+	)`,
+	`CREATE INDEX IF NOT EXISTS "idx_memories_scope" ON "memories"("scope")`,
 }
 
 // migrations are ALTER TABLE statements run after the schema is created to
