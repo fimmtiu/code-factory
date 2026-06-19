@@ -25,7 +25,7 @@ func buildHint(pairs ...string) string {
 // viewBorderOverhead is the number of rows (and columns) consumed by viewPaneStyle.
 const viewBorderOverhead = 2
 
-// ViewID is an enum for the five main views.
+// ViewID is an enum for the main views.
 type ViewID int
 
 const (
@@ -34,10 +34,11 @@ const (
 	ViewWorker
 	ViewDiff
 	ViewLog
+	ViewMemories
 )
 
 // viewCount is the total number of views; used for tab cycling.
-const viewCount = ViewLog + 1
+const viewCount = ViewMemories + 1
 
 // viewModel is the interface that each view sub-model must satisfy.
 type viewModel interface {

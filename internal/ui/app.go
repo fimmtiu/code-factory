@@ -60,11 +60,12 @@ func NewModel(pool *worker.Pool, database *db.DB, waitSecs int) Model {
 		db:         database,
 		activeView: ViewProject,
 		views: [viewCount]viewModel{
-			ViewProject: NewProjectView(database, waitSecs),
-			ViewCommand: NewCommandView(database, pool, waitSecs),
-			ViewWorker:  NewWorkerView(pool),
-			ViewLog:     NewLogView(database),
-			ViewDiff:    NewDiffView(database),
+			ViewProject:  NewProjectView(database, waitSecs),
+			ViewCommand:  NewCommandView(database, pool, waitSecs),
+			ViewWorker:   NewWorkerView(pool),
+			ViewLog:      NewLogView(database),
+			ViewDiff:     NewDiffView(database),
+			ViewMemories: NewMemoriesView(database),
 		},
 	}
 }
@@ -188,6 +189,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.dialog = NewPhasePickerDialog(m.db, msg.wu)
 		return m, nil
 
+	case openDeleteMemoryDialogMsg:
+		m.dialog = NewDeleteMemoryDialog(m.db, msg.id, msg.label)
+		return m, nil
+
+	case memoryDeletedMsg:
+		var cmds []tea.Cmd
+		if msg.err != nil {
+			cmds = append(cmds, ShowNotification("Delete failed: "+msg.err.Error()))
+		} else {
+			cmds = append(cmds, ShowNotification("Memory deleted"))
+		}
+		// Reload the Memories view so the deleted row disappears.
+		updated, cmd := m.views[ViewMemories].Update(msg)
+		m.views[ViewMemories] = updated.(viewModel)
+		if cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+		return m, tea.Batch(cmds...)
+
 	case openEditChangeRequestDialogMsg:
 		m.dialog = NewEditChangeRequestDialog(m.db, msg.location, msg.existingCR, m.width)
 		return m, nil
@@ -294,6 +314,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.activeView = ViewLog
 			return m, func() tea.Msg { return logActivatedMsg{} }
+		case "f6", "6":
+			if msg.String() == "6" && m.activeViewIsFiltering() {
+				break
+			}
+			m.activeView = ViewMemories
+			return m, nil
 
 		case "shift+tab":
 			m.activeView = nextView(m.activeView)
@@ -383,6 +409,8 @@ func (m Model) View() string {
 			if dv, ok := m.views[ViewDiff].(DiffView); ok {
 				rightPairs = dv.HintPairs()
 			}
+		case ViewMemories:
+			rightPairs = []string{"↑↓", "navigate", "←→", "switch pane", "X", "delete"}
 		}
 		if len(rightPairs) > 0 {
 			right := theme.Current().HelpHintStyle.Render(buildHint(rightPairs...))

@@ -6,6 +6,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/fimmtiu/code-factory/internal/db"
 	"github.com/fimmtiu/code-factory/internal/ui/theme"
 )
 
@@ -204,6 +205,78 @@ func (d MergeConflictDialog) View() string {
 		"Resolve the conflict, then try approving again.",
 		"",
 		lipgloss.JoinHorizontal(lipgloss.Top, fixBtn, "  ", ignoreBtn),
+	)
+	return theme.Current().DialogBoxStyle.Render(body)
+}
+
+// ── Delete memory dialog ──────────────────────────────────────────────────────
+
+type deleteMemoryFocused int
+
+const (
+	deleteMemoryFocusCancel deleteMemoryFocused = iota
+	deleteMemoryFocusDelete
+)
+
+// DeleteMemoryDialog confirms deletion of a single memory.
+type DeleteMemoryDialog struct {
+	database *db.DB
+	id       int64
+	label    string
+	focused  deleteMemoryFocused
+}
+
+func NewDeleteMemoryDialog(database *db.DB, id int64, label string) DeleteMemoryDialog {
+	return DeleteMemoryDialog{database: database, id: id, label: label, focused: deleteMemoryFocusCancel}
+}
+
+func (d DeleteMemoryDialog) Init() tea.Cmd { return nil }
+
+func (d DeleteMemoryDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "tab", "shift+tab":
+			if d.focused == deleteMemoryFocusCancel {
+				d.focused = deleteMemoryFocusDelete
+			} else {
+				d.focused = deleteMemoryFocusCancel
+			}
+		case "left", "h":
+			d.focused = deleteMemoryFocusCancel
+		case "right", "l":
+			d.focused = deleteMemoryFocusDelete
+		case "enter":
+			if d.focused == deleteMemoryFocusDelete {
+				database := d.database
+				id := d.id
+				return d, tea.Batch(
+					func() tea.Msg { return memoryDeletedMsg{id: id, err: database.DeleteMemory(id)} },
+					dismissDialogCmd(),
+				)
+			}
+			return d, dismissDialogCmd()
+		case "esc":
+			return d, dismissDialogCmd()
+		}
+	}
+	return d, nil
+}
+
+func (d DeleteMemoryDialog) View() string {
+	cancelBtn := theme.Current().ButtonNormalStyle.Render("Cancel")
+	deleteBtn := theme.Current().ButtonNormalStyle.Render("Delete")
+	if d.focused == deleteMemoryFocusCancel {
+		cancelBtn = theme.Current().ButtonFocusedStyle.Render("Cancel")
+	} else {
+		deleteBtn = theme.Current().ButtonFocusedStyle.Render("Delete")
+	}
+
+	body := lipgloss.JoinVertical(lipgloss.Left,
+		theme.Current().DialogTitleStyle.Render("Delete memory?"),
+		"Delete memory "+theme.Current().DetailLabelStyle.Render(d.label)+"?",
+		"",
+		lipgloss.JoinHorizontal(lipgloss.Top, cancelBtn, "  ", deleteBtn),
 	)
 	return theme.Current().DialogBoxStyle.Render(body)
 }

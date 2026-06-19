@@ -2,20 +2,20 @@ package ui
 
 import "testing"
 
-func TestNextView_CyclesThroughAllFiveViews(t *testing.T) {
-	// Starting from ViewProject, cycling 5 times should return to ViewProject.
+func TestNextView_CyclesThroughAllViews(t *testing.T) {
+	// Starting from ViewProject, cycling viewCount times returns to ViewProject.
 	v := ViewProject
-	for i := 0; i < 5; i++ {
+	for i := 0; i < int(viewCount); i++ {
 		v = nextView(v)
 	}
 	if v != ViewProject {
-		t.Errorf("after 5 nextView calls from ViewProject, got %d, want %d", v, ViewProject)
+		t.Errorf("after %d nextView calls from ViewProject, got %d, want %d", viewCount, v, ViewProject)
 	}
 }
 
 func TestNextView_Order(t *testing.T) {
-	// Verify the full cycle order: Project → Command → Worker → Diffs → Log → Project.
-	want := []ViewID{ViewCommand, ViewWorker, ViewDiff, ViewLog, ViewProject}
+	// Verify the full cycle order: Project → Command → Worker → Diffs → Log → Memories → Project.
+	want := []ViewID{ViewCommand, ViewWorker, ViewDiff, ViewLog, ViewMemories, ViewProject}
 	v := ViewProject
 	for i, expected := range want {
 		v = nextView(v)
@@ -25,19 +25,19 @@ func TestNextView_Order(t *testing.T) {
 	}
 }
 
-func TestPrevView_CyclesThroughAllFiveViews(t *testing.T) {
+func TestPrevView_CyclesThroughAllViews(t *testing.T) {
 	v := ViewProject
-	for i := 0; i < 5; i++ {
+	for i := 0; i < int(viewCount); i++ {
 		v = prevView(v)
 	}
 	if v != ViewProject {
-		t.Errorf("after 5 prevView calls from ViewProject, got %d, want %d", v, ViewProject)
+		t.Errorf("after %d prevView calls from ViewProject, got %d, want %d", viewCount, v, ViewProject)
 	}
 }
 
 func TestPrevView_Order(t *testing.T) {
-	// Reverse cycle: Project → Log → Diffs → Worker → Command → Project.
-	want := []ViewID{ViewLog, ViewDiff, ViewWorker, ViewCommand, ViewProject}
+	// Reverse cycle: Project → Memories → Log → Diffs → Worker → Command → Project.
+	want := []ViewID{ViewMemories, ViewLog, ViewDiff, ViewWorker, ViewCommand, ViewProject}
 	v := ViewProject
 	for i, expected := range want {
 		v = prevView(v)
@@ -53,8 +53,8 @@ func TestViewLog_HasCorrectValue(t *testing.T) {
 	}
 }
 
-func TestViewCount_IsFive(t *testing.T) {
-	if viewCount != 5 {
-		t.Errorf("viewCount = %d, want 5", viewCount)
+func TestViewCount_IsSix(t *testing.T) {
+	if viewCount != 6 {
+		t.Errorf("viewCount = %d, want 6", viewCount)
 	}
 }
