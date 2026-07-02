@@ -145,6 +145,7 @@ The `skills/` directory contains Claude Code skills that are installed to `~/.cl
 
 | Skill | Trigger | Purpose |
 |-------|---------|---------|
+| `cf-summary` | `/cf-summary` | Get oriented in a codebase you're not familiar with |
 | `cf-clarify` | `/cf-clarify` | Identify underspecified parts of a design document |
 | `cf-project` | `/cf-project` | Decompose a large project into tickets |
 | `cf-refactor` | `/cf-refactor` | Scan and refactor recent changes for code smells |
