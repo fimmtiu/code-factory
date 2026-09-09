@@ -181,6 +181,15 @@ func (c *acpWorkerClient) RequestPermission(ctx context.Context, params acp.Requ
 		title = *params.ToolCall.Title
 	}
 
+	// Unsafe mode approves everything up front: no rule matching, no external
+	// checker, no user prompt.
+	if config.Current != nil && config.Current.UnsafeModeForLunatics {
+		c.appendOutput(fmt.Sprintf("\n=== AUTO-ALLOW (unsafe mode) ===\n%s\n\n", title))
+		if resp, ok := selectAllowAlways(params.Options); ok {
+			return resp, nil
+		}
+	}
+
 	// Short-circuit when the tool call matches a project allow rule. The
 	// underlying CLI is meant to honor the allowlist before calling
 	// canUseTool, but the claude-code-acp wrapper bounces everything through

@@ -76,7 +76,8 @@ Settings are read from `.code-factory/settings.json` at startup.
   "model_review": "opus",
   "model_respond": "opus",
   "effort": "high",
-  "terminal_theme": "tan"
+  "terminal_theme": "tan",
+  "unsafe_mode_for_lunatics": false
 }
 ```
 
@@ -91,3 +92,4 @@ Settings are read from `.code-factory/settings.json` at startup.
 | `model_respond` | `"opus"` | Claude model used when responding to change requests |
 | `effort` | `"high"` | Effort level for the agent (`"low"`, `"normal"`, `"high"`, or `"max"`) |
 | `terminal_theme` | `"tan"` | Terminal colour theme (`"tan"`, `"dark"`, or `"light"`) |
+| `unsafe_mode_for_lunatics` | `false` | Approves every agent permission request automatically, without `claude-permissions-checker` and without a user prompt. Agents can then run any command and change any file. Use only in a container or another disposable environment. |

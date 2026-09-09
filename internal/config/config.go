@@ -52,6 +52,12 @@ type Settings struct {
 	// TerminalTheme selects the colour scheme. See theme.Init for valid
 	// values. Defaults to "tan".
 	TerminalTheme string `json:"terminal_theme" default:"tan"`
+
+	// UnsafeModeForLunatics auto-approves every agent permission request
+	// without consulting claude-permissions-checker or the user. Agents can
+	// then run any command and change any file the daemon can reach.
+	// Defaults to false.
+	UnsafeModeForLunatics bool `json:"unsafe_mode_for_lunatics" default:"false"`
 }
 
 // ModelForWork returns the configured model for a work run. If status is
