@@ -79,7 +79,7 @@ func TestAllowListMatches(t *testing.T) {
 			rawJSON, _ := json.Marshal(tc.raw)
 			var raw any
 			_ = json.Unmarshal(rawJSON, &raw)
-			got := al.matches(acp.RequestPermissionToolCall{RawInput: raw})
+			got := al.matches(acp.ToolCallUpdate{RawInput: raw})
 			if got != tc.want {
 				t.Errorf("matches(%v) = %v, want %v", tc.raw, got, tc.want)
 			}
@@ -94,7 +94,7 @@ func TestAllowListMissingFiles(t *testing.T) {
 	os.Setenv("HOME", t.TempDir())
 	dir := t.TempDir()
 	al := loadAllowList(dir)
-	if got := al.matches(acp.RequestPermissionToolCall{RawInput: map[string]any{"command": "ls"}}); got {
+	if got := al.matches(acp.ToolCallUpdate{RawInput: map[string]any{"command": "ls"}}); got {
 		t.Errorf("empty allowList should not match anything; got true")
 	}
 }
@@ -148,7 +148,7 @@ func TestAllowListMergesUserHomeAndWorktree(t *testing.T) {
 			rawJSON, _ := json.Marshal(map[string]any{"command": tc.cmd})
 			var raw any
 			_ = json.Unmarshal(rawJSON, &raw)
-			got := al.matches(acp.RequestPermissionToolCall{RawInput: raw})
+			got := al.matches(acp.ToolCallUpdate{RawInput: raw})
 			if got != tc.want {
 				t.Errorf("matches(%q) = %v, want %v", tc.cmd, got, tc.want)
 			}

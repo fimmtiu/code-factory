@@ -142,7 +142,7 @@ func compilePathPattern(body string) *regexp.Regexp {
 // matches reports whether the tool call should be auto-approved. The wrapper
 // gives us a structured ToolCall but not the original tool name, so we infer
 // the tool from the shape of RawInput.
-func (al *allowList) matches(tc acp.RequestPermissionToolCall) bool {
+func (al *allowList) matches(tc acp.ToolCallUpdate) bool {
 	if al == nil {
 		return false
 	}

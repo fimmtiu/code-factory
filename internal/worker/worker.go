@@ -158,11 +158,15 @@ func (w *Worker) GetLastOutput() []string {
 	return out
 }
 
-// SetLastOutput replaces the worker's last output slice under the write lock.
+// SetLastOutput replaces the worker's last output lines under the write lock.
+// The slice is copied: callers stream output by appending to a buffer of their
+// own, and storing that slice directly would leave the UI goroutine reading a
+// backing array the writer is still mutating.
 func (w *Worker) SetLastOutput(lines []string) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	w.LastOutput = lines
+	w.LastOutput = make([]string, len(lines))
+	copy(w.LastOutput, lines)
 }
 
 // GetActivity returns the worker's current activity label, or empty if idle.

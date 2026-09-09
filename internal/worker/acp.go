@@ -317,8 +317,8 @@ func (c *acpWorkerClient) CreateTerminal(_ context.Context, params acp.CreateTer
 	return acp.CreateTerminalResponse{TerminalId: "term-unsupported"}, nil
 }
 
-func (c *acpWorkerClient) KillTerminalCommand(_ context.Context, _ acp.KillTerminalCommandRequest) (acp.KillTerminalCommandResponse, error) {
-	return acp.KillTerminalCommandResponse{}, nil
+func (c *acpWorkerClient) KillTerminal(_ context.Context, _ acp.KillTerminalRequest) (acp.KillTerminalResponse, error) {
+	return acp.KillTerminalResponse{}, nil
 }
 
 func (c *acpWorkerClient) TerminalOutput(_ context.Context, _ acp.TerminalOutputRequest) (acp.TerminalOutputResponse, error) {
@@ -457,7 +457,7 @@ func runACP(
 	_, err = conn.Initialize(ctx, acp.InitializeRequest{
 		ProtocolVersion: acp.ProtocolVersionNumber,
 		ClientCapabilities: acp.ClientCapabilities{
-			Fs: acp.FileSystemCapability{ReadTextFile: true, WriteTextFile: true},
+			Fs: acp.FileSystemCapabilities{ReadTextFile: true, WriteTextFile: true},
 		},
 	})
 	if err != nil {
