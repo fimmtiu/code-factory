@@ -43,14 +43,7 @@ type pathRule struct {
 // completely empty one falls through to the normal prompt path.
 func loadAllowList(worktree string) *allowList {
 	al := &allowList{worktree: worktree}
-	var paths []string
-	if home, err := os.UserHomeDir(); err == nil && home != "" {
-		paths = append(paths, filepath.Join(home, ".claude", "settings.json"))
-	}
-	for _, name := range []string{"settings.json", "settings.local.json"} {
-		paths = append(paths, filepath.Join(worktree, ".claude", name))
-	}
-	for _, path := range paths {
+	for _, path := range claudeSettingsPaths(worktree) {
 		data, err := os.ReadFile(path)
 		if err != nil {
 			continue

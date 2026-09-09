@@ -21,11 +21,9 @@ explanation would just be noise.
 ## Output format
 
 All of your output should go into an HTML file called "SUMMARY.html" in the root of the project. If this file already
-exists, truncate it first. Important terminology, names of classes or methods, and XXX
-
-
-should be hyperlinked with relative paths to the file in the codebase where they're defined. Link each term, class,
-method, or XXX only once, the first time it's mentioned — after that, just write it in plain text.
+exists, truncate it first. Important terminology and the names of classes or methods should be hyperlinked with relative
+paths to the file in the codebase where they're defined. Link each term, class, or method only once, the first time it's
+mentioned — after that, just write it in plain text.
 
 You are free to supplement the text with ASCII-art diagrams where a visual representation would be helpful, but it's not
 required.
@@ -79,3 +77,4 @@ Explain how to do all of the following (if relevant to the codebase):
 * How to run automated tests
 * How to test the system manually
 * How to debug problems locally
+* How to deploy the codebase

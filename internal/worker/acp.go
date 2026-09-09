@@ -393,6 +393,11 @@ func runACP(
 	cmd := exec.CommandContext(ctx, "npx", acpArgs...)
 	cmd.Dir = params.WorktreePath
 	cmd.Stderr = newPrefixWriter(logFile, "[stderr] ")
+	childEnv, envWarnings := buildChildEnv(ctx, params.WorktreePath)
+	cmd.Env = childEnv
+	for _, warning := range envWarnings {
+		_, _ = fmt.Fprintf(logFile, "[warn] %s\n", warning)
+	}
 	// Start in its own process group so we can kill the entire tree
 	// (npx + its child node process). Without this, Kill() only hits
 	// npx, and the orphaned child holds pipes open, blocking cmd.Wait().
@@ -400,15 +405,6 @@ func runACP(
 	cmd.Cancel = func() error {
 		return syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM)
 	}
-	// Pin npx to the global node version so the worktree's .node-version
-	// (pinned for project tooling) doesn't override it. nodenv global returns
-	// the version from ~/.nodenv/version, ignoring any local .node-version file.
-	if os.Getenv("NODENV_VERSION") == "" {
-		if out, err := exec.Command("nodenv", "global").Output(); err == nil {
-			cmd.Env = append(os.Environ(), "NODENV_VERSION="+strings.TrimSpace(string(out)))
-		}
-	}
-
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return fmt.Errorf("stdin pipe: %w", err)
@@ -499,6 +495,7 @@ func runACP(
 	}()
 
 	stopReason, resultErr, procExited := awaitPromptCompletion(promptCh, waitCh)
+	resultErr = annotateAuthError(resultErr)
 
 	// Always close the log with a terminal marker so a reader can tell a
 	// clean end-of-turn apart from a subprocess crash, context cancellation,
