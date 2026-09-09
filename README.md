@@ -59,11 +59,11 @@ This creates `.code-factory/` with a default `settings.json`. Edit `settings.jso
 }
 ```
 
-Currently supported editors are `cursor` and `vscode`, and supported terminals are `iterm2`, `terminal` (macOS Terminal.app), and `cmux`. PRs to add more are welcome! You can also set `terminal_theme` to `"dark"`, `"light"`, or `"tan"` to match your terminal background. (For more settings, see [the `code-factory` README](cmd/code-factory/README.md).)
+Currently supported editors are `cursor` and `vscode`, and supported terminals are `iterm2`, `terminal` (macOS Terminal.app), `cmux`, and `orca`. PRs to add more are welcome! ([Orca](https://github.com/stablyai/orca) only opens worktrees it already manages, so import the repository into Orca first.) You can also set `terminal_theme` to `"dark"`, `"light"`, or `"tan"` to match your terminal background. (For more settings, see [the `code-factory` README](cmd/code-factory/README.md).)
 
 ## Using code-factory
 
-It's best to use Opus as the model when you're planning the work, so run `/model opus` in Claude's terminal UI before you start running any skills.
+It's best to use a higher-level model (at least Opus) when you're planning the work, so run `/model opus` in Claude's terminal UI before you start running any skills.
 
 **Step 1: Write a specification.** Create a markdown document that describes in detail what you want your new program or feature to do.
 

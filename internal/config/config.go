@@ -30,8 +30,8 @@ type Settings struct {
 	// "vscode". Defaults to "cursor".
 	Editor string `json:"editor" default:"cursor"`
 
-	// Terminal is the name of the terminal to use. Supported values: "iterm2",
-	// "terminal", "cmux". Defaults to "iterm2".
+	// Terminal is the name of the terminal to use. Supported values: "cmux",
+	// "iterm2", "orca", "terminal". Defaults to "iterm2".
 	Terminal string `json:"terminal" default:"iterm2"`
 
 	// ModelImplement, ModelRefactor, and ModelReview set the Claude model used

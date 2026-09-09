@@ -485,8 +485,7 @@ func (v ProjectView) openTerminal() (tea.Model, tea.Cmd) {
 	if err != nil {
 		return v, nil
 	}
-	_ = util.OpenTerminal(dir)
-	return v, nil
+	return v, openTerminalCmd(dir)
 }
 
 func (v ProjectView) openDiffView() (tea.Model, tea.Cmd) {

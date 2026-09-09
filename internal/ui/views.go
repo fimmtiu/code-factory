@@ -6,6 +6,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/fimmtiu/code-factory/internal/ui/theme"
+	"github.com/fimmtiu/code-factory/internal/util"
 	"github.com/fimmtiu/code-factory/internal/worker"
 )
 
@@ -25,6 +26,19 @@ func buildHint(pairs ...string) string {
 
 // viewBorderOverhead is the number of rows (and columns) consumed by viewPaneStyle.
 const viewBorderOverhead = 2
+
+// openTerminalCmd opens a terminal window on dir in the background, reporting
+// any refusal from the terminal as a notification. It runs off the UI
+// goroutine because a terminal driven by a CLI (Orca) can take a moment to
+// answer, and can fail for reasons the user needs to see.
+func openTerminalCmd(dir string) tea.Cmd {
+	return func() tea.Msg {
+		if err := util.OpenTerminal(dir); err != nil {
+			return notifMsg{text: "Could not open terminal: " + err.Error()}
+		}
+		return nil
+	}
+}
 
 // togglePoolPause pauses or unpauses every worker at once and returns a command
 // announcing the new state. Shared by the Commands and Workers views, which

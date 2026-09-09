@@ -671,8 +671,7 @@ func (v DiffView) openTerminal() (tea.Model, tea.Cmd) {
 	if v.worktreePath == "" {
 		return v, nil
 	}
-	_ = util.OpenTerminal(v.worktreePath)
-	return v, nil
+	return v, openTerminalCmd(v.worktreePath)
 }
 
 // fetchCRMapCmd returns a tea.Cmd that asynchronously loads open change

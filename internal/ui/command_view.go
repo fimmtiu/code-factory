@@ -449,8 +449,7 @@ func (v CommandView) openTerminal() (tea.Model, tea.Cmd) {
 	if err != nil {
 		return v, nil
 	}
-	_ = util.OpenTerminal(dir)
-	return v, nil
+	return v, openTerminalCmd(dir)
 }
 
 func (v CommandView) openEditorNonblocking() (tea.Model, tea.Cmd) {
