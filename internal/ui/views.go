@@ -6,6 +6,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/fimmtiu/code-factory/internal/ui/theme"
+	"github.com/fimmtiu/code-factory/internal/worker"
 )
 
 // buildHint renders alternating key/description pairs with each key bolded.
@@ -24,6 +25,28 @@ func buildHint(pairs ...string) string {
 
 // viewBorderOverhead is the number of rows (and columns) consumed by viewPaneStyle.
 const viewBorderOverhead = 2
+
+// togglePoolPause pauses or unpauses every worker at once and returns a command
+// announcing the new state. Shared by the Commands and Workers views, which
+// both bind it to P.
+func togglePoolPause(pool *worker.Pool) tea.Cmd {
+	if pool == nil {
+		return nil
+	}
+	if pool.ToggleAllPaused() {
+		return ShowNotification("Workers paused after their current tickets")
+	}
+	return ShowNotification("Workers unpaused")
+}
+
+// pauseHintPairs returns the key/description pair describing what P will do,
+// given the pool's current pause state.
+func pauseHintPairs(pool *worker.Pool) []string {
+	if pool != nil && pool.IsPaused() {
+		return []string{"P", "unpause"}
+	}
+	return []string{"P", "pause"}
+}
 
 // ViewID is an enum for the main views.
 type ViewID int

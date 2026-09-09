@@ -26,7 +26,7 @@ func (w *Worker) run(ctx context.Context, pollIntervalSecs int) {
 		default:
 		}
 
-		if !w.Paused {
+		if !w.IsPaused() {
 			ticket, err := w.database.Claim(w.Number)
 			if err == nil {
 				w.processTicket(ctx, ticket)
@@ -376,8 +376,8 @@ func (w *Worker) drainMessages() {
 func (w *Worker) handleMessage(msg MainToWorkerMessage) {
 	switch msg.Kind {
 	case MsgPause:
-		w.Paused = true
+		w.SetPaused(true)
 	case MsgUnpause:
-		w.Paused = false
+		w.SetPaused(false)
 	}
 }

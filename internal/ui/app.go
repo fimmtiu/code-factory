@@ -416,6 +416,9 @@ func (m Model) View() string {
 				rightPairs = append(rightPairs, "G", "github")
 			}
 			rightPairs = append(rightPairs, "E", "edit worktree", "T", "open terminal", "Enter", "respond/view")
+			rightPairs = append(rightPairs, pauseHintPairs(m.pool)...)
+		case ViewWorker:
+			rightPairs = pauseHintPairs(m.pool)
 		case ViewLog:
 			if lv, ok := m.views[ViewLog].(LogView); ok && lv.filtering {
 				rightPairs = []string{"Esc", "clear filter"}
@@ -523,7 +526,8 @@ func (m Model) View() string {
 	return full
 }
 
-// renderHeader returns the tab bar showing the active view.
+// renderHeader returns the tab bar showing the active view, with a PAUSED
+// badge in the top right corner while the worker pool is paused.
 func (m Model) renderHeader() string {
 	tabs := make([]string, len(m.views))
 	for i, v := range m.views {
@@ -533,7 +537,28 @@ func (m Model) renderHeader() string {
 			tabs[i] = theme.Current().InactiveTabStyle.Render(v.Label())
 		}
 	}
-	return theme.Current().HeaderStyle.Render(strings.Join(tabs, "  "))
+	bar := strings.Join(tabs, "  ")
+
+	if m.poolIsPaused() {
+		badge := theme.Current().PausedBadgeStyle.Render("PAUSED")
+		// HeaderStyle pads one column on each side, so the badge has to sit
+		// inside that padding to end up flush with the right edge.
+		gap := m.width - headerPadding*2 - lipgloss.Width(bar) - lipgloss.Width(badge)
+		if gap < 1 {
+			gap = 1
+		}
+		bar += strings.Repeat(" ", gap) + badge
+	}
+
+	return theme.Current().HeaderStyle.Render(bar)
+}
+
+// headerPadding is the horizontal padding applied by HeaderStyle on each side.
+const headerPadding = 1
+
+// poolIsPaused reports whether the user has paused the worker pool.
+func (m Model) poolIsPaused() bool {
+	return m.pool != nil && m.pool.IsPaused()
 }
 
 // activeViewIsFiltering reports whether the active view is currently

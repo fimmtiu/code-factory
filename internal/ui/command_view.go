@@ -252,6 +252,8 @@ func (v CommandView) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return v.githubCompare()
 	case "d", "D":
 		return v.debugPrompt()
+	case "p", "P":
+		return v, togglePoolPause(v.pool)
 	}
 	return v, nil
 }
@@ -772,6 +774,7 @@ func (v CommandView) KeyBindings() []KeyBinding {
 		{Key: "A", Description: "Approve ticket (user-review tickets)"},
 		{Key: "g", Description: "View diff"},
 		{Key: "G", Description: "Open GitHub compare page", Hidden: !isGitHubRepo()},
+		{Key: "P", Description: "Pause/unpause all workers after their current tickets"},
 	}
 }
 

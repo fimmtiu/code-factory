@@ -17,7 +17,7 @@ func assertThemeNonNil(t *testing.T, th *Theme) {
 	}
 }
 
-// assertStyleFieldCount verifies that all 63 lipgloss.Style fields and all
+// assertStyleFieldCount verifies that every lipgloss.Style field and all
 // special fields are populated with non-zero values.
 func assertStyleFieldCount(t *testing.T, th *Theme) {
 	t.Helper()
@@ -32,7 +32,7 @@ func assertStyleFieldCount(t *testing.T, th *Theme) {
 		}
 	}
 
-	const expectedStyleFields = 67
+	const expectedStyleFields = 68
 	if count != expectedStyleFields {
 		t.Errorf("Theme has %d lipgloss.Style fields, want %d", count, expectedStyleFields)
 	}

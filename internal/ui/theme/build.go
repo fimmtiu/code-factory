@@ -54,6 +54,10 @@ func buildTheme(p Palette) *Theme {
 			Foreground(p.Accent).
 			Inherit(tabBaseStyle),
 		HelpHintStyle: lipgloss.NewStyle().Padding(0, 1),
+		PausedBadgeStyle: lipgloss.NewStyle().
+			Bold(true).
+			Reverse(true).
+			Padding(0, 1),
 
 		// ── Dialog ──────────────────────────────────────────────────
 		DialogBoxStyle: lipgloss.NewStyle().

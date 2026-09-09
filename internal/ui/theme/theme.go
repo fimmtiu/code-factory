@@ -22,6 +22,7 @@ type Theme struct {
 	ActiveTabStyle   lipgloss.Style
 	InactiveTabStyle lipgloss.Style
 	HelpHintStyle    lipgloss.Style
+	PausedBadgeStyle lipgloss.Style
 
 	// ── Dialog ──────────────────────────────────────────────────────────
 	DialogBoxStyle     lipgloss.Style

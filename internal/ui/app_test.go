@@ -5,8 +5,11 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/fimmtiu/code-factory/internal/models"
+	"github.com/fimmtiu/code-factory/internal/ui/theme"
+	"github.com/fimmtiu/code-factory/internal/worker"
 )
 
 func TestNewModel_HasFiveViews(t *testing.T) {
@@ -235,5 +238,132 @@ func TestOpenViewChangeRequestDialogMsg_DialogHasCRData(t *testing.T) {
 	}
 	if d.worktreePath != "/tmp/worktree" {
 		t.Errorf("dialog worktreePath = %q, want %q", d.worktreePath, "/tmp/worktree")
+	}
+}
+
+// ── Pause indicator ──────────────────────────────────────────────────────────
+
+func TestRenderHeader_OmitsPausedBadgeWhenRunning(t *testing.T) {
+	m := NewModel(worker.NewPool(2, 5), nil, 5)
+	m.width = 120
+	m.height = 40
+
+	if strings.Contains(m.renderHeader(), "PAUSED") {
+		t.Error("header should not show the PAUSED badge while the pool is running")
+	}
+}
+
+func TestRenderHeader_ShowsPausedBadgeWhenPaused(t *testing.T) {
+	pool := worker.NewPool(2, 5)
+	pool.SetAllPaused(true)
+	m := NewModel(pool, nil, 5)
+	m.width = 120
+	m.height = 40
+
+	header := m.renderHeader()
+	if !strings.Contains(header, "PAUSED") {
+		t.Fatalf("header should show the PAUSED badge while paused, got: %q", header)
+	}
+	if !strings.Contains(header, theme.Current().PausedBadgeStyle.Render("PAUSED")) {
+		t.Errorf("PAUSED badge should use theme.Current().PausedBadgeStyle, got: %q", header)
+	}
+}
+
+func TestRenderHeader_PausedBadgeIsRightAligned(t *testing.T) {
+	pool := worker.NewPool(1, 5)
+	pool.SetAllPaused(true)
+	m := NewModel(pool, nil, 5)
+	m.width = 120
+	m.height = 40
+
+	if w := lipgloss.Width(m.renderHeader()); w != m.width {
+		t.Errorf("paused header width = %d, want %d (badge flush with the right edge)", w, m.width)
+	}
+}
+
+func TestRenderHeader_PausedBadgeSurvivesNarrowWidth(t *testing.T) {
+	pool := worker.NewPool(1, 5)
+	pool.SetAllPaused(true)
+	m := NewModel(pool, nil, 5)
+	m.width = 20
+	m.height = 40
+
+	if !strings.Contains(m.renderHeader(), "PAUSED") {
+		t.Error("PAUSED badge should still render when the terminal is too narrow for the tab bar")
+	}
+}
+
+func TestRenderHeader_NoPoolNeverPaused(t *testing.T) {
+	m := NewModel(nil, nil, 5)
+	m.width = 120
+	m.height = 40
+
+	if strings.Contains(m.renderHeader(), "PAUSED") {
+		t.Error("header should not show the PAUSED badge when there is no pool")
+	}
+}
+
+func TestPauseKey_TogglesPoolFromCommandView(t *testing.T) {
+	pool := worker.NewPool(2, 5)
+	m := NewModel(pool, nil, 5)
+	m.width = 120
+	m.height = 40
+	m.activeView = ViewCommand
+
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'P'}})
+	if !pool.IsPaused() {
+		t.Fatal("P in the Commands view should pause the pool")
+	}
+	if cmd == nil {
+		t.Error("P should return a notification command")
+	}
+
+	m = updated.(Model)
+	if _, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'P'}}); pool.IsPaused() {
+		t.Error("a second P should unpause the pool")
+	}
+}
+
+func TestPauseKey_TogglesPoolFromWorkerView(t *testing.T) {
+	pool := worker.NewPool(2, 5)
+	m := NewModel(pool, nil, 5)
+	m.width = 120
+	m.height = 40
+	m.activeView = ViewWorker
+
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'P'}})
+	if !pool.IsPaused() {
+		t.Fatal("P in the Workers view should pause the pool")
+	}
+	for _, w := range pool.Workers {
+		if !w.IsPaused() {
+			t.Errorf("worker %d should be paused", w.Number)
+		}
+	}
+}
+
+func TestPauseKey_IgnoredInProjectView(t *testing.T) {
+	pool := worker.NewPool(2, 5)
+	m := NewModel(pool, nil, 5)
+	m.width = 120
+	m.height = 40
+	m.activeView = ViewProject
+
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'P'}})
+	if pool.IsPaused() {
+		t.Error("P should only pause from the Commands and Workers views")
+	}
+}
+
+func TestPauseHintPairs_ReflectsPoolState(t *testing.T) {
+	pool := worker.NewPool(1, 5)
+
+	if got := pauseHintPairs(pool); got[1] != "pause" {
+		t.Errorf("running pool hint = %q, want \"pause\"", got[1])
+	}
+
+	pool.SetAllPaused(true)
+	if got := pauseHintPairs(pool); got[1] != "unpause" {
+		t.Errorf("paused pool hint = %q, want \"unpause\"", got[1])
 	}
 }

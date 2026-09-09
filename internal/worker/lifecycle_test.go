@@ -286,6 +286,90 @@ func TestPool_PauseUnpause_ViaMessages(t *testing.T) {
 	pool.Stop()
 }
 
+func TestPool_SetAllPaused_PausesEveryWorker(t *testing.T) {
+	pool := worker.NewPool(3, 1)
+
+	if pool.IsPaused() {
+		t.Error("a new pool should not be paused")
+	}
+
+	pool.SetAllPaused(true)
+	if !pool.IsPaused() {
+		t.Error("pool should report paused after SetAllPaused(true)")
+	}
+	for _, w := range pool.Workers {
+		if !w.IsPaused() {
+			t.Errorf("worker %d should be paused", w.Number)
+		}
+	}
+
+	pool.SetAllPaused(false)
+	if pool.IsPaused() {
+		t.Error("pool should report unpaused after SetAllPaused(false)")
+	}
+	for _, w := range pool.Workers {
+		if w.IsPaused() {
+			t.Errorf("worker %d should be unpaused", w.Number)
+		}
+	}
+}
+
+func TestPool_ToggleAllPaused_ReturnsNewState(t *testing.T) {
+	pool := worker.NewPool(2, 1)
+
+	if paused := pool.ToggleAllPaused(); !paused {
+		t.Error("first toggle should return true (paused)")
+	}
+	if !pool.Workers[0].IsPaused() {
+		t.Error("toggle should have paused the workers")
+	}
+
+	if paused := pool.ToggleAllPaused(); paused {
+		t.Error("second toggle should return false (unpaused)")
+	}
+	if pool.Workers[0].IsPaused() {
+		t.Error("second toggle should have unpaused the workers")
+	}
+}
+
+func TestPool_SetAllPaused_DoesNotClaimNewTickets(t *testing.T) {
+	d, ticketsDir := openTestDB(t)
+	createProject(t, d, "proj")
+	createTicket(t, d, "proj/t1")
+
+	pool := worker.NewPool(2, 1)
+	pool.SetAllPaused(true)
+	pool.Start(d, ticketsDir)
+
+	logs := drainLogs(pool.LogChannel, 500*time.Millisecond)
+	pool.Stop()
+
+	for _, msg := range logs {
+		if msg.Message == "claimed ticket proj/t1" {
+			t.Errorf("paused pool unexpectedly claimed a ticket: %q", msg.Message)
+		}
+	}
+}
+
+func TestPool_SetAllPaused_ResumesWork(t *testing.T) {
+	d, ticketsDir := openTestDB(t)
+	createProject(t, d, "proj")
+	createTicket(t, d, "proj/t1")
+
+	pool := worker.NewPool(1, 1)
+	pool.SetAllPaused(true)
+	pool.Start(d, ticketsDir)
+
+	time.Sleep(300 * time.Millisecond)
+	pool.SetAllPaused(false)
+
+	if !waitForLog(pool.LogChannel, "claimed ticket proj/t1", 5*time.Second) {
+		pool.Stop()
+		t.Fatal("worker did not claim ticket after the pool was unpaused")
+	}
+	pool.Stop()
+}
+
 // --- US-004: Message handling during idle ---
 
 func TestWorker_ProcessesMessagesWhileIdle(t *testing.T) {

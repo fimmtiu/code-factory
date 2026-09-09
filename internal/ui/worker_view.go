@@ -99,6 +99,8 @@ func (v WorkerView) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		v.scrollBy(-v.viewHeight())
 	case "pgdown":
 		v.scrollBy(v.viewHeight())
+	case "p", "P":
+		return v, togglePoolPause(v.pool)
 	}
 	return v, nil
 }
@@ -241,9 +243,11 @@ func formatLastActivity(since time.Duration) string {
 
 // renderStatusLine returns the styled status line for a worker.
 func (v WorkerView) renderStatusLine(w *worker.Worker) string {
+	paused := w.IsPaused()
+
 	var text string
 	switch {
-	case w.Paused:
+	case paused:
 		text = fmt.Sprintf("Worker %d: paused", w.Number)
 	case w.GetCurrentTicket() != "":
 		text = fmt.Sprintf("Worker %d: %s", w.Number, w.GetCurrentTicket())
@@ -253,7 +257,7 @@ func (v WorkerView) renderStatusLine(w *worker.Worker) string {
 
 	// Build an activity/timing suffix for non-idle, non-paused workers.
 	var suffix string
-	if w.Status != worker.StatusIdle && !w.Paused {
+	if w.Status != worker.StatusIdle && !paused {
 		if activity := w.GetActivity(); activity != "" {
 			suffix += " · " + activity
 		}
@@ -266,7 +270,7 @@ func (v WorkerView) renderStatusLine(w *worker.Worker) string {
 
 	var styled string
 	switch {
-	case w.Paused:
+	case paused:
 		styled = theme.Current().WorkerPausedStyle.Render(text)
 	case w.Status == worker.StatusIdle:
 		styled = theme.Current().WorkerIdleStyle.Render(text)
@@ -290,6 +294,7 @@ func (v WorkerView) KeyBindings() []KeyBinding {
 	return []KeyBinding{
 		{Key: "↑/↓", Description: "Scroll up/down one line"},
 		{Key: "PgUp/PgDn", Description: "Scroll up/down one page"},
+		{Key: "P", Description: "Pause/unpause all workers after their current tickets"},
 	}
 }
 

@@ -321,7 +321,7 @@ func TestWorkerView_RenderStatusLine_Paused_UsesThemeStyle(t *testing.T) {
 
 	w := worker.NewWorker(1)
 	w.Status = worker.StatusBusy
-	w.Paused = true
+	w.SetPaused(true)
 	v := NewWorkerView(nil)
 	line := v.renderStatusLine(w)
 

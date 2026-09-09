@@ -59,6 +59,13 @@ type Pool struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
+
+	// paused records whether the user has asked the whole pool to pause. It
+	// flips the moment SetAllPaused is called, ahead of the individual
+	// workers, which only notice between units of work — so the TUI can
+	// acknowledge the keypress immediately. Guarded by pauseMu.
+	paused  bool
+	pauseMu sync.RWMutex
 }
 
 // NewPool creates a Pool with size workers numbered 1 through size, and a
@@ -165,4 +172,35 @@ func (p *Pool) UnpauseWorker(number int) {
 	if w := p.GetWorker(number); w != nil {
 		w.ToWorker <- MainToWorkerMessage{Kind: MsgUnpause}
 	}
+}
+
+// IsPaused reports whether the pool is under a pause request. Individual
+// workers may still be finishing the ticket they had already claimed.
+func (p *Pool) IsPaused() bool {
+	p.pauseMu.RLock()
+	defer p.pauseMu.RUnlock()
+	return p.paused
+}
+
+// SetAllPaused records the pause request and applies it to every worker.
+// Paused workers finish the ticket they are on and then stop claiming new
+// ones until the pool is unpaused. The flags are written directly rather than
+// sent as messages: a worker only reads its queue between units of work, so a
+// send from the TUI goroutine could block behind a busy worker.
+func (p *Pool) SetAllPaused(paused bool) {
+	p.pauseMu.Lock()
+	p.paused = paused
+	p.pauseMu.Unlock()
+
+	for _, w := range p.Workers {
+		w.SetPaused(paused)
+	}
+}
+
+// ToggleAllPaused pauses the pool if it is running and unpauses it if it is
+// paused, returning the new pause state.
+func (p *Pool) ToggleAllPaused() bool {
+	paused := !p.IsPaused()
+	p.SetAllPaused(paused)
+	return paused
 }

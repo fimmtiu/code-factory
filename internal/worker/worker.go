@@ -40,9 +40,9 @@ type Worker struct {
 	// Status is the current operational state of the worker.
 	Status WorkerStatus
 
-	// Paused indicates that the worker should not pick up new tickets after
-	// completing its current work.
-	Paused bool
+	// paused indicates that the worker should not pick up new tickets after
+	// completing its current work. Protected by mu.
+	paused bool
 
 	// ToWorker carries messages from the main goroutine to this worker.
 	ToWorker chan MainToWorkerMessage
@@ -85,7 +85,7 @@ type Worker struct {
 	// nil when the worker is idle. Protected by mu.
 	cancelWork context.CancelFunc
 
-	// mu guards CurrentTicket, LastOutput, Activity, LastActivityAt,
+	// mu guards paused, CurrentTicket, LastOutput, Activity, LastActivityAt,
 	// pendingPermission, and cancelWork for concurrent access between the
 	// worker goroutine (writer) and the UI goroutine (reader).
 	mu sync.RWMutex
@@ -102,16 +102,35 @@ type Worker struct {
 }
 
 // NewWorker creates a new Worker with the given 1-based number. The worker
-// starts in StatusIdle with Paused false and buffered communication channels.
+// starts in StatusIdle, unpaused, with buffered communication channels.
 func NewWorker(number int) *Worker {
 	return &Worker{
 		Number:     number,
 		Status:     StatusIdle,
-		Paused:     false,
 		ToWorker:   make(chan MainToWorkerMessage, workerChannelBuffer),
 		permSem:    make(chan struct{}, 1),
 		LastOutput: []string{},
 	}
+}
+
+// IsPaused reports whether the worker has taken effect on a pause request and
+// will not claim any further tickets. A worker that was asked to pause while
+// busy keeps reporting false until it finishes its current ticket, because it
+// only reads its message queue between units of work. Safe for concurrent
+// access from the UI goroutine.
+func (w *Worker) IsPaused() bool {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	return w.paused
+}
+
+// SetPaused sets the worker's paused flag. It takes effect at the worker's
+// next claim check, so a worker asked to pause mid-ticket finishes that
+// ticket first.
+func (w *Worker) SetPaused(paused bool) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.paused = paused
 }
 
 // GetCurrentTicket returns the identifier of the ticket being processed, or

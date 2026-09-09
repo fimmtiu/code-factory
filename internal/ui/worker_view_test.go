@@ -160,7 +160,7 @@ func TestRenderStatusLine_HidesActivityWhenIdle(t *testing.T) {
 func TestRenderStatusLine_HidesActivityWhenPaused(t *testing.T) {
 	w := worker.NewWorker(1)
 	w.Status = worker.StatusBusy
-	w.Paused = true
+	w.SetPaused(true)
 	w.SetActivity("thinking")
 
 	v := NewWorkerView(nil)
