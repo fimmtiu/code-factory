@@ -59,7 +59,12 @@ Terminology for the `cf-tickets` system:
    - **Domain model types** — multiple tickets define the same struct, interface, or enum (e.g. `Package`, `Version`, `Dependency`).
    - **Test helpers / fixtures** — multiple tickets need the same test scaffolding (fake-command runners, golden files, table-driven harnesses).
 
-   Do NOT hand the same shared pattern to two unrelated tickets and trust them to converge. They will each invent their own version, in different files, and the merge will be unrecoverable. When the overlapping code is genuine shared infrastructure, extract it into its own ticket. When two tickets just happen to touch the same files for unrelated reasons (e.g. both add a field to the same struct), stack them instead — chain one as a dependency of the other so they run serially.
+   Do NOT hand the same shared pattern to two unrelated tickets and trust them to converge. They will each invent their
+   own version, in different files, and the merge will be unrecoverable. When the overlapping code is genuine shared
+   infrastructure, extract it into its own ticket; anything which uses that code should depend on that ticket. When two
+   tickets just happen to touch the same files for unrelated reasons (e.g. both add a field to the same struct), stack
+   them instead — chain one as a dependency of the other so they run serially. Concurrently running tickets should never
+   modify or create an overlapping set of files.
 
 7. Collect all clarifying questions across all projects and present them to the user in a single batch (see "How to ask clarifying questions" below). Wait for answers before proceeding. If nothing is ambiguous, skip this step.
 8. Determine the dependencies between projects

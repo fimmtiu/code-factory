@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"syscall"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -121,11 +123,32 @@ Options:
 		defer logFile.Close()
 	}
 
+	// Where the shell left the cursor, so the prompt can go back there once
+	// the TUI is done with the screen.
+	prompt := util.SaveCursorPosition()
+
 	model := ui.NewModel(pool, database, *waitSecs)
 	prog := tea.NewProgram(model, tea.WithAltScreen())
-	if _, err := prog.Run(); err != nil {
-		fmt.Fprintln(os.Stderr, "error: TUI exited with error:", err)
-	}
+
+	// A closed window or a `kill` would otherwise leave the terminal in the
+	// alternate screen with the cursor hidden. Kill makes bubbletea give the
+	// screen back and Run then returns through the teardown below.
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, syscall.SIGTERM, syscall.SIGHUP)
+	go func() {
+		if _, ok := <-signals; ok {
+			prog.Kill()
+		}
+	}()
+
+	_, runErr := prog.Run()
+	signal.Stop(signals)
 
 	pool.Stop()
+	if runErr != nil {
+		fmt.Fprintln(os.Stderr, "error: TUI exited with error:", runErr)
+	}
+
+	// Last, so that nothing printed on the way out moves the cursor again.
+	util.RestoreTerminal(prompt)
 }
