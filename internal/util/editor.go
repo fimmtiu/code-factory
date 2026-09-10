@@ -2,6 +2,7 @@
 package util
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
@@ -64,6 +65,25 @@ func blockingEditorAtLocationCommand(filename string, lineNo int) string {
 	return ""
 }
 
+// runEditor runs the blocking editor command in args and waits for it to
+// close. The supported editors are all GUI applications, so the command gets
+// none of our stdio: anything it wrote would land in the middle of the TUI's
+// screen, and a CLI that tidies up after itself on exit leaves the cursor
+// visible for the rest of the session. Its stderr is captured instead of
+// discarded so that a failure still carries a reason.
+func runEditor(args []string) error {
+	cmd := exec.Command(args[0], args[1:]...)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		if reason := lastNonEmptyLine(stderr.String()); reason != "" {
+			return fmt.Errorf("%s: %w", reason, err)
+		}
+		return err
+	}
+	return nil
+}
+
 // OpenEditorAtLocation opens filename at lineNo in the blocking editor and
 // waits for the editor to close. The file is opened directly — no temp file
 // is created.
@@ -72,12 +92,7 @@ func OpenEditorAtLocation(filename string, lineNo int) error {
 	if command == "" {
 		return fmt.Errorf("OpenEditorAtLocation: no editor command configured")
 	}
-	parts := strings.Fields(command)
-	cmd := exec.Command(parts[0], parts[1:]...)
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	return runEditor(strings.Fields(command))
 }
 
 // EditText writes existingContent to a temporary file, opens the blocking
@@ -137,12 +152,7 @@ func OpenFileInEditor(path string) error {
 		return fmt.Errorf("OpenFileInEditor: no editor command configured")
 	}
 	parts := strings.Fields(command)
-	args := append(parts[1:], path)
-	cmd := exec.Command(parts[0], args...)
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	return runEditor(append(parts, path))
 }
 
 func editTextImpl(existingContent string, deleteAfter bool) (string, string, error) {
@@ -169,12 +179,7 @@ func editTextImpl(existingContent string, deleteAfter bool) (string, string, err
 
 	// Command may contain arguments (e.g. "cursor --wait"), so split on spaces.
 	parts := strings.Fields(command)
-	args := append(parts[1:], tmpPath)
-	cmd := exec.Command(parts[0], args...)
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
+	if err := runEditor(append(parts, tmpPath)); err != nil {
 		os.Remove(tmpPath)
 		return "", "", fmt.Errorf("EditText: editor exited with error: %w", err)
 	}

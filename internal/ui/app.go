@@ -72,7 +72,9 @@ func NewModel(pool *worker.Pool, database *db.DB, waitSecs int) Model {
 
 // Init returns the initial command batch, including init commands from all views.
 func (m Model) Init() tea.Cmd {
-	var cmds []tea.Cmd
+	// The UI draws its own cursors (in text fields and pick lists), so the
+	// terminal's own cursor is never wanted.
+	cmds := []tea.Cmd{tea.HideCursor}
 	for _, v := range m.views {
 		if cmd := v.Init(); cmd != nil {
 			cmds = append(cmds, cmd)
@@ -275,10 +277,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case editorDoneMsg:
 		m.editorWaiting = false
+		// A subprocess that ran while the editor was open may have switched
+		// the cursor back on, which leaves it blinking over the hint bar.
 		if msg.result != nil {
-			return m, func() tea.Msg { return msg.result }
+			return m, tea.Batch(tea.HideCursor, func() tea.Msg { return msg.result })
 		}
-		return m, nil
+		return m, tea.HideCursor
 
 	case openDiffViewMsg:
 		m.activeView = ViewDiff
