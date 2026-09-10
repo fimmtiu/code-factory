@@ -892,15 +892,57 @@ func TestWorker_ReviewPhase_PreMergeRebaseSuccess(t *testing.T) {
 	pool.Stop()
 
 	// The dry run rebase should have been attempted (in addition to the
-	// start-of-phase rebase). With NoopWorkFn the agent does nothing,
-	// so the dry run succeeds and a success log message should appear.
-	// The ticket should end at review/user-review.
+	// start-of-phase rebase). With NoopWorkFn the agent does nothing, so the
+	// dry run succeeds and the review leaves no change requests behind: there
+	// is nothing for the user to approve, so the ticket goes to merging.
 	units, err := d.Status()
 	if err != nil {
 		t.Fatalf("Status: %v", err)
 	}
 	for _, u := range units {
 		if u.Identifier == "proj/review-ok" {
+			if u.Phase != models.PhaseMerging {
+				t.Errorf("expected phase %q, got %q", models.PhaseMerging, u.Phase)
+			}
+			if u.Status != models.StatusIdle {
+				t.Errorf("expected status %q, got %q", models.StatusIdle, u.Status)
+			}
+			return
+		}
+	}
+	t.Fatal("ticket not found")
+}
+
+func TestWorker_ReviewPhase_OpenChangeRequestsWaitForUser(t *testing.T) {
+	d, _, ticketsDir := openTestDBWithGit(t)
+	createProject(t, d, "proj")
+	createTicket(t, d, "proj/review-crs")
+
+	if err := d.AddChangeRequest("proj/review-crs", "main.go:42", "cf-review", "fix this"); err != nil {
+		t.Fatalf("AddChangeRequest: %v", err)
+	}
+	if err := d.SetStatus("proj/review-crs", models.PhaseReview, models.StatusIdle); err != nil {
+		t.Fatal(err)
+	}
+
+	pool := worker.NewPool(1, 1)
+	pool.WorkFn = worker.NoopWorkFn
+	pool.Start(d, ticketsDir)
+
+	if !waitForLog(pool.LogChannel, "released ticket proj/review-crs", 5*time.Second) {
+		pool.Stop()
+		t.Fatal("ticket was not released within 5 seconds")
+	}
+	pool.Stop()
+
+	// The review left an open change request, so the user still has something
+	// to look at before the merge.
+	units, err := d.Status()
+	if err != nil {
+		t.Fatalf("Status: %v", err)
+	}
+	for _, u := range units {
+		if u.Identifier == "proj/review-crs" {
 			if u.Phase != models.PhaseReview {
 				t.Errorf("expected phase %q, got %q", models.PhaseReview, u.Phase)
 			}
@@ -963,8 +1005,8 @@ func TestWorker_ReviewPhase_PreMergeRebaseConflictNotifies(t *testing.T) {
 	}
 	pool.Stop()
 
-	// The ticket should still advance to user-review (the dry run is
-	// advisory, not blocking).
+	// The ticket should still stop at user-review, even with no change
+	// requests: the conflict is worth a look before a merge starts.
 	units, err := d.Status()
 	if err != nil {
 		t.Fatalf("Status: %v", err)

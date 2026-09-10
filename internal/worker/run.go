@@ -230,10 +230,12 @@ func (w *Worker) postWorkRefactor(ctx postWorkContext) (models.TicketPhase, mode
 	return models.PhaseRefactor, models.StatusUserReview
 }
 
-// postWorkReview performs a pre-merge rebase onto the parent branch while
-// the agent still has context. The result is advisory — the ticket still
-// advances to user-review even on conflict — but a notification is sent
-// so the user can investigate early.
+// postWorkReview performs a pre-merge rebase onto the parent branch while the
+// agent still has context, then decides whether the user has anything to
+// approve. A review that raised no change requests left nothing to look at, so
+// the ticket advances straight to merging. A dry run conflict keeps the ticket
+// in user-review even so: the user was notified about it and may want to look
+// before a merge starts.
 func (w *Worker) postWorkReview(ticket *models.WorkUnit, ctx postWorkContext) (models.TicketPhase, models.TicketStatus) {
 	if err := w.database.RebaseTicketOnParent(ctx.identifier, ticket.Parent, ticket.ParentBranch); err != nil {
 		w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("pre-merge dry run conflict on %s: %v", ctx.identifier, err))
@@ -243,8 +245,18 @@ func (w *Worker) postWorkReview(ticket *models.WorkUnit, ctx postWorkContext) (m
 			default:
 			}
 		}
-	} else {
-		w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("pre-merge dry run succeeded for %s", ctx.identifier))
+		return models.PhaseReview, models.StatusUserReview
+	}
+	w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("pre-merge dry run succeeded for %s", ctx.identifier))
+
+	open, err := w.database.OpenChangeRequests(ctx.identifier)
+	if err != nil {
+		w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("error checking open change requests on %s: %v; routing to user-review", ctx.identifier, err))
+		return models.PhaseReview, models.StatusUserReview
+	}
+	if len(open) == 0 {
+		w.logCh <- NewLogMessageWithFile(w.Number, fmt.Sprintf("review on %s raised no change requests; advancing to merging", ctx.identifier), ctx.logfilePath)
+		return models.PhaseMerging, models.StatusIdle
 	}
 	return models.PhaseReview, models.StatusUserReview
 }
