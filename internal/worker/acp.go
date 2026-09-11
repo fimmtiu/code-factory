@@ -407,10 +407,16 @@ func runACP(
 	for _, warning := range envWarnings {
 		_, _ = fmt.Fprintf(logFile, "[warn] %s\n", warning)
 	}
-	// Start in its own process group so we can kill the entire tree
-	// (npx + its child node process). Without this, Kill() only hits
-	// npx, and the orphaned child holds pipes open, blocking cmd.Wait().
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	// Start in its own session, which does two things. First, it gives the
+	// child its own process group so we can kill the entire tree (npx + its
+	// child node process): without that, Kill() only hits npx, and the
+	// orphaned child holds pipes open, blocking cmd.Wait(). Second, it leaves
+	// the child with no controlling terminal, so nothing the agent runs can
+	// open /dev/tty and write to our screen. Redirecting the child's stdio is
+	// not enough on its own: /dev/tty reaches the controlling terminal whatever
+	// the file descriptors point at, and an agent command that draws a spinner
+	// or a progress bar that way leaves the cursor switched on over the UI.
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	cmd.Cancel = func() error {
 		return syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM)
 	}

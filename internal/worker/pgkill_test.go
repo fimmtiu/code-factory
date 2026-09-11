@@ -55,6 +55,39 @@ func TestProcessGroupKill_ChildHoldsPipeOpen(t *testing.T) {
 	}
 }
 
+// TestSessionKill_ChildHoldsPipeOpen covers the flag the ACP child actually
+// uses. Setsid is there to deny the agent's descendants a controlling
+// terminal, but a session leader also leads its own process group, so the
+// negative-PID kill above must still reach the whole tree.
+func TestSessionKill_ChildHoldsPipeOpen(t *testing.T) {
+	cmd := exec.Command("bash", "-c", `
+		sleep 60 &
+		exit 0
+	`)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	cmd.Stderr = &discardWriter{}
+
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	time.Sleep(200 * time.Millisecond)
+
+	_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM)
+
+	done := make(chan error, 1)
+	go func() {
+		done <- cmd.Wait()
+	}()
+
+	select {
+	case <-done:
+		// Success — the group kill reached the child under Setsid too.
+	case <-time.After(3 * time.Second):
+		t.Fatal("cmd.Wait() did not return within 3s after process group kill under Setsid")
+	}
+}
+
 // TestProcessKillOnly_ChildHoldsPipeOpen demonstrates the bug: killing only
 // the parent leaves the child alive, holding the pipe, and cmd.Wait() hangs.
 func TestProcessKillOnly_ChildHoldsPipeOpen(t *testing.T) {

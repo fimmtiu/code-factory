@@ -394,6 +394,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
+// hideCursorSeq switches the terminal's own cursor off. Every frame starts
+// with it because the UI draws its own cursors and never wants the real one,
+// and because anything outside our control — an escape sequence in the agent
+// text we render, a subprocess that reached the terminal — can switch it back
+// on, where it blinks over the hint bar until something hides it again.
+const hideCursorSeq = "\x1b[?25l"
+
 // View renders the current state of the TUI.
 func (m Model) View() string {
 	header := m.renderHeader()
@@ -527,7 +534,7 @@ func (m Model) View() string {
 		full = lipglossv2.NewCompositor(bg, fg).Render()
 	}
 
-	return full
+	return hideCursorSeq + full
 }
 
 // renderHeader returns the tab bar showing the active view, with a PAUSED

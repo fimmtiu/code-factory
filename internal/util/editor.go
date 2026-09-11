@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"syscall"
 
 	"github.com/fimmtiu/code-factory/internal/config"
 )
@@ -73,6 +74,10 @@ func blockingEditorAtLocationCommand(filename string, lineNo int) string {
 // discarded so that a failure still carries a reason.
 func runEditor(args []string) error {
 	cmd := exec.Command(args[0], args[1:]...)
+	// Its own session, so that the editor's CLI front end cannot open
+	// /dev/tty and draw on the screen the TUI is using. Empty stdio alone
+	// does not stop that.
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
