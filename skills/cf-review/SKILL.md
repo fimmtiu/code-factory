@@ -31,20 +31,20 @@ Before starting, run through ALL of the following steps in order. **If a "Pre-de
    git diff --stat BRANCHPOINT
    ```
    If there's no output, tell the user "No changes found on this branch" and stop.
-6. **Capture the full diff to a temp file**: Run `git diff BRANCHPOINT > /tmp/cf-review-diff-$$.txt` (using the shell PID to make the filename unique). Store the path as `DIFF_FILE`. This avoids embedding the full diff text in every subagent prompt — subagents will read the file instead.
+6. **Capture the full diff to a temp file**: Run `git diff BRANCHPOINT > "${TMPDIR:-/tmp}/cf-review-diff-$$.txt"` (using the shell PID to make the filename unique). Store the expanded path as `DIFF_FILE`. This avoids embedding the full diff text in every subagent prompt — subagents will read the file instead.
 7. **What does it do?**: Examine the commit messages between HEAD and BRANCHPOINT and generate a summary of what you think the branch does. Store the result as `PURPOSE`.
 
 ## Running the Phases
 
-Launch **all five phases in parallel** as separate Task subagents. They are independent — they all take the same `BRANCHPOINT` and `PURPOSE` inputs and produce the same JSON output format.
+Launch **all five phases in parallel** as separate subagents. They are independent — they all take the same `BRANCHPOINT` and `PURPOSE` inputs and produce the same JSON output format.
 
 In every subagent prompt below, replace `BRANCHPOINT` with the value from prerequisite step 4, `DIFF_FILE` with the path from prerequisite step 6, and `PURPOSE` with the value from prerequisite step 7. These are literal text substitutions — the subagent receives the actual values, not the placeholder names.
 
 ### Phase 1: Fitness for purpose
 
-Spawn a **Task subagent** with:
+Spawn a **subagent** with:
   - `description`: "Review branch for fitness for purpose"
-  - `subagent_type`: `generalPurpose`
+  - `subagent_type`: `general-purpose`
   - `prompt`: the text between ---BEGIN PROMPT--- and ---END PROMPT--- below, with BRANCHPOINT and PURPOSE substituted:
 
 ---BEGIN PROMPT---
@@ -70,9 +70,9 @@ Example: [{"filename": "cmd/main.go", "line_number": "42", "description": "**Fit
 
 ### Phase 2: Security review
 
-Spawn a **Task subagent** with:
+Spawn a **subagent** with:
   - `description`: "Security review for current branch"
-  - `subagent_type`: `generalPurpose`
+  - `subagent_type`: `general-purpose`
   - `prompt`: the text between ---BEGIN PROMPT--- and ---END PROMPT--- below, with BRANCHPOINT substituted:
 
 ---BEGIN PROMPT---
@@ -100,15 +100,13 @@ Each object must have exactly these three keys:
 Example: [{"filename": "api/auth.go", "line_number": "87", "description": "**Security:** User-supplied input is passed directly to SQL query without parameterization"}]
 ---END PROMPT---
 
-**Post-processing (parent agent does this, not the subagent):** Parse the JSON array returned by the subagent. For each object, pipe `description` into standard input of:
-
-    cf-tickets create-cr TICKET_ID FILENAME:LINE_NUMBER cf-review
+**Post-processing (parent agent does this, not the subagent):** Parse the JSON array returned by the subagent. Collect the results — they will be filed in the Completion step.
 
 ### Phase 3: Performance analysis
 
-Spawn a **Task subagent** with:
+Spawn a **subagent** with:
   - `description`: "Performance analysis for current branch"
-  - `subagent_type`: `generalPurpose`
+  - `subagent_type`: `general-purpose`
   - `prompt`: the text between ---BEGIN PROMPT--- and ---END PROMPT--- below, with BRANCHPOINT substituted:
 
 ---BEGIN PROMPT---
@@ -143,15 +141,13 @@ Each object must have exactly these three keys:
 Example: [{"filename": "db/queries.go", "line_number": "112", "description": "**Performance:** This loop issues one SELECT per item; with 10k items this will take minutes. Batch into a single IN query."}]
 ---END PROMPT---
 
-**Post-processing (parent agent does this, not the subagent):** Parse the JSON array returned by the subagent. For each object, pipe `description` into standard input of:
-
-    cf-tickets create-cr TICKET_ID FILENAME:LINE_NUMBER cf-review
+**Post-processing (parent agent does this, not the subagent):** Parse the JSON array returned by the subagent. Collect the results — they will be filed in the Completion step.
 
 ### Phase 4: Code quality
 
-Spawn a **Task subagent** with:
+Spawn a **subagent** with:
   - `description`: "Code quality analysis for current branch"
-  - `subagent_type`: `generalPurpose`
+  - `subagent_type`: `general-purpose`
   - `prompt`: the text between ---BEGIN PROMPT--- and ---END PROMPT--- below, with BRANCHPOINT substituted:
 
 ---BEGIN PROMPT---
@@ -181,15 +177,13 @@ Each object must have exactly these three keys:
 Example: [{"filename": "internal/service.go", "line_number": "55", "description": "**Code quality:** This error is silently swallowed; callers have no way to know the operation failed"}]
 ---END PROMPT---
 
-**Post-processing (parent agent does this, not the subagent):** Parse the JSON array returned by the subagent. For each object, pipe `description` into standard input of:
-
-    cf-tickets create-cr TICKET_ID FILENAME:LINE_NUMBER cf-review
+**Post-processing (parent agent does this, not the subagent):** Parse the JSON array returned by the subagent. Collect the results — they will be filed in the Completion step.
 
 ### Phase 5: Abstraction
 
-Spawn a **Task subagent** with:
+Spawn a **subagent** with:
   - `description`: "Abstraction analysis for current branch"
-  - `subagent_type`: `generalPurpose`
+  - `subagent_type`: `general-purpose`
   - `prompt`: the text between ---BEGIN PROMPT--- and ---END PROMPT--- below, with BRANCHPOINT substituted:
 
 ---BEGIN PROMPT---
@@ -229,8 +223,7 @@ After all five phases have finished:
 
        cf-tickets batch-create-crs TICKET_ID cf-review
 
-   Replace `TICKET_ID` with the value from prerequisite step 1. This creates all change requests in a single command instead of one per finding.
-
+   Replace `TICKET_ID` with the value from prerequisite step 1.
    If the merged array is empty (`[]`), skip this step — there is nothing to file.
 
 2. Clean up the temp diff file: `rm -f DIFF_FILE` (substitute the actual path).

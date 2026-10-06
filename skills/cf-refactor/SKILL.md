@@ -1,13 +1,13 @@
 ---
 name: cf-refactor
-description: "Scan branch changes for code smells and aggressively refactor to remove them using Martin Fowler-style techniques. Trigger with `/cf-refactor` or `/refactorizer`."
+description: "Scan branch changes for code smells and aggressively refactor to remove them using Martin Fowler-style techniques. Trigger with `/cf-refactor`."
 ---
 
 # Refactorizer
 
 Aggressively scan the changes on the current branch for code smells and refactor to remove them, applying Martin Fowler-style refactoring techniques.
 
-Trigger with `/cf-refactor` or `/refactorizer`.
+Trigger with `/cf-refactor`.
 
 ## Prerequisites
 
@@ -50,7 +50,7 @@ Run ALL of these steps before starting the refactoring loop. **If a "Pre-detecte
 
 ## Find Changes
 
-Determine the refactoring scope. The user may specify scope after the trigger (e.g., `/refactorizer branch`, `/refactorizer all`, `/refactorizer uncommitted`). If no scope is specified, **default to option 2** (all changes on this branch).
+Determine the refactoring scope. The user may specify scope after the trigger (e.g., `/cf-refactor branch`, `/cf-refactor all`, `/cf-refactor uncommitted`). If no scope is specified, **default to option 2** (all changes on this branch).
 
 Available scopes:
    1. `all` — All code in the repository. Run `git ls-files` to get all tracked source files.
@@ -68,7 +68,7 @@ When in doubt about whether a file is source code, include it — it is better t
 
 ## Scope Rules
 
-These rules are ABSOLUTE and apply to every phase:
+These rules apply to every phase:
 
 1. **Write scope**: ONLY modify files that appear in `CHANGED_FILES`. When a refactoring creates a NEW file (e.g., Extract Class), add it to `CHANGED_FILES` for subsequent phases.
 2. **Read scope**: You MAY read any file in the repository for context (understanding class hierarchies, finding callers, checking conventions).
@@ -105,7 +105,7 @@ For smell N of 23:
 4. **Filter**: For each instance found, check the "When to Ignore" criteria from the catalog entry. If an ignore criterion applies, skip this instance and record why.
 
 5. **Refactor**: For each remaining instance, apply one or more of the listed treatments:
-   - DEFAULT TO APPLYING the refactoring. Only skip if you can articulate a specific, concrete reason — not "it might break something" but naming exactly what would break and why.
+   - Apply the refactoring by default. Skip an instance only for a specific, concrete reason: name exactly what would break and why, not "it might break something".
    - When multiple treatments are listed, prefer the first one unless a later treatment is clearly better suited to the specific instance.
    - Follow existing naming conventions in the codebase.
    - Update all references within `CHANGED_FILES` when moving/renaming.
@@ -483,7 +483,7 @@ Create a SINGLE commit after all five passes are complete.
 
 5. Omit passes where no changes were made.
 
-**CRITICAL:** Generate the commit message body from `git diff --cached`, not from memory. If a change you intended to include is not shown by `git diff --cached`, either stage it first or omit it from the message. Only describe changes that are actually staged.
+Generate the commit message body from `git diff --cached`, not from memory. If a change you intended to include is not shown by `git diff --cached`, either stage it first or omit it from the message. Only describe changes that are actually staged.
 
 ## Post-Refactoring Verification
 

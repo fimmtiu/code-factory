@@ -38,20 +38,20 @@ Comments should be brief and concise, not conversational. For every comment you 
 
 Examples of excessively verbose comments:
 ```python
-# Lint, typecheck, and run the Python suite inside the production image (Dockerfile.worker `test`                                  │
-# stage). The build starts `FROM` the DevCycle clio/python base image, pulled cross-account                                        │
-# from its ECR (us-west-2). GitHub-hosted runners don't get that access for free, so the job                                       │
-# assumes the pull-only CI role via OIDC to mint an ECR auth token. The role ARN comes from                                        │
-# the bootstrap stack's CiRoleArn output (see cdk/lib/bootstrap-stack.ts).                                                         │
-#                                                                                                                                  │
-# Builds both images to prove they both build correctly. The test stage runs in the worker image                                   │
-# because it carries the full package. The web image is built separately to catch COPY mistakes                                    │
-# that would otherwise only surface at deploy time.                                                                                │
+# Lint, typecheck, and run the Python suite inside the production image (Dockerfile.worker `test`
+# stage). The build starts `FROM` the DevCycle clio/python base image, pulled cross-account
+# from its ECR (us-west-2). GitHub-hosted runners don't get that access for free, so the job
+# assumes the pull-only CI role via OIDC to mint an ECR auth token. The role ARN comes from
+# the bootstrap stack's CiRoleArn output (see cdk/lib/bootstrap-stack.ts).
+#
+# Builds both images to prove they both build correctly. The test stage runs in the worker image
+# because it carries the full package. The web image is built separately to catch COPY mistakes
+# that would otherwise only surface at deploy time.
 ```
 
 This could be replaced by simply:
 ```python
-# Runs lint, typecheck, and tests in the worker image's `test` stage, and builds the web image.                                    │
+# Runs lint, typecheck, and tests in the worker image's `test` stage, and builds the web image.
 # The base image is in a cross-account ECR, so the job assumes a pull-only CI role via OIDC.
 ```
 

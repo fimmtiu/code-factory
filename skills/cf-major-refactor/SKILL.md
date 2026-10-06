@@ -32,7 +32,7 @@ Run ALL of these steps before starting the refactoring loop. **If a "Pre-detecte
 
 ## Determine Relevant Files
 
-Filter to source code files only. Exclude:
+Start from all tracked files (`git ls-files`) and filter to source code files only. Exclude:
 - Binary files and images
 - Lockfiles: `package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`, `Cargo.lock`, `go.sum`, `Gemfile.lock`, `poetry.lock`, etc.
 - Generated files: files with "generated" in their name or a generation header comment (e.g., `// Code generated ... DO NOT EDIT.`)
@@ -43,13 +43,12 @@ When in doubt about whether a file is source code, include it — it is better t
 
 ## Scope Rules
 
-These rules are ABSOLUTE and apply to every phase:
+These rules apply to every phase:
 
 1. **Write scope**: ONLY modify files that appear in `CHANGED_FILES`. When a refactoring creates a NEW file (e.g., Extract Class), add it to `CHANGED_FILES` for subsequent phases.
 2. **Read scope**: You MAY read any file in the repository for context (understanding class hierarchies, finding callers, checking conventions).
 3. **Deferred refactorings**: If a refactoring would require modifying files outside `CHANGED_FILES` (e.g., updating callers in untouched files), note it in the summary as a "deferred refactoring" but do NOT make the change.
-4. **No backtracking**: Files created by a refactoring in phase N are considered "clean" for smells 1 through N. Do not re-check earlier smells on newly created files.
-5. **Language-agnostic**: Adapt all treatments to the specific language and conventions of the project. The smell descriptions are language-agnostic concepts.
+4. **Language-agnostic**: Adapt all treatments to the specific language and conventions of the project.
 
 ## Refactoring Loop
 
@@ -134,6 +133,10 @@ SHEET_MAX_FETCH_ROWS: int = 5000
 
 The same requirements apply to code-level documentation, such as Python doc strings at the top of classes and methods. Edit them to be simpler, and remove any text which is obvious from context or explains historical context that isn't required to understand the current code.
 
-### Step 5: Report
+### Step 5: Verify
+
+Run `BUILD_CMD`, `LINT_CMD`, and `TEST_CMD` (each if set). Behaviour must not change, so fix any failure the refactoring caused before you report.
+
+### Step 6: Report
 
 Print a short summary of how many bytes changed in each file you edited.
