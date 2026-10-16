@@ -13,37 +13,16 @@ import (
 	"github.com/fimmtiu/code-factory/internal/config"
 )
 
-// FindRepoRoot walks up from startDir looking for a .git directory.
-// It returns the directory that contains .git, or an error if no such
-// directory is found before the filesystem root is reached.
+// FindRepoRoot walks up from startDir looking for .git. If .git is a
+// directory, it returns the directory that contains it. If .git is a file (a
+// linked worktree, which contains "gitdir: <path>"), it returns the root of the
+// main repository, so that all worktrees of a repository share one
+// .code-factory/ directory. It returns an error if no .git is found before the
+// filesystem root is reached.
 func FindRepoRoot(startDir string) (string, error) {
 	dir, err := filepath.Abs(startDir)
 	if err != nil {
 		return "", fmt.Errorf("FindRepoRoot: %w", err)
-	}
-
-	for {
-		info, err := os.Stat(filepath.Join(dir, ".git"))
-		if err == nil && info.IsDir() {
-			return dir, nil
-		}
-
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			return "", errors.New("FindRepoRoot: no git repository found (no .git directory in any parent)")
-		}
-		dir = parent
-	}
-}
-
-// FindMainRepoRoot is like FindRepoRoot, but it also accepts a linked
-// worktree, where .git is a file that contains "gitdir: <path>". For a linked
-// worktree, it returns the root of the main repository, so that all worktrees
-// of a repository share one .code-factory/ directory.
-func FindMainRepoRoot(startDir string) (string, error) {
-	dir, err := filepath.Abs(startDir)
-	if err != nil {
-		return "", fmt.Errorf("FindMainRepoRoot: %w", err)
 	}
 
 	for {
@@ -58,7 +37,7 @@ func FindMainRepoRoot(startDir string) (string, error) {
 
 		parent := filepath.Dir(dir)
 		if parent == dir {
-			return "", errors.New("FindMainRepoRoot: no git repository found (no .git in any parent)")
+			return "", errors.New("FindRepoRoot: no git repository found (no .git in any parent)")
 		}
 		dir = parent
 	}
@@ -70,12 +49,12 @@ func FindMainRepoRoot(startDir string) (string, error) {
 func mainRootFromGitFile(dir, gitPath string) (string, error) {
 	data, err := os.ReadFile(gitPath)
 	if err != nil {
-		return "", fmt.Errorf("FindMainRepoRoot: %w", err)
+		return "", fmt.Errorf("FindRepoRoot: %w", err)
 	}
 	line := strings.TrimSpace(string(data))
 	gitDir, ok := strings.CutPrefix(line, "gitdir:")
 	if !ok {
-		return "", fmt.Errorf("FindMainRepoRoot: unrecognized .git file %s", gitPath)
+		return "", fmt.Errorf("FindRepoRoot: unrecognized .git file %s", gitPath)
 	}
 	gitDir = resolvePath(dir, strings.TrimSpace(gitDir))
 
@@ -84,7 +63,7 @@ func mainRootFromGitFile(dir, gitPath string) (string, error) {
 		return dir, nil
 	}
 	if err != nil {
-		return "", fmt.Errorf("FindMainRepoRoot: %w", err)
+		return "", fmt.Errorf("FindRepoRoot: %w", err)
 	}
 	commonDir := resolvePath(gitDir, strings.TrimSpace(string(commonData)))
 	return filepath.Dir(commonDir), nil

@@ -56,8 +56,6 @@ func TestFindRepoRoot_NotFound(t *testing.T) {
 	}
 }
 
-// ===== FindMainRepoRoot =====
-
 // makeTempWorktree creates a main repo and a linked worktree outside it, with
 // the same .git file and commondir layout that `git worktree add` creates.
 func makeTempWorktree(t *testing.T, gitdirLine string) (mainRoot, worktree string) {
@@ -80,24 +78,13 @@ func makeTempWorktree(t *testing.T, gitdirLine string) (mainRoot, worktree strin
 	return mainRoot, worktree
 }
 
-func TestFindMainRepoRoot_FromRepo(t *testing.T) {
-	root := makeTempRepo(t)
-	got, err := storage.FindMainRepoRoot(root)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if got != root {
-		t.Errorf("expected %q, got %q", root, got)
-	}
-}
-
-func TestFindMainRepoRoot_FromWorktreeSubdir(t *testing.T) {
+func TestFindRepoRoot_FromWorktreeSubdir(t *testing.T) {
 	mainRoot, worktree := makeTempWorktree(t, "")
 	sub := filepath.Join(worktree, "a", "b")
 	if err := os.MkdirAll(sub, 0755); err != nil {
 		t.Fatalf("failed to create subdirs: %v", err)
 	}
-	got, err := storage.FindMainRepoRoot(sub)
+	got, err := storage.FindRepoRoot(sub)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -106,7 +93,7 @@ func TestFindMainRepoRoot_FromWorktreeSubdir(t *testing.T) {
 	}
 }
 
-func TestFindMainRepoRoot_RelativeGitdir(t *testing.T) {
+func TestFindRepoRoot_RelativeGitdir(t *testing.T) {
 	mainRoot := makeTempRepo(t)
 	adminDir := filepath.Join(mainRoot, ".git", "worktrees", "wt")
 	if err := os.MkdirAll(adminDir, 0755); err != nil {
@@ -122,7 +109,7 @@ func TestFindMainRepoRoot_RelativeGitdir(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(worktree, ".git"), []byte("gitdir: ../../.git/worktrees/wt\n"), 0644); err != nil {
 		t.Fatalf("failed to write .git file: %v", err)
 	}
-	got, err := storage.FindMainRepoRoot(worktree)
+	got, err := storage.FindRepoRoot(worktree)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -131,13 +118,13 @@ func TestFindMainRepoRoot_RelativeGitdir(t *testing.T) {
 	}
 }
 
-func TestFindMainRepoRoot_NoCommondir(t *testing.T) {
+func TestFindRepoRoot_NoCommondir(t *testing.T) {
 	gitDir := t.TempDir()
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, ".git"), []byte("gitdir: "+gitDir+"\n"), 0644); err != nil {
 		t.Fatalf("failed to write .git file: %v", err)
 	}
-	got, err := storage.FindMainRepoRoot(dir)
+	got, err := storage.FindRepoRoot(dir)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -146,16 +133,10 @@ func TestFindMainRepoRoot_NoCommondir(t *testing.T) {
 	}
 }
 
-func TestFindMainRepoRoot_MalformedGitFile(t *testing.T) {
+func TestFindRepoRoot_MalformedGitFile(t *testing.T) {
 	_, worktree := makeTempWorktree(t, "garbage")
-	if _, err := storage.FindMainRepoRoot(worktree); err == nil {
+	if _, err := storage.FindRepoRoot(worktree); err == nil {
 		t.Fatal("expected error for malformed .git file, got nil")
-	}
-}
-
-func TestFindMainRepoRoot_NotFound(t *testing.T) {
-	if _, err := storage.FindMainRepoRoot(t.TempDir()); err == nil {
-		t.Fatal("expected error when no .git found, got nil")
 	}
 }
 
