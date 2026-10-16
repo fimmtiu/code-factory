@@ -5,8 +5,10 @@ package storage
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/fimmtiu/code-factory/internal/config"
 )
@@ -32,6 +34,67 @@ func FindRepoRoot(startDir string) (string, error) {
 		}
 		dir = parent
 	}
+}
+
+// FindMainRepoRoot is like FindRepoRoot, but it also accepts a linked
+// worktree, where .git is a file that contains "gitdir: <path>". For a linked
+// worktree, it returns the root of the main repository, so that all worktrees
+// of a repository share one .code-factory/ directory.
+func FindMainRepoRoot(startDir string) (string, error) {
+	dir, err := filepath.Abs(startDir)
+	if err != nil {
+		return "", fmt.Errorf("FindMainRepoRoot: %w", err)
+	}
+
+	for {
+		gitPath := filepath.Join(dir, ".git")
+		info, err := os.Stat(gitPath)
+		if err == nil {
+			if info.IsDir() {
+				return dir, nil
+			}
+			return mainRootFromGitFile(dir, gitPath)
+		}
+
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return "", errors.New("FindMainRepoRoot: no git repository found (no .git in any parent)")
+		}
+		dir = parent
+	}
+}
+
+// mainRootFromGitFile reads the .git file at gitPath in worktree dir and
+// returns the root of the main repository. If the git directory has no
+// commondir file (for example, a submodule), it returns dir.
+func mainRootFromGitFile(dir, gitPath string) (string, error) {
+	data, err := os.ReadFile(gitPath)
+	if err != nil {
+		return "", fmt.Errorf("FindMainRepoRoot: %w", err)
+	}
+	line := strings.TrimSpace(string(data))
+	gitDir, ok := strings.CutPrefix(line, "gitdir:")
+	if !ok {
+		return "", fmt.Errorf("FindMainRepoRoot: unrecognized .git file %s", gitPath)
+	}
+	gitDir = resolvePath(dir, strings.TrimSpace(gitDir))
+
+	commonData, err := os.ReadFile(filepath.Join(gitDir, "commondir"))
+	if errors.Is(err, fs.ErrNotExist) {
+		return dir, nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("FindMainRepoRoot: %w", err)
+	}
+	commonDir := resolvePath(gitDir, strings.TrimSpace(string(commonData)))
+	return filepath.Dir(commonDir), nil
+}
+
+func resolvePath(base, path string) string {
+	if filepath.IsAbs(path) {
+		return filepath.Clean(path)
+	}
+	return filepath.Join(base, path)
 }
 
 // TicketsDirPath returns the path to the .code-factory/ directory within repoRoot.

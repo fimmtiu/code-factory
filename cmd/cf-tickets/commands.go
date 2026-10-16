@@ -18,7 +18,7 @@ import (
 )
 
 func openDB() (*db.DB, error) {
-	repoRoot, err := storage.FindRepoRoot(".")
+	repoRoot, err := storage.FindMainRepoRoot(".")
 	if err != nil {
 		return nil, err
 	}
@@ -79,7 +79,7 @@ func runCommand(subcommand string, args []string) error {
 }
 
 func runInit() error {
-	repoRoot, err := storage.FindRepoRoot(".")
+	repoRoot, err := storage.FindMainRepoRoot(".")
 	if err != nil {
 		return err
 	}
