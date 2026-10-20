@@ -626,7 +626,7 @@ func TestFindForbiddenMarkers_FindsTODOAndPanic(t *testing.T) {
 		t.Fatalf("commit: %v\n%s", err, out)
 	}
 
-	hits, err := client.FindForbiddenMarkers(dir, baseBranch)
+	hits, err := client.FindForbiddenMarkers(dir, baseBranch, gitutil.MarkerNotes|gitutil.MarkerStubs)
 	if err != nil {
 		t.Fatalf("FindForbiddenMarkers: %v", err)
 	}
@@ -671,7 +671,7 @@ func TestFindForbiddenMarkers_CleanDiffReturnsNoHits(t *testing.T) {
 		t.Fatalf("commit: %v\n%s", err, out)
 	}
 
-	hits, err := client.FindForbiddenMarkers(dir, baseBranch)
+	hits, err := client.FindForbiddenMarkers(dir, baseBranch, gitutil.MarkerNotes|gitutil.MarkerStubs)
 	if err != nil {
 		t.Fatalf("FindForbiddenMarkers: %v", err)
 	}
@@ -711,7 +711,7 @@ func TestFindForbiddenMarkers_IgnoresPreExistingMarkersOnBase(t *testing.T) {
 		t.Fatalf("commit: %v\n%s", err, out)
 	}
 
-	hits, err := client.FindForbiddenMarkers(dir, baseBranch)
+	hits, err := client.FindForbiddenMarkers(dir, baseBranch, gitutil.MarkerNotes|gitutil.MarkerStubs)
 	if err != nil {
 		t.Fatalf("FindForbiddenMarkers: %v", err)
 	}
@@ -744,7 +744,7 @@ func TestFindForbiddenMarkers_MultiLanguageStubs(t *testing.T) {
 		t.Fatalf("commit: %v\n%s", err, out)
 	}
 
-	hits, err := client.FindForbiddenMarkers(dir, baseBranch)
+	hits, err := client.FindForbiddenMarkers(dir, baseBranch, gitutil.MarkerNotes|gitutil.MarkerStubs)
 	if err != nil {
 		t.Fatalf("FindForbiddenMarkers: %v", err)
 	}
@@ -779,7 +779,7 @@ func TestFindForbiddenMarkers_AllowsRaiseNotImplementedError(t *testing.T) {
 		t.Fatalf("commit: %v\n%s", err, out)
 	}
 
-	hits, err := client.FindForbiddenMarkers(dir, baseBranch)
+	hits, err := client.FindForbiddenMarkers(dir, baseBranch, gitutil.MarkerNotes|gitutil.MarkerStubs)
 	if err != nil {
 		t.Fatalf("FindForbiddenMarkers: %v", err)
 	}
@@ -815,11 +815,54 @@ func TestFindForbiddenMarkers_AllowsTODOInDocFiles(t *testing.T) {
 		t.Fatalf("commit: %v\n%s", err, out)
 	}
 
-	hits, err := client.FindForbiddenMarkers(dir, baseBranch)
+	hits, err := client.FindForbiddenMarkers(dir, baseBranch, gitutil.MarkerNotes|gitutil.MarkerStubs)
 	if err != nil {
 		t.Fatalf("FindForbiddenMarkers: %v", err)
 	}
 	if len(hits) != 0 {
 		t.Errorf("TODO in doc files should not be flagged, got: %v", hits)
+	}
+}
+
+func TestFindForbiddenMarkers_FiltersByKind(t *testing.T) {
+	dir := initTestRepo(t)
+	client := gitutil.NewRealGitClient()
+	baseBranch := currentBranch(t, dir)
+
+	if out, err := exec.Command("git", "-C", dir, "checkout", "-b", "kinds").CombinedOutput(); err != nil {
+		t.Fatalf("checkout: %v\n%s", err, out)
+	}
+	contents := "package x\n" +
+		"// FIXME: tidy\n" +
+		"func A() { panic(\"not implemented\") }\n"
+	if err := os.WriteFile(filepath.Join(dir, "x.go"), []byte(contents), 0644); err != nil {
+		t.Fatalf("write x.go: %v", err)
+	}
+	if out, err := exec.Command("git", "-C", dir, "add", "x.go").CombinedOutput(); err != nil {
+		t.Fatalf("add: %v\n%s", err, out)
+	}
+	if out, err := exec.Command("git", "-C", dir, "commit", "-m", "kinds").CombinedOutput(); err != nil {
+		t.Fatalf("commit: %v\n%s", err, out)
+	}
+
+	tests := []struct {
+		name  string
+		kinds gitutil.MarkerKinds
+		want  []string
+	}{
+		{"notes", gitutil.MarkerNotes, []string{"x.go:2: // FIXME: tidy"}},
+		{"stubs", gitutil.MarkerStubs, []string{`x.go:3: func A() { panic("not implemented") }`}},
+		{"none", 0, nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			hits, err := client.FindForbiddenMarkers(dir, baseBranch, tt.kinds)
+			if err != nil {
+				t.Fatalf("FindForbiddenMarkers: %v", err)
+			}
+			if strings.Join(hits, "\n") != strings.Join(tt.want, "\n") {
+				t.Errorf("hits = %q, want %q", hits, tt.want)
+			}
+		})
 	}
 }

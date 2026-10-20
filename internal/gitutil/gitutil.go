@@ -46,11 +46,11 @@ type GitClient interface {
 	EnableRerere(worktreeDir string) error
 	// FindForbiddenMarkers returns lines added on the branch checked out at
 	// worktreeDir but not present on targetBranch that contain incomplete-work
-	// markers (TODO, FIXME, XXX, panic("unimplemented"), panic("not implemented")).
-	// Hits in test files (paths matching *_test.* or under test/, tests/, spec/
-	// directories) are filtered out. Each returned hit is formatted as
-	// "path:line: text" so callers can surface a jump-to-source list.
-	FindForbiddenMarkers(worktreeDir, targetBranch string) ([]string, error)
+	// markers of the given kinds (see MarkerKinds). Hits in test files (paths
+	// matching *_test.* or under test/, tests/, spec/ directories) are filtered
+	// out. Each returned hit is formatted as "path:line: text" so callers can
+	// surface a jump-to-source list.
+	FindForbiddenMarkers(worktreeDir, targetBranch string, kinds MarkerKinds) ([]string, error)
 }
 
 // RealGitClient implements GitClient using actual git commands.
@@ -213,23 +213,41 @@ func (g *RealGitClient) EnableRerere(worktreeDir string) error {
 	return runGit("-C", worktreeDir, "config", "rerere.autoUpdate", "true")
 }
 
-// forbiddenMarkerPattern matches incomplete-work markers we want to keep out
-// of merged code. The first alternative is the universal-comment family
-// (TODO/FIXME/XXX) found in every language. The remaining alternatives are
-// stub-throw idioms in the languages code-factory is most often used with:
-// Go's panic("unimplemented") and Rust's unimplemented!()/todo!(). Adding
-// more languages is just a matter of extending this regex — no other code in
-// the scanner is language-specific.
+// MarkerKinds is a set of incomplete-work marker families for
+// FindForbiddenMarkers.
+type MarkerKinds int
+
+const (
+	// MarkerNotes is the universal-comment family (TODO/FIXME/XXX) found in
+	// every language.
+	MarkerNotes MarkerKinds = 1 << iota
+	// MarkerStubs is the stub-throw family: Go's panic("unimplemented") and
+	// Rust's unimplemented!()/todo!(). A scaffold ticket adds these on
+	// purpose, and later tickets in the same project fill them in.
+	MarkerStubs
+)
+
+// noteMarkerPattern and stubMarkerPattern match the marker families. Adding
+// more languages is just a matter of extending these regexes — no other code
+// in the scanner is language-specific.
 //
 // Note: raise NotImplementedError is intentionally excluded. In Ruby (and
 // Python) it is the idiomatic way to declare an abstract method, not a
 // placeholder stub, so treating it as forbidden would block legitimate
 // library code.
-var forbiddenMarkerPattern = regexp.MustCompile(
-	`\b(?:TODO|FIXME|XXX)\b` +
-		`|panic\(\s*"(?:[Uu]nimplemented|not implemented)"\s*\)` +
-		`|\b(?:unimplemented|todo)!\s*\(`,
+var (
+	noteMarkerPattern = regexp.MustCompile(`\b(?:TODO|FIXME|XXX)\b`)
+	stubMarkerPattern = regexp.MustCompile(
+		`panic\(\s*"(?:[Uu]nimplemented|not implemented)"\s*\)` +
+			`|\b(?:unimplemented|todo)!\s*\(`,
+	)
 )
+
+// matchesMarker reports whether line contains a marker of the given kinds.
+func matchesMarker(line string, kinds MarkerKinds) bool {
+	return (kinds&MarkerNotes != 0 && noteMarkerPattern.MatchString(line)) ||
+		(kinds&MarkerStubs != 0 && stubMarkerPattern.MatchString(line))
+}
 
 // isDocPath reports whether path is a documentation or prose file (Markdown,
 // plain text, reStructuredText). Such files are excluded from marker scanning
@@ -272,9 +290,9 @@ func isTestPath(path string) bool {
 
 // FindForbiddenMarkers diffs HEAD against targetBranch (using merge-base
 // semantics) and returns one "path:line: text" entry per added line that
-// matches forbiddenMarkerPattern in a non-test, non-documentation file. The
-// result is empty when the diff is clean.
-func (g *RealGitClient) FindForbiddenMarkers(worktreeDir, targetBranch string) ([]string, error) {
+// contains a marker of the given kinds in a non-test, non-documentation file.
+// The result is empty when the diff is clean.
+func (g *RealGitClient) FindForbiddenMarkers(worktreeDir, targetBranch string, kinds MarkerKinds) ([]string, error) {
 	out, err := runGitOutput(
 		"-C", worktreeDir,
 		"diff", "--no-color", "-U0",
@@ -283,12 +301,12 @@ func (g *RealGitClient) FindForbiddenMarkers(worktreeDir, targetBranch string) (
 	if err != nil {
 		return nil, fmt.Errorf("FindForbiddenMarkers: diff: %w", err)
 	}
-	return scanDiffForMarkers(out), nil
+	return scanDiffForMarkers(out, kinds), nil
 }
 
-// scanDiffForMarkers walks unified-diff output and returns hits in non-test,
-// non-documentation files.
-func scanDiffForMarkers(diff string) []string {
+// scanDiffForMarkers walks unified-diff output and returns hits of the given
+// kinds in non-test, non-documentation files.
+func scanDiffForMarkers(diff string, kinds MarkerKinds) []string {
 	if diff == "" {
 		return nil
 	}
@@ -335,7 +353,7 @@ func scanDiffForMarkers(diff string) []string {
 				continue
 			}
 			added := strings.TrimPrefix(line, "+")
-			if forbiddenMarkerPattern.MatchString(added) {
+			if matchesMarker(added, kinds) {
 				hits = append(hits, fmt.Sprintf("%s:%d: %s", currentPath, lineNo, strings.TrimSpace(added)))
 			}
 			lineNo++

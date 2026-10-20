@@ -14,8 +14,9 @@ import (
 // all completed) are marked done and their worktrees removed. If a rebase
 // conflict cannot be auto-resolved by the agent, the ticket is left in
 // merging/user-review with a "Merge conflict on <ticket>" notification so
-// the user can take over. If the ticket contains incomplete-work markers the
-// merge is blocked before any git operations and the notification reads
+// the user can take over. If the ticket, or a parent project in the cascade,
+// contains incomplete-work markers, the merge is blocked before that work
+// unit's git operations and the notification reads
 // "Merge blocked: forbidden markers on <ticket>" instead.
 func (w *Worker) processMerging(ctx context.Context, ticket *models.WorkUnit) {
 	identifier := ticket.Identifier
@@ -104,7 +105,11 @@ func (w *Worker) processMerging(ctx context.Context, ticket *models.WorkUnit) {
 
 	var forbidden *db.ForbiddenMarkersError
 	if errors.As(mergeErr, &forbidden) {
-		w.logCh <- NewLogMessageWithFile(w.Number, fmt.Sprintf("merge blocked on %s: forbidden markers", identifier), logfilePath)
+		msg := fmt.Sprintf("merge blocked on %s: forbidden markers", identifier)
+		if forbidden.Identifier != identifier {
+			msg = fmt.Sprintf("merge blocked on %s: forbidden markers in %s", identifier, forbidden.Identifier)
+		}
+		w.logCh <- NewLogMessageWithFile(w.Number, msg, logfilePath)
 		if err := w.database.SetStatus(identifier, models.PhaseMerging, models.StatusUserReview); err != nil {
 			w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("error setting user-review on %s: %v", identifier, err))
 		}

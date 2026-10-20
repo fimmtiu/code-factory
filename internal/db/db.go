@@ -57,11 +57,14 @@ func (e *MergeUnresolvedError) Error() string {
 	return fmt.Sprintf("merge conflict on %s remains unresolved (worktree %s)", e.Identifier, e.WorktreePath)
 }
 
-// ForbiddenMarkersError is returned when a ticket's diff against its parent
-// branch contains incomplete-work markers (TODO/FIXME/XXX/panic-stubs) in
-// non-test files. Markers are listed as "path:line: text" so the UI can
-// surface them as a jump-to-source list. The user must remove or rephrase
-// the markers in the worktree, then retry the done transition.
+// ForbiddenMarkersError is returned when a work unit's diff against its
+// parent branch contains incomplete-work markers (TODO/FIXME/XXX/panic-stubs)
+// in non-test files; see markerKindsToCheck for which markers apply. Markers
+// are listed as "path:line: text" so the UI can surface them as a
+// jump-to-source list. Identifier is the work unit whose merge was blocked,
+// which is a parent project when its remaining stubs block the cascade. The
+// user must remove or rephrase the markers in the worktree, then retry the
+// done transition.
 type ForbiddenMarkersError struct {
 	Identifier   string
 	WorktreePath string
@@ -81,7 +84,7 @@ func (e *ForbiddenMarkersError) Error() string {
 		b.WriteString(m)
 		b.WriteByte('\n')
 	}
-	b.WriteString("Remove or rephrase these before marking the ticket done.")
+	b.WriteString("Remove or rephrase these, then retry the merge.")
 	return b.String()
 }
 
@@ -779,10 +782,8 @@ func (d *DB) rebaseAndFastForward(identifier, mergeTarget string) error {
 	if err != nil {
 		return fmt.Errorf("classify %s: %w", identifier, err)
 	}
-	// The forbidden-marker scan applies only to tickets: projects carry no
-	// hand-written code of their own, just the merged work of their children.
-	if unitType == workUnitTypeTicket {
-		markers, err := d.git.FindForbiddenMarkers(childWorktree, targetBranch)
+	if kinds := markerKindsToCheck(unitType, mergeTarget == d.repoRoot); kinds != 0 {
+		markers, err := d.git.FindForbiddenMarkers(childWorktree, targetBranch, kinds)
 		if err != nil {
 			return fmt.Errorf("scan markers on %s: %w", identifier, err)
 		}
@@ -816,6 +817,26 @@ func (d *DB) rebaseAndFastForward(identifier, mergeTarget string) error {
 		return &MergeConflictError{WorktreePath: mergeTarget, Branch: identifier, Err: err}
 	}
 	return nil
+}
+
+// markerKindsToCheck returns the incomplete-work markers that block a work
+// unit's merge. intoBase is true when the merge target is the repository
+// root, not a project worktree.
+//
+// Notes (TODO/FIXME/XXX) are checked on every ticket. Projects carry no
+// hand-written code of their own, so their merges skip notes. Stubs are
+// checked only when work lands outside every project: a scaffold ticket adds
+// stubs to its project branch on purpose, and later tickets in the project
+// fill them in. The project's own merge then finds any stubs that remain.
+func markerKindsToCheck(unitType int, intoBase bool) gitutil.MarkerKinds {
+	var kinds gitutil.MarkerKinds
+	if unitType == workUnitTypeTicket {
+		kinds |= gitutil.MarkerNotes
+	}
+	if intoBase {
+		kinds |= gitutil.MarkerStubs
+	}
+	return kinds
 }
 
 // mergeLock returns the mutex that serializes merges into the given target

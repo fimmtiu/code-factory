@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -861,6 +862,112 @@ func TestMarkTicketDone_RejectsForbiddenMarkers(t *testing.T) {
 	}
 	if len(git.MergeTargets) != 0 {
 		t.Errorf("expected no fast-forward merge when markers present, got %v", git.MergeTargets)
+	}
+}
+
+func TestMarkTicketDone_TicketInProjectChecksNotesOnly(t *testing.T) {
+	d, _, git := openTestDB(t)
+
+	if err := d.CreateProject("proj", "A project", nil, "", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj/scaffold", "Scaffold", nil, "", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj/other", "Keeps the project open", nil, "", nil); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := d.SetStatus("proj/scaffold", models.PhaseDone, models.StatusIdle); err != nil {
+		t.Fatal(err)
+	}
+	want := []gitutil.MarkerKinds{gitutil.MarkerNotes}
+	if !slices.Equal(git.ForbiddenMarkerKinds, want) {
+		t.Errorf("ForbiddenMarkerKinds = %v, want %v", git.ForbiddenMarkerKinds, want)
+	}
+}
+
+func TestMarkTicketDone_StandaloneTicketChecksNotesAndStubs(t *testing.T) {
+	d, _, git := openTestDB(t)
+
+	if err := d.CreateTicket("standalone", "A standalone ticket", nil, "", nil); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := d.SetStatus("standalone", models.PhaseDone, models.StatusIdle); err != nil {
+		t.Fatal(err)
+	}
+	want := []gitutil.MarkerKinds{gitutil.MarkerNotes | gitutil.MarkerStubs}
+	if !slices.Equal(git.ForbiddenMarkerKinds, want) {
+		t.Errorf("ForbiddenMarkerKinds = %v, want %v", git.ForbiddenMarkerKinds, want)
+	}
+}
+
+func TestMarkTicketDoneCascading_ChecksStubsOnlyWhenMergingIntoBase(t *testing.T) {
+	d, ticketsDir, git := openTestDB(t)
+
+	if err := d.CreateProject("grand", "Grandparent", nil, "", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateProject("grand/parent", "Parent", nil, "", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("grand/parent/t1", "Only ticket", nil, "", nil); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := d.MarkTicketDoneCascading("grand/parent/t1"); err != nil {
+		t.Fatalf("MarkTicketDoneCascading: %v", err)
+	}
+
+	// grand/parent merges into a project branch, so it is not scanned.
+	wantCalls := []string{
+		filepath.Join(ticketsDir, "grand", "parent", "t1", "worktree"),
+		filepath.Join(ticketsDir, "grand", "worktree"),
+	}
+	wantKinds := []gitutil.MarkerKinds{gitutil.MarkerNotes, gitutil.MarkerStubs}
+	if !slices.Equal(git.ForbiddenMarkerCalls, wantCalls) {
+		t.Errorf("ForbiddenMarkerCalls = %v, want %v", git.ForbiddenMarkerCalls, wantCalls)
+	}
+	if !slices.Equal(git.ForbiddenMarkerKinds, wantKinds) {
+		t.Errorf("ForbiddenMarkerKinds = %v, want %v", git.ForbiddenMarkerKinds, wantKinds)
+	}
+}
+
+func TestMarkTicketDoneCascading_ProjectStubsBlockMerge(t *testing.T) {
+	d, ticketsDir, git := openTestDB(t)
+
+	if err := d.CreateProject("proj", "A project", nil, "", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreateTicket("proj/ticket", "Only ticket", nil, "", nil); err != nil {
+		t.Fatal(err)
+	}
+
+	projWorktree := filepath.Join(ticketsDir, "proj", "worktree")
+	git.ForbiddenMarkersByWorktree = map[string][]string{
+		projWorktree: {`internal/x/x.go:3: panic("unimplemented")`},
+	}
+	git.MergeTargets = nil
+
+	err := d.MarkTicketDoneCascading("proj/ticket")
+	var fmErr *db.ForbiddenMarkersError
+	if !errors.As(err, &fmErr) {
+		t.Fatalf("expected *db.ForbiddenMarkersError, got %T: %v", err, err)
+	}
+	if fmErr.Identifier != "proj" {
+		t.Errorf("Identifier = %q, want %q", fmErr.Identifier, "proj")
+	}
+	if fmErr.WorktreePath != projWorktree {
+		t.Errorf("WorktreePath = %q, want %q", fmErr.WorktreePath, projWorktree)
+	}
+	// The ticket merged into the project, but the project did not merge
+	// into the base branch, and nothing was marked done.
+	if !slices.Equal(git.MergeTargets, []string{projWorktree}) {
+		t.Errorf("MergeTargets = %v, want only %q", git.MergeTargets, projWorktree)
+	}
+	if u := findUnit(t, d, "proj/ticket"); u.Phase == models.PhaseDone {
+		t.Errorf("proj/ticket phase = %q, want not done", u.Phase)
 	}
 }
 
