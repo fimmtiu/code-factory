@@ -2,6 +2,8 @@ package worker
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -231,10 +233,43 @@ func TestSessionUpdate_ToolCallUpdateFlushesPartialLine(t *testing.T) {
 		acp.UpdateToolCall("call-1", acp.WithUpdateStatus(acp.ToolCallStatusCompleted)),
 	))
 
+	// The tool-update line is hidden from the display, so the flushed
+	// thought must stand alone as the only line.
 	output := w.GetLastOutput()
-	for _, line := range output {
-		if strings.Contains(line, "considering...") && strings.Contains(line, "[tool-update]") {
-			t.Errorf("tool-update was appended to streaming text instead of starting a new line: %q", line)
-		}
+	if len(output) != 1 || output[0] != "[thought] considering..." {
+		t.Errorf("output = %q, want only the flushed thought line", output)
+	}
+}
+
+func TestSessionUpdate_ToolCallUpdateHiddenFromDisplay(t *testing.T) {
+	c, w := newTestClient()
+	logPath := filepath.Join(t.TempDir(), "agent.log")
+	logFile, err := os.Create(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer logFile.Close()
+	c.logFile = logFile
+
+	_ = c.SessionUpdate(context.Background(), sessionNotification(
+		acp.UpdateAgentMessageText("first line\n"),
+	))
+	_ = c.SessionUpdate(context.Background(), sessionNotification(
+		acp.UpdateToolCall("call-1", acp.WithUpdateStatus(acp.ToolCallStatusCompleted)),
+	))
+	_ = c.SessionUpdate(context.Background(), sessionNotification(
+		acp.UpdateAgentMessageText("second line\n"),
+	))
+
+	output := w.GetLastOutput()
+	if strings.Join(output, "|") != "first line|second line" {
+		t.Errorf("output = %q, want the two message lines without the tool-update", output)
+	}
+	logged, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(logged), "[tool-update] call-1: completed") {
+		t.Errorf("logfile should still contain the tool-update line, got:\n%s", logged)
 	}
 }

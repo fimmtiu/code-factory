@@ -57,6 +57,10 @@ type dbInterface interface {
 	SetStatus(identifier string, phase models.TicketPhase, status models.TicketStatus) error
 }
 
+// toolUpdatePrefix starts each line that SessionUpdate writes for a tool call
+// update.
+const toolUpdatePrefix = "[tool-update]"
+
 // flushPartialLine terminates any in-progress streaming text with a newline
 // so that subsequent structured lines (like [tool] or [tool-update]) start on
 // their own line in the logfile. Must be called without logMu held.
@@ -83,9 +87,11 @@ func (c *acpWorkerClient) appendOutput(text string) {
 	// Prepend any in-progress partial line, then split on newlines.
 	parts := strings.Split(c.partialLine+text, "\n")
 
-	// All parts except the last are complete lines.
+	// All parts except the last are complete lines. Tool-update lines carry
+	// only a call ID and a status, so they go to the logfile but not the
+	// display, where they would push more useful lines off the screen.
 	for _, line := range parts[:len(parts)-1] {
-		if line == "" {
+		if line == "" || strings.HasPrefix(line, toolUpdatePrefix) {
 			continue
 		}
 		c.committedLines = append(c.committedLines, line)
@@ -147,7 +153,7 @@ func (c *acpWorkerClient) SessionUpdate(_ context.Context, params acp.SessionNot
 			status = string(*u.ToolCallUpdate.Status)
 		}
 		c.flushPartialLine()
-		c.appendOutput(fmt.Sprintf("[tool-update] %s: %s\n", u.ToolCallUpdate.ToolCallId, status))
+		c.appendOutput(fmt.Sprintf("%s %s: %s\n", toolUpdatePrefix, u.ToolCallUpdate.ToolCallId, status))
 	}
 	return nil
 }
