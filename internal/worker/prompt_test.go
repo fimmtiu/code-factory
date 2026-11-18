@@ -544,7 +544,9 @@ func TestBuildPrompt_RequiredChecksRule(t *testing.T) {
 
 			got := strings.Contains(prompt, "### Required checks") &&
 				strings.Contains(prompt, "including failures in code that you did not write") &&
-				strings.Contains(prompt, "If the check still cannot run, stop")
+				strings.Contains(prompt, "If the check still cannot run, stop") &&
+				strings.Contains(prompt, "run only the checks and tests that cover the code you are changing") &&
+				strings.Contains(prompt, "Do not run a full check again only to see a different part of its output")
 			if got != tc.want {
 				t.Errorf("prompt has required-checks rule = %v, want %v", got, tc.want)
 			}

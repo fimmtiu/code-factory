@@ -12,11 +12,16 @@ import (
 // checksRule tells an agent that writes code how to treat the project's
 // required checks. Without it, agents that find a failure in code from an
 // earlier ticket call it "pre-existing", run a narrower check that passes, and
-// report that all checks pass.
+// report that all checks pass. Full runs can take minutes, so it also limits
+// them to one final run plus any reruns that a fix makes necessary.
 const checksRule = "### Required checks\n\n" +
-	"Before you commit, run the project's full lint, type check, and test commands. " +
+	"While you work, run only the checks and tests that cover the code you are changing, so that each run is fast.\n\n" +
+	"Before you commit, run the project's full lint, type check, and test commands one time. " +
 	"Run them the same way as the project's own scripts and CI do: do not pass file paths to make a check smaller, " +
-	"and do not run the underlying tool directly to skip part of a wrapper script (for example, `pytest` in place of a `bin/test` that also type-checks).\n\n" +
+	"and do not run the underlying tool directly to skip part of a wrapper script (for example, `pytest` in place of a `bin/test` that also type-checks). " +
+	"Send the complete output of each full run to a file, for example `./bin/test > \"$TMPDIR/test.log\" 2>&1; echo \"exit $?\"`, " +
+	"and read that file to see the results. Do not run a full check again only to see a different part of its output. " +
+	"If the full run finds failures, fix them with targeted runs, then do one more full run to confirm.\n\n" +
 	"Every failure in these checks is your responsibility, including failures in code that you did not write. " +
 	"Do not call a failure \"pre-existing\" or \"unrelated\" and continue. " +
 	"Fix it if your ticket allows you to change the file. " +
