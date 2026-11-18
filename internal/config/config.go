@@ -58,6 +58,13 @@ type Settings struct {
 	// then run any command and change any file the daemon can reach.
 	// Defaults to false.
 	UnsafeModeForLunatics bool `json:"unsafe_mode_for_lunatics" default:"false"`
+
+	// WorktreeSetup is a shell command that a worker runs one time in each
+	// ticket worktree before the first agent starts there, for example
+	// "./bin/setup". The command runs with the worktree as its working
+	// directory. If it fails, the ticket goes to user-review and no agent
+	// runs. Empty means no command.
+	WorktreeSetup string `json:"worktree_setup"`
 }
 
 // ModelForWork returns the configured model for a work run. If status is

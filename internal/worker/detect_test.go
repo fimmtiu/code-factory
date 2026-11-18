@@ -160,3 +160,49 @@ func containsSubstring(s, substr string) bool {
 	}
 	return false
 }
+
+func TestDetectTooling_BinScriptsBeforeLanguageDefaults(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "pyproject.toml"), []byte("[project]\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "bin"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"test", "lint"} {
+		if err := os.WriteFile(filepath.Join(dir, "bin", name), []byte("#!/bin/sh\n"), 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(dir, "bin", "build"), []byte("not executable\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	build, test, lint := detectTooling(dir)
+	if build != "" {
+		t.Errorf("build = %q, want empty for a bin/build without an execute bit", build)
+	}
+	if test != "./bin/test" {
+		t.Errorf("test = %q, want %q", test, "./bin/test")
+	}
+	if lint != "./bin/lint" {
+		t.Errorf("lint = %q, want %q", lint, "./bin/lint")
+	}
+}
+
+func TestDetectTooling_MakefileBeforeBinScripts(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "Makefile"), []byte("test:\n\ttrue\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "bin"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "bin", "test"), []byte("#!/bin/sh\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, test, _ := detectTooling(dir); test != "make test" {
+		t.Errorf("test = %q, want %q", test, "make test")
+	}
+}

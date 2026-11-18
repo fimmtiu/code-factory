@@ -512,3 +512,42 @@ func TestBuildPrompt_CaptureInstructionSuggestsParentScope(t *testing.T) {
 		t.Error("expected capture instruction to set --source to the ticket identifier")
 	}
 }
+
+func TestBuildPrompt_RequiredChecksRule(t *testing.T) {
+	cases := []struct {
+		name   string
+		skill  string
+		phase  models.TicketPhase
+		status models.TicketStatus
+		want   bool
+	}{
+		{"implement", "", models.PhaseImplement, models.StatusIdle, true},
+		{"refactor", "cf-refactor", models.PhaseRefactor, models.StatusIdle, true},
+		{"respond", "cf-respond", models.PhaseImplement, models.StatusResponding, true},
+		{"review", "cf-review", models.PhaseReview, models.StatusIdle, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.skill != "" {
+				installFakeSkill(t, tc.skill, "BODY")
+			}
+			d, ticketsDir := openTestDB(t)
+			createProject(t, d, "proj")
+			createTicket(t, d, "proj/ticket-1")
+
+			ticket := buildPromptTicket("proj/ticket-1", "desc", tc.phase)
+			ticket.Status = tc.status
+			prompt, err := worker.BuildPrompt(ticket, d, ticketsDir)
+			if err != nil {
+				t.Fatalf("BuildPrompt: %v", err)
+			}
+
+			got := strings.Contains(prompt, "### Required checks") &&
+				strings.Contains(prompt, "including failures in code that you did not write") &&
+				strings.Contains(prompt, "If the check still cannot run, stop")
+			if got != tc.want {
+				t.Errorf("prompt has required-checks rule = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}

@@ -215,6 +215,7 @@ Copy this block word for word into every implementation ticket description.
 - Do not re-declare a constant, timeout, limit, or default that the Contract already assigns to an owner. Read it from its owner.
 - Mock only at process boundaries: the network, the clock, the data store, a third-party service. Never replace a first-party module with a fake. A test that stands in for a module will pass even when that module does not exist.
 - Every file you change must appear in this ticket's Files block. If you need a change outside it, report it rather than making it.
+- The build, type check, lint, and full test suite must pass before you commit, even when a failure comes from code that an earlier ticket wrote. Do not call it "pre-existing" and continue. Fix it if the file is in your Files block. If it is not, commit the rest of your work, name the failing check and the file in the commit message body, and leave "Build, typecheck, and lint pass" unchecked. If you cannot run a check at all, stop and report it; a manual review or a smaller check is not a substitute.
 - If the Contract is wrong or incomplete, follow the "Reporting a contract defect" steps below.
 
 ## Reporting a contract defect

@@ -103,6 +103,19 @@ func detectTooling(worktreePath string) (buildCmd, testCmd, lintCmd string) {
 		}
 	}
 
+	// Wrapper scripts in bin/ often do more than the language's default tool
+	// (for example, bin/test that type-checks before it runs the tests), so
+	// they come before the language defaults.
+	if buildCmd == "" && isExecutable(filepath.Join(worktreePath, "bin", "build")) {
+		buildCmd = "./bin/build"
+	}
+	if testCmd == "" && isExecutable(filepath.Join(worktreePath, "bin", "test")) {
+		testCmd = "./bin/test"
+	}
+	if lintCmd == "" && isExecutable(filepath.Join(worktreePath, "bin", "lint")) {
+		lintCmd = "./bin/lint"
+	}
+
 	// Fill in gaps with language-specific defaults.
 	switch {
 	case fileExists(filepath.Join(worktreePath, "go.mod")):
@@ -177,4 +190,10 @@ func gitOutput(worktreePath string, args ...string) (string, error) {
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
+}
+
+// isExecutable reports whether path is a regular file with an execute bit set.
+func isExecutable(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.Mode().IsRegular() && info.Mode().Perm()&0111 != 0
 }

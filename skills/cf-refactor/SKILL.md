@@ -494,14 +494,17 @@ After all passes are complete and committed:
    git diff --stat <BRANCHPOINT>
    ```
 
-2. If `TEST_CMD` was detected, run the full test suite.
+2. If `TEST_CMD` was detected, run the full test suite with exactly that command. Do not pass file paths to it, and do not replace it with the tool that it wraps. Also run the project's type check if it has one and `TEST_CMD` does not already run it.
 
-3. If tests fail:
+3. If tests or the type check fail:
    a. Analyze which refactoring likely caused the failure.
    b. Attempt to fix the test or the refactored code.
    c. If unfixable after a reasonable attempt, offer to revert the entire refactoring commit with `git revert HEAD`.
+   d. If the failure also occurs without your refactoring, it is still not acceptable. The Scope Rules stop you from refactoring pre-existing code, but they do not make a failing check pass. Fix the failure if it is in a file in `CHANGED_FILES`. Otherwise, name each failing check and the files that cause it in the summary, and do not report the checks as passing.
 
-4. If `LINT_CMD` was detected, run the linter and fix any issues.
+4. If `LINT_CMD` was detected, run the linter on the full project and fix any issues.
+
+If you cannot run `TEST_CMD`, the type check, or `LINT_CMD` at all (for example, a tool or a virtualenv is missing), do not substitute a smaller check. Say in the summary which check could not run and why.
 
 5. Present a summary table:
 

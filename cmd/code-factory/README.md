@@ -78,7 +78,8 @@ Settings are read from `.code-factory/settings.json` at startup.
   "model_respond": "opus",
   "effort": "high",
   "terminal_theme": "tan",
-  "unsafe_mode_for_lunatics": false
+  "unsafe_mode_for_lunatics": false,
+  "worktree_setup": ""
 }
 ```
 
@@ -94,3 +95,4 @@ Settings are read from `.code-factory/settings.json` at startup.
 | `effort` | `"high"` | Effort level for the agent (`"low"`, `"normal"`, `"high"`, or `"max"`) |
 | `terminal_theme` | `"tan"` | Terminal colour theme (`"tan"`, `"dark"`, or `"light"`) |
 | `unsafe_mode_for_lunatics` | `false` | Approves every agent permission request automatically, without `claude-permissions-checker` and without a user prompt. Agents can then run any command and change any file. Use only in a container or another disposable environment. |
+| `worktree_setup` | `""` | Shell command that a worker runs in each ticket worktree before the first agent starts there, for example `"./bin/setup"`. Before the command runs, the worker also copies the gitignored files that the repository's `.worktreeinclude` names (such as `.env`). This happens one time per worktree, and again if the command changes. If the command fails, the ticket goes to user-review with its output in `setup.log`, and no agent runs. To try again, fix the problem and use the phase picker to put the ticket back in the queue. |

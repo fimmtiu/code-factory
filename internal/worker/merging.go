@@ -92,12 +92,7 @@ func (w *Worker) processMerging(ctx context.Context, ticket *models.WorkUnit) {
 		if err := w.database.SetStatus(identifier, models.PhaseMerging, models.StatusUserReview); err != nil {
 			w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("error setting user-review on %s: %v", identifier, err))
 		}
-		if w.notifCh != nil {
-			select {
-			case w.notifCh <- Notification{Text: "Merge conflict on " + identifier, Identifier: identifier}:
-			default:
-			}
-		}
+		w.notify("Merge conflict on "+identifier, identifier)
 		w.releaseTicket(identifier)
 		w.Status = StatusIdle
 		return
@@ -113,12 +108,7 @@ func (w *Worker) processMerging(ctx context.Context, ticket *models.WorkUnit) {
 		if err := w.database.SetStatus(identifier, models.PhaseMerging, models.StatusUserReview); err != nil {
 			w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("error setting user-review on %s: %v", identifier, err))
 		}
-		if w.notifCh != nil {
-			select {
-			case w.notifCh <- Notification{Text: "Merge blocked: forbidden markers on " + identifier, Identifier: identifier}:
-			default:
-			}
-		}
+		w.notify("Merge blocked: forbidden markers on "+identifier, identifier)
 		w.releaseTicket(identifier)
 		w.Status = StatusIdle
 		return
@@ -130,12 +120,7 @@ func (w *Worker) processMerging(ctx context.Context, ticket *models.WorkUnit) {
 	if err := w.database.SetStatus(identifier, models.PhaseMerging, models.StatusUserReview); err != nil {
 		w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("error setting user-review on %s: %v", identifier, err))
 	}
-	if w.notifCh != nil {
-		select {
-		case w.notifCh <- Notification{Text: "Merging error on " + identifier, Identifier: identifier}:
-		default:
-		}
-	}
+	w.notify("Merging error on "+identifier, identifier)
 	w.releaseTicket(identifier)
 	w.Status = StatusIdle
 }

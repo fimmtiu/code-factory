@@ -9,6 +9,24 @@ import (
 	"github.com/fimmtiu/code-factory/internal/storage"
 )
 
+// checksRule tells an agent that writes code how to treat the project's
+// required checks. Without it, agents that find a failure in code from an
+// earlier ticket call it "pre-existing", run a narrower check that passes, and
+// report that all checks pass.
+const checksRule = "### Required checks\n\n" +
+	"Before you commit, run the project's full lint, type check, and test commands. " +
+	"Run them the same way as the project's own scripts and CI do: do not pass file paths to make a check smaller, " +
+	"and do not run the underlying tool directly to skip part of a wrapper script (for example, `pytest` in place of a `bin/test` that also type-checks).\n\n" +
+	"Every failure in these checks is your responsibility, including failures in code that you did not write. " +
+	"Do not call a failure \"pre-existing\" or \"unrelated\" and continue. " +
+	"Fix it if your ticket allows you to change the file. " +
+	"If the fix needs a change that your ticket does not allow, commit the rest of your work, " +
+	"name each failing check and the files that cause it in the commit message body, and leave the related acceptance criteria unchecked.\n\n" +
+	"If you cannot run a required check at all (for example, a tool or a virtualenv is missing), run the project's setup command one time. " +
+	"If the check still cannot run, stop: do not commit, and end your turn with a message that names the check and the error. " +
+	"A manual review, a syntax check, or a smaller check is not a substitute for a required check.\n\n" +
+	"Never report that a check passes unless you ran the complete check and it passed."
+
 // BuildPrompt generates the appropriate prompt for the Claude agent based on
 // the ticket's current status and phase. A status of "responding" runs the
 // /cf-respond skill regardless of phase; otherwise the phase drives the
@@ -27,7 +45,7 @@ func BuildPrompt(ticket *models.WorkUnit, database *db.DB, ticketsDir string) (s
 
 	if ticket.Status == models.StatusResponding {
 		p, err := buildSkillPrompt("cf-respond", worktreePath, identifier)
-		return p + memory, err
+		return p + "\n\n" + checksRule + memory, err
 	}
 
 	var prompt string
@@ -38,7 +56,7 @@ func BuildPrompt(ticket *models.WorkUnit, database *db.DB, ticketsDir string) (s
 				"Implement the following work in the git worktree `%s` for ticket `%s`:\n\n%s\n\n"+
 				"For all of your changes, you MUST begin by writing new tests or editing existing relevant tests to cover your changes before you start coding. "+
 				"Tests that cover your planned changes MUST exist before you begin changing the implementation.\n\n"+
-				"Before you commit, you MUST run linting and tests to ensure your changes are working as expected.\n\n"+
+				checksRule+"\n\n"+
 				"When you're done, commit your changes to the worktree with a commit message that explains what you did and why you did it. "+
 				"Your commit message must not be prefixed with `cf-respond:` or `refactor:`. "+
 				"You may create intermediate commits if you need to, as long as you give them complete commit messages.",
@@ -95,7 +113,7 @@ func BuildPrompt(ticket *models.WorkUnit, database *db.DB, ticketsDir string) (s
 
 	case models.PhaseRefactor:
 		p, err := buildSkillPrompt("cf-refactor", worktreePath, identifier)
-		return p + memory, err
+		return p + "\n\n" + checksRule + memory, err
 
 	case models.PhaseReview:
 		p, err := buildSkillPrompt("cf-review", worktreePath, identifier)

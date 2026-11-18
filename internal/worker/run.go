@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -92,6 +93,31 @@ func (w *Worker) processTicket(ctx context.Context, ticket *models.WorkUnit) {
 	}
 
 	worktreePath := storage.TicketWorktreePathIn(w.ticketsDir, identifier)
+
+	// An agent that cannot run the project's checks writes code that nobody
+	// has verified, so a failed setup stops the ticket before the agent runs.
+	setupLogPath := NextLogfilePath(w.ticketsDir, identifier, "setup")
+	repoRoot := filepath.Dir(w.ticketsDir)
+	if err := prepareWorktree(taskCtx, repoRoot, worktreePath, worktreeSetupCommand(), setupLogPath); err != nil {
+		if taskCtx.Err() != nil {
+			w.handleAbort(ctx, identifier, ticket.Phase, isResponding)
+			return
+		}
+		msg := fmt.Sprintf("worktree setup failed on %s: %v", identifier, err)
+		if exists, _ := pathExists(setupLogPath); exists {
+			w.logCh <- NewLogMessageWithFile(w.Number, msg, setupLogPath)
+		} else {
+			w.logCh <- NewLogMessage(w.Number, msg)
+		}
+		w.notify("Worktree setup failed on "+identifier, identifier)
+		if err := w.database.SetStatus(identifier, ticket.Phase, models.StatusUserReview); err != nil {
+			w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("error setting %s on %s: %v", models.StatusUserReview, identifier, err))
+		}
+		w.releaseTicket(identifier)
+		w.Status = StatusIdle
+		return
+	}
+
 	logfilePath := NextLogfilePath(w.ticketsDir, identifier, logfilePhase)
 
 	// For a fresh refactor or implement run, capture HEAD so we can later
@@ -239,12 +265,7 @@ func (w *Worker) postWorkRefactor(ctx postWorkContext) (models.TicketPhase, mode
 func (w *Worker) postWorkReview(ticket *models.WorkUnit, ctx postWorkContext) (models.TicketPhase, models.TicketStatus) {
 	if err := w.database.RebaseTicketOnParent(ctx.identifier, ticket.Parent, ticket.ParentBranch); err != nil {
 		w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("pre-merge dry run conflict on %s: %v", ctx.identifier, err))
-		if w.notifCh != nil {
-			select {
-			case w.notifCh <- Notification{Text: "Pre-merge dry run conflict on " + ctx.identifier, Identifier: ctx.identifier}:
-			default:
-			}
-		}
+		w.notify("Pre-merge dry run conflict on "+ctx.identifier, ctx.identifier)
 		return models.PhaseReview, models.StatusUserReview
 	}
 	w.logCh <- NewLogMessage(w.Number, fmt.Sprintf("pre-merge dry run succeeded for %s", ctx.identifier))
@@ -275,12 +296,7 @@ func (w *Worker) postWorkImplement(ctx postWorkContext) (models.TicketPhase, mod
 	}
 	if !added {
 		w.logCh <- NewLogMessageWithFile(w.Number, fmt.Sprintf("implement on %s produced no commits; flagging for user attention", ctx.identifier), ctx.logfilePath)
-		if w.notifCh != nil {
-			select {
-			case w.notifCh <- Notification{Text: "Empty implement on " + ctx.identifier, Identifier: ctx.identifier}:
-			default:
-			}
-		}
+		w.notify("Empty implement on "+ctx.identifier, ctx.identifier)
 	}
 	return models.PhaseImplement, models.StatusUserReview
 }
@@ -391,5 +407,18 @@ func (w *Worker) handleMessage(msg MainToWorkerMessage) {
 		w.SetPaused(true)
 	case MsgUnpause:
 		w.SetPaused(false)
+	}
+}
+
+// notify sends a notification to the TUI. It drops the notification if the
+// worker has no notification channel or the channel is full, so a worker
+// never blocks on the TUI.
+func (w *Worker) notify(text, identifier string) {
+	if w.notifCh == nil {
+		return
+	}
+	select {
+	case w.notifCh <- Notification{Text: text, Identifier: identifier}:
+	default:
 	}
 }
